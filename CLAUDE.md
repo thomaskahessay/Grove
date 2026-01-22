@@ -17,8 +17,8 @@ Grove is a native iOS 26 workout tracking app built exclusively on Apple framewo
 
 ```swift
 extension Color {
-    static let groveTerracotta = Color(hex: "C4785B")  // Primary: buttons, highlights, progress
-    static let groveSage = Color(hex: "87A878")        // Secondary: success, completed, streaks
+    static let groveSage = Color(hex: "87A878")        // Primary: buttons, highlights, progress
+    static let groveTerracotta = Color(hex: "C4785B")  // Secondary: accents, success, completed
     static let groveWarmSand = Color(hex: "D4C4A8")    // Accent: card backgrounds, dividers
     static let groveCharcoal = Color(hex: "3D3229")    // Text (light mode), backgrounds (dark mode)
     static let groveCream = Color(hex: "F5F1EB")       // Backgrounds (light mode)
@@ -65,8 +65,8 @@ Grove/
 │   │   └── ExerciseChartView.swift
 │   ├── Social/
 │   │   └── SocialFeedView.swift
-│   ├── Settings/
-│   │   ├── SettingsView.swift
+│   ├── Profile/
+│   │   ├── ProfileView.swift
 │   │   └── NotificationSettingsView.swift
 │   └── Library/
 │       ├── ExerciseLibraryView.swift

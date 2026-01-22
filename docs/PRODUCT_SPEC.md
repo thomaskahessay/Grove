@@ -85,7 +85,7 @@ Grove/
 │   ├── Workout/
 │   ├── Progress/
 │   ├── Social/
-│   ├── Settings/
+│   ├── Profile/
 │   └── Library/
 ├── Components/
 │   ├── GlassCard.swift
@@ -105,8 +105,8 @@ Grove uses an earthy color palette that works beautifully with iOS 26 Liquid Gla
 
 | Role | Color Name | Hex Code | Usage |
 |------|------------|----------|-------|
-| Primary | Terracotta | #C4785B | Buttons, highlights, progress indicators, active states |
-| Secondary | Sage | #87A878 | Success states, completed sets, streaks, achievements |
+| Primary | Sage | #87A878 | Buttons, highlights, progress indicators, active states |
+| Secondary | Terracotta | #C4785B | Accents, success states, completed sets, achievements |
 | Accent | Warm Sand | #D4C4A8 | Card backgrounds, subtle highlights, dividers |
 | Neutral Dark | Charcoal Brown | #3D3229 | Primary text (light mode), backgrounds (dark mode) |
 | Neutral Light | Cream | #F5F1EB | Backgrounds (light mode), secondary text (dark mode) |
@@ -609,7 +609,7 @@ The primary hub users see after login.
 1. **Header**
    - Grove logo (left)
    - Streak count with flame icon (center-right)
-   - Settings gear (right)
+   - Profile icon (right)
 
 2. **Quick Start Section**
    - Horizontal scroll of workout buttons
@@ -801,13 +801,13 @@ The primary hub users see after login.
 └────────────────────────────────────┘
 ```
 
-### Settings Screen
+### Profile Screen
 
 ```
 ┌────────────────────────────────────┐
-│            SETTINGS                │
+│            PROFILE                 │
 ├────────────────────────────────────┤
-│  PROFILE                           │
+│  ACCOUNT                           │
 │  Display Name         [Edit →]     │
 │  Fitness Goal         [Edit →]     │
 │  Experience Level     [Edit →]     │
@@ -1039,7 +1039,7 @@ enum HealthKitError: Error {
 
 ### User Configuration
 
-**Settings → Notifications:**
+**Profile → Notifications:**
 - Master toggle: All notifications on/off
 - Per-type toggles for granular control
 - Quiet hours: Start time, end time
@@ -1104,7 +1104,7 @@ class NotificationService {
 | SwiftData models | High | All models from Section 4 |
 | Color system + extensions | High | ColorExtensions.swift |
 | Sign in with Apple | High | AuthService.swift |
-| Basic tab navigation | High | Home, Progress, Social, Settings tabs |
+| Basic tab navigation | High | Home, Progress, Social, Profile tabs |
 | Liquid Glass components | Medium | GlassCard, GlassButton |
 | Exercise seed data | Medium | ~100 exercises in ExerciseSeeds.swift |
 
@@ -1157,7 +1157,7 @@ class NotificationService {
 | Task | Priority | Notes |
 |------|----------|-------|
 | Notification system | Medium | All notification types |
-| Settings screen | Medium | All preferences |
+| Profile screen | Medium | All preferences |
 | Onboarding flow polish | High | Smooth, welcoming |
 | Crash recovery | High | Auto-save mid-workout |
 | Vacation mode | Low | Toggle and date range |
