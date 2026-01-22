@@ -1,0 +1,27 @@
+# Xcode
+*.xcodeproj/xcuserdata/
+*.xcworkspace/xcuserdata/
+DerivedData/
+*.hmap
+*.ipa
+*.dSYM.zip
+*.dSYM
+.build/
+
+# Swift Package Manager
+.swiftpm/
+Packages/
+Package.pins
+Package.resolved
+
+# CocoaPods (shouldn't need, but just in case)
+Pods/
+
+# macOS
+.DS_Store
+*.swp
+*~
+
+# Secrets (if any)
+*.xcconfig
+!*.sample.xcconfig
