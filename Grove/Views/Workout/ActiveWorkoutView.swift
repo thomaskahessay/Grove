@@ -3,7 +3,7 @@ import SwiftData
 
 struct ActiveWorkoutView: View {
     @Environment(\.modelContext) private var modelContext
-    @Environment(\.dismiss) private var dismiss
+    @Environment(WorkoutSessionManager.self) private var sessionManager
 
     @Bindable var workout: Workout
 
@@ -61,12 +61,23 @@ struct ActiveWorkoutView: View {
                 }
 
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button {
-                        showingCardView.toggle()
-                    } label: {
-                        Image(systemName: showingCardView ? "rectangle.expand.vertical" : "list.bullet")
+                    HStack(spacing: 16) {
+                        Button {
+                            showingCardView.toggle()
+                        } label: {
+                            Image(systemName: showingCardView ? "rectangle.expand.vertical" : "list.bullet")
+                        }
+                        .tint(Color.groveSage)
+
+                        Button {
+                            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                                sessionManager.minimizeWorkout()
+                            }
+                        } label: {
+                            Image(systemName: "chevron.down.circle")
+                        }
+                        .tint(Color.groveSage)
                     }
-                    .tint(Color.groveSage)
                 }
             }
             .alert("End Workout?", isPresented: $showingEndWorkoutAlert) {
@@ -80,6 +91,16 @@ struct ActiveWorkoutView: View {
             .sheet(isPresented: $showingAddExercise) {
                 AddExerciseToWorkoutView(workout: workout)
             }
+            .gesture(
+                DragGesture(minimumDistance: 50)
+                    .onEnded { value in
+                        if value.translation.height > 100 {
+                            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                                sessionManager.minimizeWorkout()
+                            }
+                        }
+                    }
+            )
         }
     }
 
@@ -280,16 +301,7 @@ struct ActiveWorkoutView: View {
     // MARK: - Actions
 
     private func endWorkout() {
-        workout.completedAt = Date()
-
-        // Mark any in-progress exercises as completed
-        for exercise in exercises {
-            if exercise.status == .inProgress {
-                exercise.status = .completed
-            }
-        }
-
-        dismiss()
+        sessionManager.endWorkout()
     }
 }
 
@@ -340,7 +352,10 @@ struct ExerciseFullScreenCard: View {
                             } : nil,
                             onRepsChanged: index == 0 ? { newReps in
                                 autofillReps(newReps)
-                            } : nil
+                            } : nil,
+                            onSetStatusChanged: {
+                                updateExerciseStatus()
+                            }
                         )
                     }
 
@@ -375,8 +390,17 @@ struct ExerciseFullScreenCard: View {
                 .buttonStyle(.secondary)
                 .padding(.horizontal)
 
-                // Skip exercise button
-                if exerciseLog.status != .skipped {
+                // Skip/Unskip exercise button
+                if exerciseLog.status == .skipped {
+                    Button {
+                        exerciseLog.status = .planned
+                    } label: {
+                        Text("Unskip Exercise")
+                            .font(.subheadline)
+                            .foregroundStyle(Color.groveSage)
+                    }
+                    .padding(.top, 8)
+                } else {
                     Button {
                         exerciseLog.status = .skipped
                     } label: {
@@ -434,6 +458,19 @@ struct ExerciseFullScreenCard: View {
             set.reps = newReps
         }
     }
+
+    private func updateExerciseStatus() {
+        let allSetsCompleted = exerciseLog.sets.allSatisfy { $0.isCompleted }
+        let anySetsCompleted = exerciseLog.sets.contains { $0.isCompleted }
+
+        if allSetsCompleted && !exerciseLog.sets.isEmpty {
+            exerciseLog.status = .completed
+        } else if anySetsCompleted {
+            exerciseLog.status = .inProgress
+        } else {
+            exerciseLog.status = .planned
+        }
+    }
 }
 
 // MARK: - Set Row View
@@ -445,6 +482,7 @@ struct SetRowView: View {
     let onRemove: (() -> Void)?
     var onWeightChanged: ((Double?) -> Void)? = nil
     var onRepsChanged: ((Int?) -> Void)? = nil
+    var onSetStatusChanged: (() -> Void)? = nil
 
     @State private var weightText: String = ""
     @State private var repsText: String = ""
@@ -653,6 +691,7 @@ struct SetRowView: View {
         } else {
             setLog.completedAt = nil
         }
+        onSetStatusChanged?()
     }
 }
 
@@ -823,5 +862,6 @@ struct AddExerciseToWorkoutView: View {
     }
 
     return ActiveWorkoutView(workout: workout)
+        .environment(WorkoutSessionManager())
         .modelContainer(container)
 }

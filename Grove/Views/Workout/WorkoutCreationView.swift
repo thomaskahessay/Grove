@@ -4,6 +4,7 @@ import SwiftData
 struct WorkoutCreationView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
+    @Environment(WorkoutSessionManager.self) private var sessionManager
     @Query(sort: \Exercise.name) private var allExercises: [Exercise]
 
     // Optional initial category passed from Quick Start
@@ -16,10 +17,6 @@ struct WorkoutCreationView: View {
     @State private var defaultSets = 3
     @State private var defaultReps = 10
     @State private var hasAppliedInitialCategory = false
-
-    // For navigation to active workout
-    @State private var activeWorkout: Workout?
-    @State private var navigateToActiveWorkout = false
 
     private var suggestedExercises: [Exercise] {
         guard let category = selectedCategory else { return [] }
@@ -78,12 +75,6 @@ struct WorkoutCreationView: View {
                     selectedExercises: $selectedExercises,
                     filterCategory: selectedCategory
                 )
-            }
-            .navigationDestination(isPresented: $navigateToActiveWorkout) {
-                if let workout = activeWorkout {
-                    ActiveWorkoutView(workout: workout)
-                        .navigationBarBackButtonHidden()
-                }
             }
             .onAppear {
                 if !hasAppliedInitialCategory, let category = initialCategory {
@@ -226,6 +217,7 @@ struct WorkoutCreationView: View {
             .buttonStyle(.secondary)
         }
         .frame(maxWidth: .infinity)
+        .padding(.horizontal, 24)
         .padding(.vertical, 32)
         .background(Color.groveCardBackground)
         .clipShape(RoundedRectangle(cornerRadius: 12))
@@ -336,8 +328,9 @@ struct WorkoutCreationView: View {
             }
         }
 
-        activeWorkout = workout
-        navigateToActiveWorkout = true
+        // Start workout via session manager and dismiss sheet
+        sessionManager.startWorkout(workout)
+        dismiss()
     }
 
     // MARK: - Helpers
@@ -384,8 +377,8 @@ struct CategoryButton: View {
                     .font(.caption)
                     .fontWeight(.medium)
             }
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 16)
+            .frame(maxWidth: .infinity, minHeight: 70)
+            .padding(.vertical, 12)
             .background(isSelected ? Color.groveSage : Color.groveCardBackground)
             .foregroundStyle(isSelected ? .white : Color.groveText)
             .clipShape(RoundedRectangle(cornerRadius: 12))
@@ -510,6 +503,7 @@ struct SelectedExerciseRow: View {
 
 #Preview {
     WorkoutCreationView()
+        .environment(WorkoutSessionManager())
         .modelContainer(for: [
             Exercise.self,
             Workout.self,

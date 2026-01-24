@@ -28,9 +28,12 @@ struct GroveApp: App {
         }
     }
 
+    @State private var workoutSessionManager = WorkoutSessionManager()
+
     var body: some Scene {
         WindowGroup {
             ContentView()
+                .environment(workoutSessionManager)
         }
         .modelContainer(modelContainer)
     }
