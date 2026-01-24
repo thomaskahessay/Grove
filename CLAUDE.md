@@ -128,18 +128,31 @@ class Workout {
 - [x] Home screen with welcome message, calendar strip, quick start section
 - [x] Exercise Library (browse, search, filter by muscle group)
 - [x] Add custom exercise form
+- [x] Workout creation flow
+  - WorkoutCreationView with category selection grid
+  - Suggested exercises based on category (tap to add)
+  - ExercisePickerView modal for browsing full library
+  - FAB (floating action button) with liquid glass styling
+  - Quick start buttons with category pre-selection
+  - Categories: Push, Pull, Legs, Upper, Lower, Full Body, Chest & Triceps, Back & Biceps, Shoulders, Custom
+- [x] Active workout view (ActiveWorkoutView.swift)
+  - Full-screen exercise view with swipe navigation (TabView)
+  - Card view toggle to see all exercises at once
+  - SetRowView with editable weight/reps (text fields + ±5/±1 stepper buttons)
+  - Support for decimal weights (e.g., 137.5)
+  - Auto-fill subsequent sets from first set values
+  - Add/remove sets during workout
+  - Manual rest timer with countdown, +30s/-30s controls
+  - Add exercise mid-workout
+  - Skip exercise functionality
+  - End workout with confirmation
+- [x] Profile view with light/dark mode toggle
 
 ### 🚧 In Progress
 
-- [ ] Workout creation flow (template selection, exercise picker)
+- [ ] Workout summary screen (post-workout stats)
 
 ### 📋 Not Started
-
-**Phase 2: Core Features (continued)**
-- [ ] Active workout view (full-screen exercise, set logging)
-- [ ] Active workout card view (minimized list)
-- [ ] Workout summary screen
-- [ ] Set completion with checkmarks
 
 **Phase 3: Progress & Planning**
 - [ ] Weekly calendar planning view

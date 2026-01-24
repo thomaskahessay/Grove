@@ -81,8 +81,8 @@ struct WorkoutCreationView: View {
             }
             .navigationDestination(isPresented: $navigateToActiveWorkout) {
                 if let workout = activeWorkout {
-                    // TODO: ActiveWorkoutView(workout: workout)
-                    Text("Active Workout: \(workout.name)")
+                    ActiveWorkoutView(workout: workout)
+                        .navigationBarBackButtonHidden()
                 }
             }
             .onAppear {
@@ -326,6 +326,14 @@ struct WorkoutCreationView: View {
             )
             exerciseLog.workout = workout
             modelContext.insert(exerciseLog)
+
+            // Create SetLogs for each set
+            for setNumber in 1...defaultSets {
+                let setLog = SetLog(setNumber: setNumber)
+                setLog.exerciseLog = exerciseLog
+                exerciseLog.sets.append(setLog)
+                modelContext.insert(setLog)
+            }
         }
 
         activeWorkout = workout

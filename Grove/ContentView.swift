@@ -3,6 +3,15 @@ import SwiftData
 
 struct ContentView: View {
     @State private var showingWorkoutCreation = false
+    @AppStorage("appearanceMode") private var appearanceMode: String = "System"
+
+    private var colorScheme: ColorScheme? {
+        switch appearanceMode {
+        case "Light": return .light
+        case "Dark": return .dark
+        default: return nil
+        }
+    }
 
     var body: some View {
         ZStack(alignment: .bottom) {
@@ -20,7 +29,7 @@ struct ContentView: View {
                 }
 
                 Tab("Profile", systemImage: "person.fill") {
-                    Text("Profile")
+                    ProfileView()
                 }
             }
             .tint(.groveSage)
@@ -51,6 +60,7 @@ struct ContentView: View {
         .sheet(isPresented: $showingWorkoutCreation) {
             WorkoutCreationView()
         }
+        .preferredColorScheme(colorScheme)
     }
 }
 
