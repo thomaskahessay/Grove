@@ -17,7 +17,7 @@ struct GlassButtonStyle: ButtonStyle {
 
 /// Primary action button with sage background
 struct PrimaryButtonStyle: ButtonStyle {
-    var isEnabled: Bool = true
+    @Environment(\.isEnabled) private var isEnabled
 
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
@@ -26,9 +26,9 @@ struct PrimaryButtonStyle: ButtonStyle {
             .padding(.horizontal, 24)
             .padding(.vertical, 14)
             .frame(maxWidth: .infinity)
-            .background(isEnabled ? Color.groveSage : Color.gray)
+            .background(isEnabled ? Color.groveSage : Color.groveWarmSand)
             .clipShape(RoundedRectangle(cornerRadius: 12))
-            .opacity(configuration.isPressed ? 0.8 : 1.0)
+            .opacity(isEnabled ? (configuration.isPressed ? 0.8 : 1.0) : 0.6)
             .scaleEffect(configuration.isPressed ? 0.98 : 1.0)
             .animation(.easeInOut(duration: 0.15), value: configuration.isPressed)
     }
@@ -97,9 +97,6 @@ extension ButtonStyle where Self == GlassButtonStyle {
 
 extension ButtonStyle where Self == PrimaryButtonStyle {
     static var primary: PrimaryButtonStyle { PrimaryButtonStyle() }
-    static func primary(isEnabled: Bool) -> PrimaryButtonStyle {
-        PrimaryButtonStyle(isEnabled: isEnabled)
-    }
 }
 
 extension ButtonStyle where Self == SecondaryButtonStyle {

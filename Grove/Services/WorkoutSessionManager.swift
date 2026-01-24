@@ -7,6 +7,10 @@ class WorkoutSessionManager {
     var isMinimized: Bool = false
     var isFullScreenPresented: Bool = false
 
+    // Summary state
+    var completedWorkout: Workout?
+    var showingSummary: Bool = false
+
     var hasActiveWorkout: Bool {
         activeWorkout != nil && activeWorkout?.completedAt == nil
     }
@@ -46,8 +50,19 @@ class WorkoutSessionManager {
             }
         }
 
+        // Store completed workout for summary
+        completedWorkout = activeWorkout
+
         activeWorkout = nil
         isMinimized = false
         isFullScreenPresented = false
+
+        // Show summary
+        showingSummary = true
+    }
+
+    func dismissSummary() {
+        showingSummary = false
+        completedWorkout = nil
     }
 }

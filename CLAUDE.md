@@ -43,7 +43,8 @@ Grove/
 ├── Services/
 │   ├── AuthService.swift          # Sign in with Apple handling
 │   ├── HealthKitManager.swift     # HealthKit authorization and queries
-│   └── NotificationService.swift  # Local notification scheduling
+│   ├── NotificationService.swift  # Local notification scheduling
+│   └── WorkoutSessionManager.swift # @Observable - active workout state management
 ├── Views/
 │   ├── Onboarding/
 │   │   ├── SignInView.swift
@@ -56,7 +57,7 @@ Grove/
 │   ├── Workout/
 │   │   ├── WorkoutCreationView.swift
 │   │   ├── ActiveWorkoutView.swift
-│   │   ├── ActiveWorkoutCardView.swift
+│   │   ├── MinimizedWorkoutCardView.swift  # Floating card for minimized workouts
 │   │   ├── ExerciseFullScreenView.swift
 │   │   ├── SetRowView.swift
 │   │   └── WorkoutSummaryView.swift
@@ -144,8 +145,14 @@ class Workout {
   - Add/remove sets during workout
   - Manual rest timer with countdown, +30s/-30s controls
   - Add exercise mid-workout
-  - Skip exercise functionality
+  - Skip/unskip exercise functionality
   - End workout with confirmation
+  - Minimize workout to floating card (swipe down or button)
+  - Exercise auto-completes when all sets marked done
+- [x] Minimized workout card (MinimizedWorkoutCardView.swift)
+  - Floating card above tab bar showing workout name + progress
+  - Tap or swipe up to return to full workout
+  - WorkoutSessionManager for app-wide active workout state
 - [x] Profile view with light/dark mode toggle
 
 ### 🚧 In Progress

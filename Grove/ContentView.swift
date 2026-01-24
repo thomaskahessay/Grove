@@ -64,7 +64,7 @@ struct ContentView: View {
             if sessionManager.isMinimized {
                 MinimizedWorkoutCardView()
                     .padding(.horizontal, 20)
-                    .padding(.bottom, 90)
+                    .padding(.bottom, 60)
                     .transition(.move(edge: .bottom).combined(with: .opacity))
             }
         }
@@ -79,6 +79,16 @@ struct ContentView: View {
         ) {
             if let workout = sessionManager.activeWorkout {
                 ActiveWorkoutView(workout: workout)
+            }
+        }
+        .sheet(
+            isPresented: Binding(
+                get: { sessionManager.showingSummary },
+                set: { sessionManager.showingSummary = $0 }
+            )
+        ) {
+            if let workout = sessionManager.completedWorkout {
+                WorkoutSummaryView(workout: workout)
             }
         }
         .preferredColorScheme(colorScheme)

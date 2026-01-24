@@ -1,5 +1,6 @@
 import SwiftUI
 import SwiftData
+import UniformTypeIdentifiers
 
 struct ActiveWorkoutView: View {
     @Environment(\.modelContext) private var modelContext
@@ -142,6 +143,15 @@ struct ActiveWorkoutView: View {
         }
     }
 
+    private var isLastExercise: Bool {
+        currentExerciseIndex >= exercises.count - 1
+    }
+
+    private var lastExerciseCompleted: Bool {
+        guard let lastExercise = exercises.last else { return false }
+        return lastExercise.sets.allSatisfy { $0.isCompleted } && !lastExercise.sets.isEmpty
+    }
+
     private var navigationButtons: some View {
         HStack(spacing: 20) {
             Button {
@@ -160,21 +170,34 @@ struct ActiveWorkoutView: View {
             .buttonStyle(.secondary)
             .disabled(currentExerciseIndex == 0)
 
-            Button {
-                withAnimation {
-                    if currentExerciseIndex < exercises.count - 1 {
-                        currentExerciseIndex += 1
+            if isLastExercise && lastExerciseCompleted {
+                Button {
+                    endWorkout()
+                } label: {
+                    HStack {
+                        Text("Done")
+                        Image(systemName: "checkmark.circle.fill")
                     }
+                    .frame(maxWidth: .infinity)
                 }
-            } label: {
-                HStack {
-                    Text("Next")
-                    Image(systemName: "chevron.right")
+                .buttonStyle(.primary)
+            } else {
+                Button {
+                    withAnimation {
+                        if currentExerciseIndex < exercises.count - 1 {
+                            currentExerciseIndex += 1
+                        }
+                    }
+                } label: {
+                    HStack {
+                        Text("Next")
+                        Image(systemName: "chevron.right")
+                    }
+                    .frame(maxWidth: .infinity)
                 }
-                .frame(maxWidth: .infinity)
+                .buttonStyle(.primary)
+                .disabled(isLastExercise)
             }
-            .buttonStyle(.primary)
-            .disabled(currentExerciseIndex >= exercises.count - 1)
         }
         .padding()
         .background(.ultraThinMaterial)
@@ -182,18 +205,31 @@ struct ActiveWorkoutView: View {
 
     // MARK: - Card View
 
+    @State private var draggingExerciseID: UUID?
+
     private var cardView: some View {
         ScrollView {
             VStack(spacing: 12) {
                 ForEach(Array(exercises.enumerated()), id: \.element.id) { index, exerciseLog in
-                    ExerciseCardRow(
+                    ExerciseCardRowDraggable(
                         exerciseLog: exerciseLog,
                         isActive: index == currentExerciseIndex,
+                        isDragging: draggingExerciseID == exerciseLog.id,
                         onTap: {
                             currentExerciseIndex = index
                             showingCardView = false
                         }
                     )
+                    .onDrag {
+                        draggingExerciseID = exerciseLog.id
+                        return NSItemProvider(object: exerciseLog.id.uuidString as NSString)
+                    }
+                    .onDrop(of: [.text], delegate: ExerciseDropDelegate(
+                        exerciseLog: exerciseLog,
+                        exercises: exercises,
+                        draggingExerciseID: $draggingExerciseID,
+                        currentExerciseIndex: $currentExerciseIndex
+                    ))
                 }
 
                 // Add exercise button
@@ -213,6 +249,13 @@ struct ActiveWorkoutView: View {
                 .foregroundStyle(Color.groveSage)
             }
             .padding()
+        }
+        .onDrop(of: [.text], isTargeted: nil) { _ in
+            // Reset dragging state when dropped anywhere
+            DispatchQueue.main.async {
+                draggingExerciseID = nil
+            }
+            return true
         }
     }
 
@@ -709,7 +752,7 @@ struct ExerciseCardRow: View {
     private var statusIcon: String {
         switch exerciseLog.status {
         case .completed: return "checkmark.circle.fill"
-        case .skipped: return "xmark.circle.fill"
+        case .skipped: return "forward.circle.fill"
         case .inProgress: return "circle.lefthalf.filled"
         default: return "circle"
         }
@@ -718,15 +761,23 @@ struct ExerciseCardRow: View {
     private var statusColor: Color {
         switch exerciseLog.status {
         case .completed: return .groveSage
-        case .skipped: return .groveMutedRust
+        case .skipped: return .secondary
         case .inProgress: return .groveTerracotta
         default: return .secondary
         }
     }
 
+    var showDragHandle: Bool = true
+
     var body: some View {
         Button(action: onTap) {
             HStack(spacing: 12) {
+                if showDragHandle {
+                    Image(systemName: "line.3.horizontal")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+
                 Image(systemName: statusIcon)
                     .font(.title2)
                     .foregroundStyle(statusColor)
@@ -760,6 +811,128 @@ struct ExerciseCardRow: View {
             )
         }
         .buttonStyle(.plain)
+    }
+}
+
+// MARK: - Draggable Exercise Card Row
+
+struct ExerciseCardRowDraggable: View {
+    let exerciseLog: ExerciseLog
+    let isActive: Bool
+    let isDragging: Bool
+    let onTap: () -> Void
+
+    private var completedSets: Int {
+        exerciseLog.sets.filter { $0.isCompleted }.count
+    }
+
+    private var statusIcon: String {
+        switch exerciseLog.status {
+        case .completed: return "checkmark.circle.fill"
+        case .skipped: return "forward.circle.fill"
+        case .inProgress: return "circle.lefthalf.filled"
+        default: return "circle"
+        }
+    }
+
+    private var statusColor: Color {
+        switch exerciseLog.status {
+        case .completed: return .groveSage
+        case .skipped: return .secondary
+        case .inProgress: return .groveTerracotta
+        default: return .secondary
+        }
+    }
+
+    var body: some View {
+        HStack(spacing: 12) {
+            // Drag handle on the left
+            Image(systemName: "line.3.horizontal")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+
+            // Exercise info
+            VStack(alignment: .leading, spacing: 2) {
+                Text(exerciseLog.exercise?.name ?? "Exercise")
+                    .font(.body)
+                    .fontWeight(.medium)
+                    .foregroundStyle(exerciseLog.status == .skipped ? .secondary : Color.groveText)
+                    .strikethrough(exerciseLog.status == .skipped)
+
+                Text("\(completedSets)/\(exerciseLog.sets.count) sets")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            Spacer()
+
+            // Status icon on the right
+            Image(systemName: statusIcon)
+                .font(.title2)
+                .foregroundStyle(statusColor)
+        }
+        .padding()
+        .background(isActive ? Color.groveSage.opacity(0.1) : Color.groveCardBackground)
+        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .overlay(
+            RoundedRectangle(cornerRadius: 12)
+                .stroke(isActive ? Color.groveSage : Color.clear, lineWidth: 2)
+        )
+        .opacity(isDragging ? 0.5 : 1.0)
+        .contentShape(Rectangle())
+        .onTapGesture {
+            onTap()
+        }
+    }
+}
+
+// MARK: - Exercise Drop Delegate
+
+struct ExerciseDropDelegate: DropDelegate {
+    let exerciseLog: ExerciseLog
+    let exercises: [ExerciseLog]
+    @Binding var draggingExerciseID: UUID?
+    @Binding var currentExerciseIndex: Int
+
+    func performDrop(info: DropInfo) -> Bool {
+        DispatchQueue.main.async {
+            draggingExerciseID = nil
+        }
+        return true
+    }
+
+    func dropEntered(info: DropInfo) {
+        guard let draggingID = draggingExerciseID,
+              draggingID != exerciseLog.id,
+              let sourceIndex = exercises.firstIndex(where: { $0.id == draggingID }),
+              let destIndex = exercises.firstIndex(where: { $0.id == exerciseLog.id }) else {
+            return
+        }
+
+        withAnimation(.easeInOut(duration: 0.2)) {
+            // Swap the orderIndex values
+            let sourceExercise = exercises[sourceIndex]
+            let destExercise = exercises[destIndex]
+
+            let tempIndex = sourceExercise.orderIndex
+            sourceExercise.orderIndex = destExercise.orderIndex
+            destExercise.orderIndex = tempIndex
+
+            // Update currentExerciseIndex if needed
+            if currentExerciseIndex == sourceIndex {
+                currentExerciseIndex = destIndex
+            } else if currentExerciseIndex == destIndex {
+                currentExerciseIndex = sourceIndex
+            }
+        }
+    }
+
+    func dropUpdated(info: DropInfo) -> DropProposal? {
+        return DropProposal(operation: .move)
+    }
+
+    func dropExited(info: DropInfo) {
+        // Don't reset here as user might be moving to another card
     }
 }
 
