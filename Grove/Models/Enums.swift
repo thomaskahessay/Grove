@@ -36,6 +36,9 @@ enum TemplateCategory: String, Codable, CaseIterable {
     case upper = "Upper"
     case lower = "Lower"
     case fullBody = "Full Body"
+    case chestTriceps = "Chest & Triceps"
+    case backBiceps = "Back & Biceps"
+    case shoulders = "Shoulders"
     case custom = "Custom"
 }
 

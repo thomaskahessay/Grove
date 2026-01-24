@@ -12,6 +12,18 @@ struct HomeView: View {
         order: .reverse
     ) private var workoutPlans: [WorkoutPlan]
 
+    @Query(
+        filter: #Predicate<Workout> { workout in
+            workout.completedAt != nil
+        },
+        sort: \Workout.completedAt,
+        order: .reverse
+    ) private var completedWorkouts: [Workout]
+
+    private var recentWorkouts: [Workout] {
+        Array(completedWorkouts.prefix(5))
+    }
+
     private var currentUser: User? { users.first }
 
     private var greeting: String {
@@ -75,7 +87,12 @@ struct HomeView: View {
                         EmptyTodayCard()
                     }
 
-                    Spacer(minLength: 40)
+                    // Recent Workouts Section
+                    if !recentWorkouts.isEmpty {
+                        RecentWorkoutsSection(workouts: recentWorkouts)
+                    }
+
+                    Spacer(minLength: 100)
                 }
                 .padding(.horizontal)
                 .padding(.top, 8)
@@ -172,39 +189,28 @@ struct TodayWorkoutCard: View {
 
 struct EmptyTodayCard: View {
     var body: some View {
-        VStack(spacing: 16) {
-            Image(systemName: "calendar.badge.plus")
-                .font(.system(size: 40))
-                .foregroundStyle(Color.groveSage.opacity(0.6))
+        HStack(spacing: 16) {
+            Image(systemName: "moon.zzz.fill")
+                .font(.title)
+                .foregroundStyle(Color.groveWarmSand)
 
-            Text("No workout planned for today")
-                .font(.headline)
-                .foregroundStyle(Color.groveText)
+            VStack(alignment: .leading, spacing: 4) {
+                Text("No workout planned")
+                    .font(.subheadline)
+                    .fontWeight(.medium)
+                    .foregroundStyle(Color.groveText)
 
-            Text("Start a quick workout or plan your week")
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
-
-            VStack(spacing: 12) {
-                Button(action: {
-                    // TODO: Create workout
-                }) {
-                    Text("Start Empty Workout")
-                }
-                .buttonStyle(.primary)
-
-                NavigationLink(destination: ExerciseLibraryView()) {
-                    Text("Browse Exercises")
-                }
-                .buttonStyle(.secondary)
+                Text("Use Quick Start above or tap + to begin")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
+
+            Spacer()
         }
-        .padding(24)
+        .padding(16)
         .frame(maxWidth: .infinity)
         .background(Color.groveCardBackground)
-        .clipShape(RoundedRectangle(cornerRadius: 16))
-        .shadow(color: .black.opacity(0.05), radius: 10, y: 4)
+        .clipShape(RoundedRectangle(cornerRadius: 12))
     }
 }
 
@@ -221,6 +227,9 @@ struct CategoryIcon: View {
         case .upper: return "figure.arms.open"
         case .lower: return "figure.run.circle.fill"
         case .fullBody: return "figure.mixed.cardio"
+        case .chestTriceps: return "arrowtriangle.down.fill"
+        case .backBiceps: return "dumbbell.fill"
+        case .shoulders: return "figure.boxing"
         case .custom: return "star.circle.fill"
         }
     }
@@ -232,7 +241,126 @@ struct CategoryIcon: View {
     }
 }
 
-#Preview {
+// MARK: - Recent Workouts Section
+
+struct RecentWorkoutsSection: View {
+    let workouts: [Workout]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Recent Workouts")
+                .font(.headline)
+                .foregroundStyle(Color.groveText)
+
+            VStack(spacing: 0) {
+                ForEach(Array(workouts.enumerated()), id: \.element.id) { index, workout in
+                    RecentWorkoutRow(workout: workout)
+
+                    if index < workouts.count - 1 {
+                        Divider()
+                            .padding(.leading, 48)
+                    }
+                }
+            }
+            .background(Color.groveCardBackground)
+            .clipShape(RoundedRectangle(cornerRadius: 12))
+        }
+    }
+}
+
+struct RecentWorkoutRow: View {
+    let workout: Workout
+
+    private var formattedDate: String {
+        guard let completedAt = workout.completedAt else { return "" }
+
+        let calendar = Calendar.current
+        if calendar.isDateInToday(completedAt) {
+            return "Today"
+        } else if calendar.isDateInYesterday(completedAt) {
+            return "Yesterday"
+        } else {
+            let formatter = DateFormatter()
+            formatter.dateFormat = "EEE, MMM d"
+            return formatter.string(from: completedAt)
+        }
+    }
+
+    private var formattedDuration: String {
+        let minutes = Int(workout.duration / 60)
+        return "\(minutes) min"
+    }
+
+    var body: some View {
+        HStack(spacing: 12) {
+            // Icon
+            Image(systemName: "checkmark.circle.fill")
+                .font(.title2)
+                .foregroundStyle(Color.groveSage)
+
+            // Workout info
+            VStack(alignment: .leading, spacing: 2) {
+                Text(workout.name)
+                    .font(.subheadline)
+                    .fontWeight(.medium)
+                    .foregroundStyle(Color.groveText)
+
+                HStack(spacing: 8) {
+                    Text(formattedDate)
+                    Text("•")
+                    Text(formattedDuration)
+                    Text("•")
+                    Text("\(workout.completedExerciseCount) exercises")
+                }
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            }
+
+            Spacer()
+
+            Image(systemName: "chevron.right")
+                .font(.caption)
+                .foregroundStyle(.tertiary)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+    }
+}
+
+#Preview("Home - Empty") {
     HomeView()
-        .modelContainer(for: [User.self, WorkoutPlan.self, WorkoutTemplate.self])
+        .modelContainer(for: [User.self, WorkoutPlan.self, WorkoutTemplate.self, Workout.self])
+}
+
+#Preview("Home - With Workouts") {
+    let config = ModelConfiguration(isStoredInMemoryOnly: true)
+    let container = try! ModelContainer(
+        for: User.self, Workout.self, ExerciseLog.self, WorkoutPlan.self, WorkoutTemplate.self,
+        configurations: config
+    )
+
+    // Create sample workouts
+    let workout1 = Workout(name: "Push Day")
+    workout1.startedAt = Date().addingTimeInterval(-3600) // 1 hour ago
+    workout1.completedAt = Date()
+
+    let workout2 = Workout(name: "Leg Day")
+    workout2.startedAt = Calendar.current.date(byAdding: .day, value: -1, to: Date())!
+    workout2.completedAt = Calendar.current.date(byAdding: .day, value: -1, to: Date())!.addingTimeInterval(2700)
+
+    let workout3 = Workout(name: "Pull Day")
+    workout3.startedAt = Calendar.current.date(byAdding: .day, value: -3, to: Date())!
+    workout3.completedAt = Calendar.current.date(byAdding: .day, value: -3, to: Date())!.addingTimeInterval(3000)
+
+    let workout4 = Workout(name: "Upper Body")
+    workout4.startedAt = Calendar.current.date(byAdding: .day, value: -5, to: Date())!
+    workout4.completedAt = Calendar.current.date(byAdding: .day, value: -5, to: Date())!.addingTimeInterval(2400)
+
+    container.mainContext.insert(workout1)
+    container.mainContext.insert(workout2)
+    container.mainContext.insert(workout3)
+    container.mainContext.insert(workout4)
+
+    return HomeView()
+        .modelContainer(container)
 }
