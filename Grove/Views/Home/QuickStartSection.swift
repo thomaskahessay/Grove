@@ -18,7 +18,7 @@ struct QuickStartSection: View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Quick Start")
                 .font(.headline)
-                .foregroundStyle(Color.groveCharcoal)
+                .foregroundStyle(Color.groveText)
 
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 12) {
@@ -95,7 +95,7 @@ struct QuickStartButton: View {
                     Text(title)
                         .font(.subheadline)
                         .fontWeight(.semibold)
-                        .foregroundStyle(Color.groveCharcoal)
+                        .foregroundStyle(Color.groveText)
 
                     Text(subtitle)
                         .font(.caption)
@@ -104,7 +104,7 @@ struct QuickStartButton: View {
             }
             .frame(width: 100, alignment: .leading)
             .padding(12)
-            .background(Color.white)
+            .background(Color.groveCardBackground)
             .clipShape(RoundedRectangle(cornerRadius: 12))
             .shadow(color: .black.opacity(0.04), radius: 8, y: 2)
         }
@@ -115,6 +115,6 @@ struct QuickStartButton: View {
 #Preview {
     QuickStartSection()
         .padding()
-        .background(Color.groveCream)
+        .background(Color.groveBackground)
         .modelContainer(for: [WorkoutTemplate.self])
 }

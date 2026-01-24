@@ -1,15 +1,49 @@
 import SwiftUI
+import UIKit
 
 extension Color {
-    // MARK: - Primary & Secondary
+    // MARK: - Brand Colors (non-adaptive)
     static let groveSage = Color(hex: "87A878")        // Primary: buttons, highlights, progress
     static let groveTerracotta = Color(hex: "C4785B")  // Secondary: accents, success, completed
-
-    // MARK: - Supporting Colors
     static let groveWarmSand = Color(hex: "D4C4A8")    // Accent: card backgrounds, dividers
-    static let groveCharcoal = Color(hex: "3D3229")    // Text (light mode), backgrounds (dark mode)
-    static let groveCream = Color(hex: "F5F1EB")       // Backgrounds (light mode)
     static let groveMutedRust = Color(hex: "A65E4E")   // Alerts: skipped exercises, warnings
+
+    // MARK: - Raw Colors (for reference)
+    static let groveCharcoal = Color(hex: "3D3229")    // Dark brown
+    static let groveCream = Color(hex: "F5F1EB")       // Light cream
+
+    // MARK: - Adaptive Colors (light/dark mode)
+    static let groveBackground = Color(
+        uiColor: UIColor { traits in
+            traits.userInterfaceStyle == .dark
+                ? UIColor(Color(hex: "1C1917"))  // Dark warm gray
+                : UIColor(Color(hex: "F5F1EB"))  // Cream
+        }
+    )
+
+    static let groveCardBackground = Color(
+        uiColor: UIColor { traits in
+            traits.userInterfaceStyle == .dark
+                ? UIColor(Color(hex: "292524"))  // Dark card
+                : UIColor.white
+        }
+    )
+
+    static let groveText = Color(
+        uiColor: UIColor { traits in
+            traits.userInterfaceStyle == .dark
+                ? UIColor(Color(hex: "F5F1EB"))  // Cream text on dark
+                : UIColor(Color(hex: "3D3229"))  // Charcoal text on light
+        }
+    )
+
+    static let groveTextSecondary = Color(
+        uiColor: UIColor { traits in
+            traits.userInterfaceStyle == .dark
+                ? UIColor(Color(hex: "A8A29E"))  // Muted light
+                : UIColor(Color(hex: "78716C"))  // Muted dark
+        }
+    )
 
     // MARK: - Semantic Aliases
     static let grovePrimary = groveSage

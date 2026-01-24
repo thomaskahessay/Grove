@@ -1,8 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
-<dict>
-	<key>NSHealthShareUsageDescription</key>
-	<string>Grove reads your workout data to track heart rate and calories during your strength training sessions.</string>
-</dict>
+<dict/>
 </plist>

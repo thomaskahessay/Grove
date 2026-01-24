@@ -119,7 +119,7 @@ extension ButtonStyle where Self == DestructiveButtonStyle {
 
 #Preview("Button Styles") {
     ZStack {
-        Color.groveCream
+        Color.groveBackground
             .ignoresSafeArea()
 
         VStack(spacing: 20) {

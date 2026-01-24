@@ -31,7 +31,7 @@ struct CalendarStripView: View {
         VStack(alignment: .leading, spacing: 12) {
             Text("This Week")
                 .font(.headline)
-                .foregroundStyle(Color.groveCharcoal)
+                .foregroundStyle(Color.groveText)
 
             ScrollView(.horizontal, showsIndicators: false) {
                 ScrollViewReader { proxy in
@@ -141,7 +141,7 @@ struct CalendarDayCell: View {
                 Text(dayNumber)
                     .font(.system(.body, design: .rounded))
                     .fontWeight(isToday ? .bold : .medium)
-                    .foregroundStyle(isSelected ? .white : (isPast ? .secondary : Color.groveCharcoal))
+                    .foregroundStyle(isSelected ? .white : (isPast ? .secondary : Color.groveText))
             }
 
             // Status indicator

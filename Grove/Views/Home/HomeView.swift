@@ -56,7 +56,7 @@ struct HomeView: View {
                     Text(welcomeMessage)
                         .font(.title)
                         .fontWeight(.bold)
-                        .foregroundStyle(Color.groveCharcoal)
+                        .foregroundStyle(Color.groveText)
 
                     // Quick Start Section
                     QuickStartSection()
@@ -80,7 +80,7 @@ struct HomeView: View {
                 .padding(.horizontal)
                 .padding(.top, 8)
             }
-            .background(Color.groveCream)
+            .background(Color.groveBackground)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
@@ -141,7 +141,7 @@ struct TodayWorkoutCard: View {
                     Text(workoutName)
                         .font(.title2)
                         .fontWeight(.bold)
-                        .foregroundStyle(Color.groveCharcoal)
+                        .foregroundStyle(Color.groveText)
                 }
                 Spacer()
                 CategoryIcon(category: category)
@@ -162,7 +162,7 @@ struct TodayWorkoutCard: View {
             .buttonStyle(.primary)
         }
         .padding(20)
-        .background(Color.white)
+        .background(Color.groveCardBackground)
         .clipShape(RoundedRectangle(cornerRadius: 16))
         .shadow(color: .black.opacity(0.05), radius: 10, y: 4)
     }
@@ -179,23 +179,30 @@ struct EmptyTodayCard: View {
 
             Text("No workout planned for today")
                 .font(.headline)
-                .foregroundStyle(Color.groveCharcoal)
+                .foregroundStyle(Color.groveText)
 
             Text("Start a quick workout or plan your week")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
 
-            Button(action: {
-                // TODO: Create workout
-            }) {
-                Text("Start Empty Workout")
+            VStack(spacing: 12) {
+                Button(action: {
+                    // TODO: Create workout
+                }) {
+                    Text("Start Empty Workout")
+                }
+                .buttonStyle(.primary)
+
+                NavigationLink(destination: ExerciseLibraryView()) {
+                    Text("Browse Exercises")
+                }
+                .buttonStyle(.secondary)
             }
-            .buttonStyle(.secondary)
         }
         .padding(24)
         .frame(maxWidth: .infinity)
-        .background(Color.white)
+        .background(Color.groveCardBackground)
         .clipShape(RoundedRectangle(cornerRadius: 16))
         .shadow(color: .black.opacity(0.05), radius: 10, y: 4)
     }

@@ -112,7 +112,63 @@ class Workout {
 - `preferredUnits` in User model determines display
 - No conversion needed—just store what user enters
 
-## Current Phase
+## Development Progress
+
+### ✅ Completed
+
+**Phase 1: Foundation**
+- [x] Xcode project setup (iOS 26, SwiftUI, SwiftData)
+- [x] SwiftData models (User, Exercise, Workout, ExerciseLog, SetLog, WorkoutTemplate, WorkoutPlan, Achievement)
+- [x] Color system + ColorExtensions.swift
+- [x] Liquid Glass components (GlassCard, GlassButton)
+- [x] Exercise seed data (~100 exercises)
+- [x] Basic tab navigation (Home, Progress, Social, Profile)
+
+**Phase 2: Core Features**
+- [x] Home screen with welcome message, calendar strip, quick start section
+- [x] Exercise Library (browse, search, filter by muscle group)
+- [x] Add custom exercise form
+
+### 🚧 In Progress
+
+- [ ] Workout creation flow (template selection, exercise picker)
+
+### 📋 Not Started
+
+**Phase 2: Core Features (continued)**
+- [ ] Active workout view (full-screen exercise, set logging)
+- [ ] Active workout card view (minimized list)
+- [ ] Workout summary screen
+- [ ] Set completion with checkmarks
+
+**Phase 3: Progress & Planning**
+- [ ] Weekly calendar planning view
+- [ ] Assign workouts to days
+- [ ] Progress charts (1RM, weight×reps)
+- [ ] Personal record detection
+- [ ] Streak tracking logic
+- [ ] Achievements system
+
+**Phase 4: HealthKit & Social**
+- [ ] HealthKit authorization
+- [ ] Workout detection from Apple Watch
+- [ ] Heart rate / calorie integration
+- [ ] Social feed UI
+- [ ] Sharing preferences
+
+**Phase 5: Polish & Launch**
+- [ ] Sign in with Apple + Onboarding flow
+- [ ] Notification system
+- [ ] Profile/Settings screen
+- [ ] Data export (CSV/PDF)
+- [ ] Vacation mode
+
+### Known Issues
+- [ ] Streak badge number not displaying (needs debugging)
+
+---
+
+## Full Specification
 
 See `docs/PRODUCT_SPEC.md` for full specification including:
 - Detailed data models with all properties
