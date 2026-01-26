@@ -8,10 +8,6 @@ struct WorkoutSummaryView: View {
 
     let workout: Workout
 
-    private var duration: TimeInterval {
-        workout.duration
-    }
-
     private var totalVolume: Double {
         workout.exercises.reduce(0) { exerciseTotal, exerciseLog in
             exerciseTotal + exerciseLog.sets.reduce(0) { setTotal, setLog in
@@ -53,6 +49,30 @@ struct WorkoutSummaryView: View {
         return ((totalVolume - prev) / prev) * 100
     }
 
+    private var skippedCount: Int {
+        workout.exercises.filter { $0.status == .skipped }.count
+    }
+
+    private var personalRecords: [(name: String, weight: Double, reps: Int)] {
+        workout.exercises.compactMap { exerciseLog in
+            guard exerciseLog.status != .skipped else { return nil }
+            let best = exerciseLog.sets.filter { $0.isCompleted }.max { a, b in
+                (a.weight ?? 0) * Double(a.reps ?? 0) < (b.weight ?? 0) * Double(b.reps ?? 0)
+            }
+            let prevLog = findPreviousExerciseLog(for: exerciseLog)
+            let prevBest = prevLog?.sets.filter { $0.isCompleted }.max { a, b in
+                (a.weight ?? 0) * Double(a.reps ?? 0) < (b.weight ?? 0) * Double(b.reps ?? 0)
+            }
+            guard let bestSet = best,
+                  let prevBestSet = prevBest,
+                  let bestWeight = bestSet.weight,
+                  let prevWeight = prevBestSet.weight,
+                  bestWeight > prevWeight,
+                  let reps = bestSet.reps else { return nil }
+            return (exerciseLog.exercise?.name ?? "Exercise", bestWeight, reps)
+        }
+    }
+
     var body: some View {
         NavigationStack {
             ScrollView {
@@ -68,25 +88,24 @@ struct WorkoutSummaryView: View {
                         comparisonSection
                     }
 
+                    // Personal records (if any)
+                    if !personalRecords.isEmpty {
+                        prSection
+                    }
+
                     // Exercise breakdown
                     exerciseBreakdownSection
 
-                    Spacer(minLength: 100)
+                    // Done button
+                    doneButton
+                        .padding(.top, 8)
+                        .padding(.bottom, 32)
                 }
                 .padding()
             }
             .background(Color.groveBackground)
             .navigationTitle("Workout Complete")
             .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Done") {
-                        sessionManager.dismissSummary()
-                    }
-                    .fontWeight(.semibold)
-                    .foregroundStyle(Color.groveSage)
-                }
-            }
         }
     }
 
@@ -106,16 +125,34 @@ struct WorkoutSummaryView: View {
             Text(formattedDate(workout.startedAt))
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
+
+            Text(completionSummary)
+                .font(.caption)
+                .foregroundStyle(.secondary)
         }
         .padding(.top, 8)
+    }
+
+    private var completionSummary: String {
+        let total = workout.exercises.count
+        let completed = exerciseCount
+        var summary = "\(completed) of \(total) exercises completed"
+        if skippedCount > 0 {
+            summary += " (\(skippedCount) skipped)"
+        }
+        return summary
+    }
+
+    private var exerciseCount: Int {
+        workout.exercises.filter { $0.status != .skipped }.count
     }
 
     private var statsSection: some View {
         HStack(spacing: 16) {
             StatCard(
-                icon: "clock.fill",
-                value: formatDuration(duration),
-                label: "Duration"
+                icon: "figure.strengthtraining.traditional",
+                value: "\(exerciseCount)",
+                label: "Exercises"
             )
 
             StatCard(
@@ -138,24 +175,61 @@ struct WorkoutSummaryView: View {
                 .font(.headline)
                 .foregroundStyle(Color.groveText)
 
-            HStack(spacing: 16) {
-                if let change = volumeChange {
-                    ComparisonCard(
-                        label: "Volume",
-                        change: change,
-                        isPositive: change >= 0
-                    )
-                }
+            if let change = volumeChange {
+                ComparisonCard(
+                    label: "Volume",
+                    change: change,
+                    isPositive: change >= 0
+                )
+            }
+        }
+    }
 
-                if let prev = previousWorkout {
-                    let durationChange = ((duration - prev.duration) / prev.duration) * 100
-                    ComparisonCard(
-                        label: "Duration",
-                        change: durationChange,
-                        isPositive: durationChange <= 0 // Less time is better
-                    )
+    private var prSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Label("New Personal Records", systemImage: "trophy.fill")
+                .font(.headline)
+                .foregroundStyle(Color.groveTerracotta)
+
+            VStack(spacing: 8) {
+                ForEach(personalRecords, id: \.name) { record in
+                    HStack(spacing: 12) {
+                        Image(systemName: "star.fill")
+                            .font(.caption)
+                            .foregroundStyle(Color.groveTerracotta)
+
+                        Text(record.name)
+                            .font(.body)
+                            .fontWeight(.medium)
+                            .foregroundStyle(Color.groveText)
+
+                        Spacer()
+
+                        Text(formatPRWeight(record.weight) + " × \(record.reps)")
+                            .font(.subheadline)
+                            .fontWeight(.semibold)
+                            .foregroundStyle(Color.groveTerracotta)
+                    }
+                    .padding()
+                    .background(Color.groveTerracotta.opacity(0.1))
+                    .clipShape(RoundedRectangle(cornerRadius: 12))
                 }
             }
+        }
+    }
+
+    private var doneButton: some View {
+        Button {
+            sessionManager.dismissSummary()
+        } label: {
+            Text("Done")
+                .font(.title3)
+                .fontWeight(.semibold)
+                .foregroundStyle(.white)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 16)
+                .background(Color.groveSage)
+                .clipShape(RoundedRectangle(cornerRadius: 16))
         }
     }
 
@@ -178,15 +252,11 @@ struct WorkoutSummaryView: View {
 
     // MARK: - Helpers
 
-    private func formatDuration(_ interval: TimeInterval) -> String {
-        let hours = Int(interval) / 3600
-        let minutes = (Int(interval) % 3600) / 60
-
-        if hours > 0 {
-            return "\(hours)h \(minutes)m"
-        } else {
-            return "\(minutes)m"
+    private func formatPRWeight(_ weight: Double) -> String {
+        if weight.truncatingRemainder(dividingBy: 1) == 0 {
+            return "\(Int(weight)) lbs"
         }
+        return String(format: "%.1f lbs", weight)
     }
 
     private func formatVolume(_ volume: Double) -> String {
@@ -307,6 +377,17 @@ struct ExerciseSummaryRow: View {
         return bestWeight > prevWeight
     }
 
+    private var setsVary: Bool {
+        guard completedSets.count > 1 else { return false }
+        let volumes = completedSets.map { ($0.weight ?? 0) * Double($0.reps ?? 0) }
+        return Set(volumes).count > 1
+    }
+
+    private func isBestSet(_ set: SetLog) -> Bool {
+        guard setsVary, let best = bestSet else { return false }
+        return set.setNumber == best.setNumber
+    }
+
     var body: some View {
         HStack(spacing: 12) {
             // Status icon
@@ -334,7 +415,7 @@ struct ExerciseSummaryRow: View {
                 }
 
                 if exerciseLog.status != .skipped {
-                    Text(setsSummary)
+                    setsSummaryText
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
@@ -370,21 +451,33 @@ struct ExerciseSummaryRow: View {
         }
     }
 
-    private var setsSummary: String {
+    private var setsSummaryText: Text {
         let sets = completedSets
-        if sets.isEmpty { return "No sets completed" }
-
-        // Show weight x reps for each set
-        let descriptions = sets.compactMap { set -> String? in
-            guard let weight = set.weight, let reps = set.reps else { return nil }
-            if weight.truncatingRemainder(dividingBy: 1) == 0 {
-                return "\(Int(weight))×\(reps)"
-            } else {
-                return String(format: "%.1f×%d", weight, reps)
-            }
+        guard !sets.isEmpty else {
+            return Text("No sets completed")
         }
 
-        return descriptions.joined(separator: ", ")
+        var result = Text("")
+        for (index, set) in sets.enumerated() {
+            if index > 0 {
+                result = result + Text(", ")
+            }
+            let desc = formatSetDescription(set)
+            if isBestSet(set) {
+                result = result + Text(Image(systemName: "star.fill")).foregroundColor(Color.groveTerracotta).font(.caption2) + Text(" \(desc)").bold()
+            } else {
+                result = result + Text(desc)
+            }
+        }
+        return result
+    }
+
+    private func formatSetDescription(_ set: SetLog) -> String {
+        guard let weight = set.weight, let reps = set.reps else { return "—" }
+        if weight.truncatingRemainder(dividingBy: 1) == 0 {
+            return "\(Int(weight))×\(reps)"
+        }
+        return String(format: "%.1f×%d", weight, reps)
     }
 
     private func formatVolume(_ volume: Double) -> String {
@@ -401,25 +494,80 @@ struct ExerciseSummaryRow: View {
         for: Workout.self, ExerciseLog.self, SetLog.self, Exercise.self,
         configurations: config
     )
+    let ctx = container.mainContext
 
+    // Exercises
+    let bench = Exercise(name: "Bench Press", muscleGroup: .chest, muscleSubgroup: "Middle")
+    let ohp = Exercise(name: "Overhead Press", muscleGroup: .shoulders, muscleSubgroup: "Front")
+    let laterals = Exercise(name: "Lateral Raises", muscleGroup: .shoulders, muscleSubgroup: "Side")
+    ctx.insert(bench)
+    ctx.insert(ohp)
+    ctx.insert(laterals)
+
+    // --- Previous workout (for PR comparison) ---
+    let prevWorkout = Workout(name: "Push Day")
+    prevWorkout.startedAt = Calendar.current.date(byAdding: .day, value: -7, to: Date())!
+    prevWorkout.completedAt = Calendar.current.date(byAdding: .day, value: -7, to: Date())!
+    ctx.insert(prevWorkout)
+
+    let prevBenchLog = ExerciseLog(exercise: bench, orderIndex: 0, targetSets: 3, targetReps: 8)
+    prevBenchLog.workout = prevWorkout
+    prevBenchLog.status = .completed
+    ctx.insert(prevBenchLog)
+    for i in 1...3 {
+        let s = SetLog(setNumber: i, weight: 125, reps: 8)
+        s.isCompleted = true
+        s.exerciseLog = prevBenchLog
+        ctx.insert(s)
+    }
+
+    let prevOHPLog = ExerciseLog(exercise: ohp, orderIndex: 1, targetSets: 3, targetReps: 10)
+    prevOHPLog.workout = prevWorkout
+    prevOHPLog.status = .completed
+    ctx.insert(prevOHPLog)
+    for i in 1...3 {
+        let s = SetLog(setNumber: i, weight: 85, reps: 10)
+        s.isCompleted = true
+        s.exerciseLog = prevOHPLog
+        ctx.insert(s)
+    }
+
+    // --- Current workout ---
     let workout = Workout(name: "Push Day")
     workout.completedAt = Date()
-    container.mainContext.insert(workout)
+    ctx.insert(workout)
 
-    let exercise = Exercise(name: "Bench Press", muscleGroup: .chest, muscleSubgroup: "Middle")
-    container.mainContext.insert(exercise)
-
-    let exerciseLog = ExerciseLog(exercise: exercise, orderIndex: 0, targetSets: 3, targetReps: 10)
-    exerciseLog.workout = workout
-    exerciseLog.status = .completed
-    container.mainContext.insert(exerciseLog)
-
-    for i in 1...3 {
-        let setLog = SetLog(setNumber: i, weight: 135, reps: 8)
-        setLog.isCompleted = true
-        setLog.exerciseLog = exerciseLog
-        container.mainContext.insert(setLog)
+    // Bench Press: varying sets (star on set 2), PR vs previous 125
+    let benchLog = ExerciseLog(exercise: bench, orderIndex: 0, targetSets: 3, targetReps: 8)
+    benchLog.workout = workout
+    benchLog.status = .completed
+    ctx.insert(benchLog)
+    let benchWeights: [(Double, Int)] = [(135, 8), (145, 8), (135, 6)]
+    for (i, (w, r)) in benchWeights.enumerated() {
+        let s = SetLog(setNumber: i + 1, weight: w, reps: r)
+        s.isCompleted = true
+        s.exerciseLog = benchLog
+        ctx.insert(s)
     }
+
+    // Overhead Press: varying sets (star on set 1), PR vs previous 85
+    let ohpLog = ExerciseLog(exercise: ohp, orderIndex: 1, targetSets: 3, targetReps: 10)
+    ohpLog.workout = workout
+    ohpLog.status = .completed
+    ctx.insert(ohpLog)
+    let ohpWeights: [(Double, Int)] = [(95, 10), (105, 8), (105, 6)]
+    for (i, (w, r)) in ohpWeights.enumerated() {
+        let s = SetLog(setNumber: i + 1, weight: w, reps: r)
+        s.isCompleted = true
+        s.exerciseLog = ohpLog
+        ctx.insert(s)
+    }
+
+    // Lateral Raises: skipped
+    let lateralLog = ExerciseLog(exercise: laterals, orderIndex: 2, targetSets: 3, targetReps: 12)
+    lateralLog.workout = workout
+    lateralLog.status = .skipped
+    ctx.insert(lateralLog)
 
     return WorkoutSummaryView(workout: workout)
         .environment(WorkoutSessionManager())
