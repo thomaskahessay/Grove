@@ -11,6 +11,10 @@ class WorkoutSessionManager {
     var completedWorkout: Workout?
     var showingSummary: Bool = false
 
+    // Streak & plan linking
+    var user: User?
+    var onWorkoutCompleted: ((Workout) -> Void)?
+
     var hasActiveWorkout: Bool {
         activeWorkout != nil && activeWorkout?.completedAt == nil
     }
@@ -50,8 +54,18 @@ class WorkoutSessionManager {
             }
         }
 
+        // Update streak
+        if let user = user {
+            StreakManager.recordWorkout(for: user)
+        }
+
         // Store completed workout for summary
         completedWorkout = activeWorkout
+
+        // Notify callback for plan linking
+        if let workout = activeWorkout {
+            onWorkoutCompleted?(workout)
+        }
 
         activeWorkout = nil
         isMinimized = false

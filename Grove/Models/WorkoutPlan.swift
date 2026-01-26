@@ -11,8 +11,8 @@ class WorkoutPlan {
     var completedWorkout: Workout?
 
     var status: PlanStatus {
-        if isRestDay { return .rest }
         if completedWorkout != nil { return .completed }
+        if isRestDay { return .rest }
         if date < Calendar.current.startOfDay(for: Date()) { return .incomplete }
         return .planned
     }

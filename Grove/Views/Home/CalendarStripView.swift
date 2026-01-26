@@ -5,6 +5,7 @@ struct CalendarStripView: View {
     @Query private var workoutPlans: [WorkoutPlan]
 
     @State private var selectedDate: Date = Date()
+    @State private var selectedDayForPlan: IdentifiableDate?
 
     private let calendar = Calendar.current
     private let dateFormatter: DateFormatter = {
@@ -15,9 +16,12 @@ struct CalendarStripView: View {
 
     private var weekDates: [Date] {
         let today = calendar.startOfDay(for: Date())
-        // Show 3 days before today, today, and 3 days after
-        return (-3...3).compactMap { offset in
-            calendar.date(byAdding: .day, value: offset, to: today)
+        let weekday = calendar.component(.weekday, from: today)
+        // Monday = 0 offset. weekday: Sun=1, Mon=2, ..., Sat=7
+        let daysFromMonday = (weekday + 5) % 7
+        let monday = calendar.date(byAdding: .day, value: -daysFromMonday, to: today)!
+        return (0..<7).compactMap { offset in
+            calendar.date(byAdding: .day, value: offset, to: monday)
         }
     }
 
@@ -33,31 +37,29 @@ struct CalendarStripView: View {
                 .font(.headline)
                 .foregroundStyle(Color.groveText)
 
-            ScrollView(.horizontal, showsIndicators: false) {
-                ScrollViewReader { proxy in
-                    HStack(spacing: 8) {
-                        ForEach(weekDates, id: \.self) { date in
-                            CalendarDayCell(
-                                date: date,
-                                isSelected: calendar.isDate(date, inSameDayAs: selectedDate),
-                                isToday: calendar.isDateInToday(date),
-                                plan: plan(for: date)
-                            )
-                            .id(date)
-                            .onTapGesture {
-                                withAnimation(.easeInOut(duration: 0.2)) {
-                                    selectedDate = date
-                                }
-                            }
+            HStack(spacing: 0) {
+                ForEach(weekDates, id: \.self) { date in
+                    CalendarDayCell(
+                        date: date,
+                        isSelected: calendar.isDate(date, inSameDayAs: selectedDate),
+                        isToday: calendar.isDateInToday(date),
+                        plan: plan(for: date)
+                    )
+                    .frame(maxWidth: .infinity)
+                    .onTapGesture {
+                        withAnimation(.easeInOut(duration: 0.2)) {
+                            selectedDate = date
                         }
-                    }
-                    .onAppear {
-                        // Scroll to today on appear
-                        let today = calendar.startOfDay(for: Date())
-                        proxy.scrollTo(today, anchor: .center)
+                        selectedDayForPlan = IdentifiableDate(date: date)
                     }
                 }
             }
+        }
+        .sheet(item: $selectedDayForPlan) { identifiableDate in
+            DayPlanSheet(
+                date: identifiableDate.date,
+                existingPlan: plan(for: identifiableDate.date)
+            )
         }
     }
 }

@@ -2,7 +2,10 @@ import SwiftUI
 import SwiftData
 
 struct ContentView: View {
+    @Environment(\.modelContext) private var modelContext
     @Environment(WorkoutSessionManager.self) private var sessionManager
+    @Query private var users: [User]
+    @Query(sort: \WorkoutPlan.date, order: .reverse) private var workoutPlans: [WorkoutPlan]
     @State private var showingWorkoutCreation = false
     @AppStorage("appearanceMode") private var appearanceMode: String = "System"
 
@@ -92,6 +95,20 @@ struct ContentView: View {
             }
         }
         .preferredColorScheme(colorScheme)
+        .task {
+            sessionManager.user = users.first
+            sessionManager.onWorkoutCompleted = { workout in
+                // Link completed workout to today's plan
+                let calendar = Calendar.current
+                let today = calendar.startOfDay(for: Date())
+                if let todaysPlan = workoutPlans.first(where: { calendar.isDate($0.date, inSameDayAs: today) && !$0.isRestDay }) {
+                    todaysPlan.completedWorkout = workout
+                }
+            }
+        }
+        .onChange(of: users.first?.appleUserID) {
+            sessionManager.user = users.first
+        }
     }
 }
 

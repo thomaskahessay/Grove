@@ -29,7 +29,8 @@ enum MuscleGroup: String, Codable, CaseIterable {
     case fullBody = "Full Body"
 }
 
-enum TemplateCategory: String, Codable, CaseIterable {
+enum TemplateCategory: String, Codable, CaseIterable, Identifiable {
+    var id: String { rawValue }
     case push = "Push"
     case pull = "Pull"
     case legs = "Legs"

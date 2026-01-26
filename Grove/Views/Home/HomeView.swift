@@ -5,9 +5,6 @@ struct HomeView: View {
     @Environment(\.modelContext) private var modelContext
     @Query private var users: [User]
     @Query(
-        filter: #Predicate<WorkoutPlan> { plan in
-            plan.isRestDay == false
-        },
         sort: \WorkoutPlan.date,
         order: .reverse
     ) private var workoutPlans: [WorkoutPlan]
@@ -19,6 +16,8 @@ struct HomeView: View {
         sort: \Workout.completedAt,
         order: .reverse
     ) private var completedWorkouts: [Workout]
+
+    @State private var showingWeeklyPlan = false
 
     private var recentWorkouts: [Workout] {
         Array(completedWorkouts.prefix(5))
@@ -60,6 +59,56 @@ struct HomeView: View {
         }
     }
 
+    // MARK: - Weekly Stats
+
+    private var weekStart: Date {
+        let calendar = Calendar.current
+        let today = calendar.startOfDay(for: Date())
+        let weekday = calendar.component(.weekday, from: today)
+        let daysFromMonday = (weekday + 5) % 7
+        return calendar.date(byAdding: .day, value: -daysFromMonday, to: today)!
+    }
+
+    private var weekEnd: Date {
+        Calendar.current.date(byAdding: .day, value: 6, to: weekStart)!
+    }
+
+    private var workoutsThisWeek: Int {
+        let calendar = Calendar.current
+        return completedWorkouts.filter { workout in
+            guard let completedAt = workout.completedAt else { return false }
+            let day = calendar.startOfDay(for: completedAt)
+            return day >= weekStart && day <= weekEnd
+        }.count
+    }
+
+    private var plannedThisWeek: Int {
+        let calendar = Calendar.current
+        return workoutPlans.filter { plan in
+            let day = calendar.startOfDay(for: plan.date)
+            return day >= weekStart && day <= weekEnd && !plan.isRestDay
+        }.count
+    }
+
+    // MARK: - Next Upcoming Workout
+
+    private var nextPlannedWorkout: (name: String, date: Date)? {
+        let calendar = Calendar.current
+        let tomorrow = calendar.date(byAdding: .day, value: 1, to: calendar.startOfDay(for: Date()))!
+
+        let futurePlans = workoutPlans
+            .filter { plan in
+                let day = calendar.startOfDay(for: plan.date)
+                return day >= tomorrow && !plan.isRestDay && plan.template != nil
+            }
+            .sorted { $0.date < $1.date }
+
+        guard let next = futurePlans.first, let template = next.template else {
+            return nil
+        }
+        return (name: template.name, date: next.date)
+    }
+
     var body: some View {
         NavigationStack {
             ScrollView {
@@ -70,22 +119,57 @@ struct HomeView: View {
                         .fontWeight(.bold)
                         .foregroundStyle(Color.groveText)
 
-                    // Quick Start Section
-                    QuickStartSection()
+                    // Today's Workout Card
+                    if let plan = todaysPlan {
+                        if plan.isRestDay {
+                            RestDayCard()
+                        } else if let template = plan.template {
+                            TodayWorkoutCard(
+                                workoutName: template.name,
+                                exerciseCount: template.exerciseIDs.count,
+                                category: template.category
+                            )
+                        } else if let next = nextPlannedWorkout {
+                            NextWorkoutCard(name: next.name, date: next.date)
+                        } else {
+                            EmptyTodayCard()
+                        }
+                    } else if let next = nextPlannedWorkout {
+                        NextWorkoutCard(name: next.name, date: next.date)
+                    } else {
+                        EmptyTodayCard()
+                    }
 
                     // Calendar Strip
                     CalendarStripView()
 
-                    // Today's Workout Card
-                    if let plan = todaysPlan, let template = plan.template {
-                        TodayWorkoutCard(
-                            workoutName: template.name,
-                            exerciseCount: template.exerciseIDs.count,
-                            category: template.category
-                        )
-                    } else {
-                        EmptyTodayCard()
+                    // Plan My Week Button
+                    Button {
+                        showingWeeklyPlan = true
+                    } label: {
+                        HStack(spacing: 8) {
+                            Image(systemName: "calendar.badge.plus")
+                                .foregroundStyle(Color.groveSage)
+                            Text("Plan My Week")
+                                .font(.subheadline)
+                                .fontWeight(.medium)
+                                .foregroundStyle(Color.groveText)
+                            Spacer()
+                            Image(systemName: "chevron.right")
+                                .font(.caption)
+                                .foregroundStyle(.tertiary)
+                        }
+                        .padding(12)
+                        .background(Color.groveCardBackground)
+                        .clipShape(RoundedRectangle(cornerRadius: 10))
                     }
+                    .buttonStyle(.plain)
+
+                    // Weekly Stats
+                    WeeklyStatsCard(
+                        completed: workoutsThisWeek,
+                        planned: plannedThisWeek
+                    )
 
                     // Recent Workouts Section
                     if !recentWorkouts.isEmpty {
@@ -115,6 +199,18 @@ struct HomeView: View {
                             .font(.title2)
                             .foregroundStyle(Color.groveSage)
                     }
+                }
+            }
+            .sheet(isPresented: $showingWeeklyPlan) {
+                WeeklyPlanView()
+            }
+            .onAppear {
+                if let user = currentUser {
+                    StreakManager.recalculateStreak(
+                        for: user,
+                        workouts: completedWorkouts,
+                        plans: workoutPlans
+                    )
                 }
             }
         }
@@ -200,7 +296,150 @@ struct EmptyTodayCard: View {
                     .fontWeight(.medium)
                     .foregroundStyle(Color.groveText)
 
-                Text("Use Quick Start above or tap + to begin")
+                Text("Tap + to start a workout")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            Spacer()
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity)
+        .background(Color.groveCardBackground)
+        .clipShape(RoundedRectangle(cornerRadius: 12))
+    }
+}
+
+// MARK: - Weekly Stats Card
+
+struct WeeklyStatsCard: View {
+    let completed: Int
+    let planned: Int
+
+    private var hasPlans: Bool { planned > 0 }
+
+    private var progress: Double {
+        guard planned > 0 else { return 0 }
+        return min(Double(completed) / Double(planned), 1.0)
+    }
+
+    private var summaryText: String {
+        if hasPlans {
+            return "\(completed) of \(planned) workouts"
+        } else {
+            return "\(completed) workout\(completed == 1 ? "" : "s")"
+        }
+    }
+
+    private var subtitleText: String {
+        if !hasPlans && completed == 0 {
+            return "Plan your week to set goals"
+        } else if completed >= planned && hasPlans {
+            return "Week complete!"
+        } else {
+            return "This week"
+        }
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Image(systemName: "chart.bar.fill")
+                    .foregroundStyle(Color.groveSage)
+                Text("Weekly Progress")
+                    .font(.headline)
+                    .foregroundStyle(Color.groveText)
+                Spacer()
+                Text(summaryText)
+                    .font(.subheadline)
+                    .fontWeight(.semibold)
+                    .foregroundStyle(Color.groveSage)
+            }
+
+            // Progress bar
+            GeometryReader { geo in
+                ZStack(alignment: .leading) {
+                    RoundedRectangle(cornerRadius: 4)
+                        .fill(Color.groveWarmSand.opacity(0.4))
+                        .frame(height: 8)
+
+                    RoundedRectangle(cornerRadius: 4)
+                        .fill(Color.groveSage)
+                        .frame(width: hasPlans ? geo.size.width * progress : (completed > 0 ? geo.size.width * 0.5 : 0), height: 8)
+                        .animation(.easeInOut(duration: 0.4), value: progress)
+                }
+            }
+            .frame(height: 8)
+
+            Text(subtitleText)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+        .padding(16)
+        .background(Color.groveCardBackground)
+        .clipShape(RoundedRectangle(cornerRadius: 12))
+    }
+}
+
+// MARK: - Next Workout Card
+
+struct NextWorkoutCard: View {
+    let name: String
+    let date: Date
+
+    private var dayLabel: String {
+        let calendar = Calendar.current
+        if calendar.isDateInTomorrow(date) {
+            return "Tomorrow"
+        } else {
+            let formatter = DateFormatter()
+            formatter.dateFormat = "EEEE"
+            return formatter.string(from: date)
+        }
+    }
+
+    var body: some View {
+        HStack(spacing: 16) {
+            Image(systemName: "calendar.badge.clock")
+                .font(.title)
+                .foregroundStyle(Color.groveTerracotta)
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Next up: \(name)")
+                    .font(.subheadline)
+                    .fontWeight(.medium)
+                    .foregroundStyle(Color.groveText)
+
+                Text(dayLabel)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            Spacer()
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity)
+        .background(Color.groveCardBackground)
+        .clipShape(RoundedRectangle(cornerRadius: 12))
+    }
+}
+
+// MARK: - Rest Day Card
+
+struct RestDayCard: View {
+    var body: some View {
+        HStack(spacing: 16) {
+            Image(systemName: "moon.fill")
+                .font(.title)
+                .foregroundStyle(Color.groveTerracotta)
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Rest Day")
+                    .font(.subheadline)
+                    .fontWeight(.medium)
+                    .foregroundStyle(Color.groveText)
+
+                Text("Recovery is part of the plan")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }

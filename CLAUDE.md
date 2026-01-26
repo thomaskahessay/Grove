@@ -44,6 +44,7 @@ Grove/
 │   ├── AuthService.swift          # Sign in with Apple handling
 │   ├── HealthKitManager.swift     # HealthKit authorization and queries
 │   ├── NotificationService.swift  # Local notification scheduling
+│   ├── StreakManager.swift        # Streak calculation logic (static methods)
 │   └── WorkoutSessionManager.swift # @Observable - active workout state management
 ├── Views/
 │   ├── Onboarding/
@@ -53,7 +54,9 @@ Grove/
 │   ├── Home/
 │   │   ├── HomeView.swift
 │   │   ├── CalendarStripView.swift
-│   │   └── QuickStartSection.swift
+│   │   ├── QuickStartSection.swift
+│   │   ├── DayPlanSheet.swift         # Sheet for assigning workout/rest to a day
+│   │   └── WeeklyPlanView.swift       # Full-screen weekly planner
 │   ├── Workout/
 │   │   ├── WorkoutCreationView.swift
 │   │   ├── ActiveWorkoutView.swift
@@ -126,7 +129,7 @@ class Workout {
 - [x] Basic tab navigation (Home, Progress, Social, Profile)
 
 **Phase 2: Core Features**
-- [x] Home screen with welcome message, calendar strip, quick start section
+- [x] Home screen with welcome message, calendar strip, weekly stats, next workout preview
 - [x] Exercise Library (browse, search, filter by muscle group)
 - [x] Add custom exercise form
 - [x] Workout creation flow
@@ -155,18 +158,39 @@ class Workout {
   - WorkoutSessionManager for app-wide active workout state
 - [x] Profile view with light/dark mode toggle
 
-### 🚧 In Progress
-
-- [ ] Workout summary screen (post-workout stats)
+**Phase 3a: Weekly Planning & Streaks**
+- [x] Workout summary screen (post-workout stats + PR callout)
+- [x] Weekly calendar planning view (WeeklyPlanView.swift)
+  - Full-screen week planner with Mon–Sun layout
+  - Week navigator (< This Week >) with chevron buttons
+  - Summary bar (X workouts, Y rest days, Z unplanned)
+  - Tap day to open DayPlanSheet
+- [x] Day plan sheet (DayPlanSheet.swift)
+  - Assign workout template or rest day to any date
+  - Rest day toggle with moon icon
+  - Template picker (user templates + category grid)
+  - New template creation with exercise picker + suggested exercises
+  - Clear plan option for existing plans
+- [x] Assign workouts to days via calendar strip tap or weekly planner
+- [x] Calendar strip shows fixed Mon–Sun week (rolls over on Monday)
+- [x] Streak tracking logic (StreakManager.swift)
+  - recordWorkout: increments/resets streak based on gap
+  - recordRestDay: preserves streak (up to 3 consecutive)
+  - recalculateStreak: full audit on app launch
+  - Vacation mode support
+- [x] Streak wired into workout completion (WorkoutSessionManager)
+- [x] Plan linking: completed workouts auto-link to today's plan
+- [x] Home screen improvements
+  - Weekly stats card with progress bar
+  - Next workout preview (replaces empty card)
+  - Plan My Week button
+  - Rest day card
 
 ### 📋 Not Started
 
-**Phase 3: Progress & Planning**
-- [ ] Weekly calendar planning view
-- [ ] Assign workouts to days
+**Phase 3b: Progress & Achievements**
 - [ ] Progress charts (1RM, weight×reps)
 - [ ] Personal record detection
-- [ ] Streak tracking logic
 - [ ] Achievements system
 
 **Phase 4: HealthKit & Social**
@@ -184,7 +208,7 @@ class Workout {
 - [ ] Vacation mode
 
 ### Known Issues
-- [ ] Streak badge number not displaying (needs debugging)
+- [x] Streak badge — now wired to StreakManager with recalculation on app launch
 
 ---
 
