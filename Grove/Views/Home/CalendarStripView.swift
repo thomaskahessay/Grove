@@ -4,7 +4,6 @@ import SwiftData
 struct CalendarStripView: View {
     @Query private var workoutPlans: [WorkoutPlan]
 
-    @State private var selectedDate: Date = Date()
     @State private var selectedDayForPlan: IdentifiableDate?
 
     private let calendar = Calendar.current
@@ -41,15 +40,14 @@ struct CalendarStripView: View {
                 ForEach(weekDates, id: \.self) { date in
                     CalendarDayCell(
                         date: date,
-                        isSelected: calendar.isDate(date, inSameDayAs: selectedDate),
+                        isSelected: calendar.isDateInToday(date),
                         isToday: calendar.isDateInToday(date),
                         plan: plan(for: date)
                     )
                     .frame(maxWidth: .infinity)
                     .onTapGesture {
-                        withAnimation(.easeInOut(duration: 0.2)) {
-                            selectedDate = date
-                        }
+                        let dayPlan = plan(for: date)
+                        guard dayPlan?.status != .completed else { return }
                         selectedDayForPlan = IdentifiableDate(date: date)
                     }
                 }
@@ -122,9 +120,25 @@ struct CalendarDayCell: View {
         case .incomplete:
             return "exclamationmark"
         case .planned:
-            return nil
+            return categoryIconName(for: plan.template?.category)
         case .rest:
             return "moon.fill"
+        }
+    }
+
+    private func categoryIconName(for category: TemplateCategory?) -> String? {
+        guard let category else { return nil }
+        switch category {
+        case .push: return "arrow.up.circle"
+        case .pull: return "arrow.down.circle"
+        case .legs: return "figure.run"
+        case .upper: return "figure.arms.open"
+        case .lower: return "figure.walk"
+        case .fullBody: return "figure.mixed.cardio"
+        case .chestTriceps: return "arrowtriangle.down.fill"
+        case .backBiceps: return "dumbbell.fill"
+        case .shoulders: return "figure.boxing"
+        case .custom: return "star.circle.fill"
         }
     }
 

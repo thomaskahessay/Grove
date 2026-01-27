@@ -3,6 +3,7 @@ import SwiftData
 
 struct HomeView: View {
     @Environment(\.modelContext) private var modelContext
+    @Environment(WorkoutSessionManager.self) private var sessionManager
     @Query private var users: [User]
     @Query(
         sort: \WorkoutPlan.date,
@@ -16,6 +17,8 @@ struct HomeView: View {
         sort: \Workout.completedAt,
         order: .reverse
     ) private var completedWorkouts: [Workout]
+
+    @Query(sort: \Exercise.name) private var allExercises: [Exercise]
 
     @State private var showingWeeklyPlan = false
 
@@ -109,6 +112,22 @@ struct HomeView: View {
         return (name: template.name, date: next.date)
     }
 
+    private var tomorrowsPlan: WorkoutPlan? {
+        let calendar = Calendar.current
+        let tomorrow = calendar.date(byAdding: .day, value: 1, to: calendar.startOfDay(for: Date()))!
+        return workoutPlans.first { plan in
+            calendar.isDate(plan.date, inSameDayAs: tomorrow)
+        }
+    }
+
+    private var todaysCompletedWorkout: Workout? {
+        let calendar = Calendar.current
+        return completedWorkouts.first { workout in
+            guard let completedAt = workout.completedAt else { return false }
+            return calendar.isDateInToday(completedAt)
+        }
+    }
+
     var body: some View {
         NavigationStack {
             ScrollView {
@@ -123,17 +142,30 @@ struct HomeView: View {
                     if let plan = todaysPlan {
                         if plan.isRestDay {
                             RestDayCard()
+                        } else if let completedWorkout = plan.completedWorkout {
+                            CompletedTodayCard(
+                                workout: completedWorkout,
+                                tomorrowsPlan: tomorrowsPlan,
+                                onPlanTomorrow: { showingWeeklyPlan = true }
+                            )
                         } else if let template = plan.template {
                             TodayWorkoutCard(
                                 workoutName: template.name,
                                 exerciseCount: template.exerciseIDs.count,
-                                category: template.category
+                                category: template.category,
+                                onStart: { startTodaysWorkout(plan: plan) }
                             )
                         } else if let next = nextPlannedWorkout {
                             NextWorkoutCard(name: next.name, date: next.date)
                         } else {
                             EmptyTodayCard()
                         }
+                    } else if let completedWorkout = todaysCompletedWorkout {
+                        CompletedTodayCard(
+                            workout: completedWorkout,
+                            tomorrowsPlan: tomorrowsPlan,
+                            onPlanTomorrow: { showingWeeklyPlan = true }
+                        )
                     } else if let next = nextPlannedWorkout {
                         NextWorkoutCard(name: next.name, date: next.date)
                     } else {
@@ -215,6 +247,46 @@ struct HomeView: View {
             }
         }
     }
+
+    // MARK: - Start Today's Workout
+
+    private func startTodaysWorkout(plan: WorkoutPlan) {
+        guard let template = plan.template else { return }
+
+        let exercises = template.exerciseIDs.compactMap { id in
+            allExercises.first { $0.id == id }
+        }
+        guard !exercises.isEmpty else { return }
+
+        let defaultSets = template.defaultSets
+        let defaultReps = template.defaultReps
+
+        let workout = Workout(name: template.name, templateUsed: template)
+        modelContext.insert(workout)
+
+        for (index, exercise) in exercises.enumerated() {
+            let exerciseLog = ExerciseLog(
+                exercise: exercise,
+                orderIndex: index,
+                targetSets: defaultSets,
+                targetReps: defaultReps
+            )
+            exerciseLog.workout = workout
+            modelContext.insert(exerciseLog)
+
+            for setNumber in 1...defaultSets {
+                let setLog = SetLog(setNumber: setNumber)
+                setLog.exerciseLog = exerciseLog
+                exerciseLog.sets.append(setLog)
+                modelContext.insert(setLog)
+            }
+        }
+
+        template.usageCount += 1
+        template.lastUsedDate = Date()
+
+        sessionManager.startWorkout(workout)
+    }
 }
 
 // MARK: - Streak Badge
@@ -243,6 +315,7 @@ struct TodayWorkoutCard: View {
     let workoutName: String
     let exerciseCount: Int
     let category: TemplateCategory
+    var onStart: (() -> Void)?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -268,7 +341,7 @@ struct TodayWorkoutCard: View {
             }
 
             Button(action: {
-                // TODO: Start workout
+                onStart?()
             }) {
                 Text("Start Workout")
             }
@@ -453,6 +526,105 @@ struct RestDayCard: View {
     }
 }
 
+// MARK: - Completed Today Card
+
+struct CompletedTodayCard: View {
+    let workout: Workout
+    let tomorrowsPlan: WorkoutPlan?
+    var onPlanTomorrow: (() -> Void)?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 10) {
+                Image(systemName: "checkmark.circle.fill")
+                    .font(.title2)
+                    .foregroundStyle(Color.groveSage)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(workout.name)
+                        .font(.subheadline)
+                        .fontWeight(.semibold)
+                        .foregroundStyle(Color.groveText)
+                    Text("\(workout.completedExerciseCount) exercises completed")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+            }
+
+            Divider()
+
+            // Up Next section
+            upNextSection
+        }
+        .padding(16)
+        .background(Color.groveCardBackground)
+        .clipShape(RoundedRectangle(cornerRadius: 12))
+    }
+
+    @ViewBuilder
+    private var upNextSection: some View {
+        if let plan = tomorrowsPlan {
+            if plan.isRestDay {
+                HStack(spacing: 10) {
+                    Image(systemName: "moon.fill")
+                        .foregroundStyle(Color.groveTerracotta)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Rest Day Tomorrow")
+                            .font(.subheadline)
+                            .fontWeight(.medium)
+                            .foregroundStyle(Color.groveText)
+                        Text("Recovery is part of the plan")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    Spacer()
+                }
+            } else if let template = plan.template {
+                HStack(spacing: 10) {
+                    Image(systemName: "dumbbell.fill")
+                        .foregroundStyle(Color.groveSage)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(template.name)
+                            .font(.subheadline)
+                            .fontWeight(.medium)
+                            .foregroundStyle(Color.groveText)
+                        Text("Tomorrow")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    Spacer()
+                }
+            } else {
+                unscheduledTomorrow
+            }
+        } else {
+            unscheduledTomorrow
+        }
+    }
+
+    private var unscheduledTomorrow: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "calendar")
+                .foregroundStyle(Color.groveWarmSand)
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Tomorrow isn't planned yet")
+                    .font(.subheadline)
+                    .fontWeight(.medium)
+                    .foregroundStyle(Color.groveText)
+            }
+            Spacer()
+            Button {
+                onPlanTomorrow?()
+            } label: {
+                Text("Plan My Week")
+                    .font(.caption)
+                    .fontWeight(.semibold)
+                    .foregroundStyle(Color.groveSage)
+            }
+        }
+    }
+}
+
 // MARK: - Category Icon
 
 struct CategoryIcon: View {
@@ -568,13 +740,14 @@ struct RecentWorkoutRow: View {
 
 #Preview("Home - Empty") {
     HomeView()
-        .modelContainer(for: [User.self, WorkoutPlan.self, WorkoutTemplate.self, Workout.self])
+        .environment(WorkoutSessionManager())
+        .modelContainer(for: [User.self, WorkoutPlan.self, WorkoutTemplate.self, Workout.self, Exercise.self])
 }
 
 #Preview("Home - With Workouts") {
     let config = ModelConfiguration(isStoredInMemoryOnly: true)
     let container = try! ModelContainer(
-        for: User.self, Workout.self, ExerciseLog.self, WorkoutPlan.self, WorkoutTemplate.self,
+        for: User.self, Workout.self, ExerciseLog.self, WorkoutPlan.self, WorkoutTemplate.self, Exercise.self,
         configurations: config
     )
 
@@ -601,5 +774,6 @@ struct RecentWorkoutRow: View {
     container.mainContext.insert(workout4)
 
     return HomeView()
+        .environment(WorkoutSessionManager())
         .modelContainer(container)
 }

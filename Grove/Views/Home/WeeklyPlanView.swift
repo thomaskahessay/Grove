@@ -83,6 +83,7 @@ struct WeeklyPlanView: View {
                                 isToday: calendar.isDateInToday(date)
                             )
                             .onTapGesture {
+                                guard plan(for: date)?.status != .completed else { return }
                                 selectedDay = IdentifiableDate(date: date)
                             }
 
@@ -197,9 +198,10 @@ struct WeekDayRow: View {
     }
 
     private var statusIcon: String? {
-        guard let plan = plan, isPast else { return nil }
+        guard let plan = plan else { return nil }
+        if plan.status == .completed { return "checkmark.circle.fill" }
+        guard isPast else { return nil }
         switch plan.status {
-        case .completed: return "checkmark.circle.fill"
         case .incomplete: return "exclamationmark.circle.fill"
         case .rest: return "moon.fill"
         default: return nil
@@ -267,9 +269,11 @@ struct WeekDayRow: View {
                     .font(.body)
             }
 
-            Image(systemName: "chevron.right")
-                .font(.caption)
-                .foregroundStyle(.tertiary)
+            if plan?.status != .completed {
+                Image(systemName: "chevron.right")
+                    .font(.caption)
+                    .foregroundStyle(.tertiary)
+            }
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 14)

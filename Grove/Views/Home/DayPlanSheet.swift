@@ -12,6 +12,7 @@ struct DayPlanSheet: View {
     @State private var isRestDay: Bool
     @State private var selectedTemplate: WorkoutTemplate?
     @State private var newTemplateCategory: TemplateCategory?
+    @State private var filterCategory: TemplateCategory?
 
     init(date: Date, existingPlan: WorkoutPlan? = nil) {
         self.date = date
@@ -28,6 +29,11 @@ struct DayPlanSheet: View {
 
     private var userTemplates: [WorkoutTemplate] {
         templates.filter { !$0.isBuiltIn }
+    }
+
+    private var filteredUserTemplates: [WorkoutTemplate] {
+        guard let category = filterCategory else { return userTemplates }
+        return userTemplates.filter { $0.category == category }
     }
 
     var body: some View {
@@ -80,7 +86,12 @@ struct DayPlanSheet: View {
             }
         }
         .presentationDetents([.large])
-        .sheet(item: $newTemplateCategory) { category in
+        .sheet(item: $newTemplateCategory, onDismiss: {
+            if selectedTemplate == nil || selectedTemplate?.category != filterCategory {
+                filterCategory = nil
+                selectedTemplate = nil
+            }
+        }) { category in
             NewTemplateSheet(category: category) { template in
                 selectedTemplate = template
             }
@@ -122,21 +133,30 @@ struct DayPlanSheet: View {
                 .foregroundStyle(Color.groveText)
 
             // User templates
-            if !userTemplates.isEmpty {
+            if !filteredUserTemplates.isEmpty {
                 VStack(alignment: .leading, spacing: 8) {
                     Text("Your Templates")
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
 
-                    ForEach(userTemplates) { template in
+                    ForEach(filteredUserTemplates) { template in
                         TemplatePlanRow(
                             template: template,
-                            isSelected: selectedTemplate?.id == template.id
-                        ) {
-                            withAnimation(.easeInOut(duration: 0.2)) {
-                                selectedTemplate = (selectedTemplate?.id == template.id) ? nil : template
+                            isSelected: selectedTemplate?.id == template.id,
+                            onSelect: {
+                                withAnimation(.easeInOut(duration: 0.2)) {
+                                    selectedTemplate = (selectedTemplate?.id == template.id) ? nil : template
+                                }
+                            },
+                            onDelete: {
+                                withAnimation(.easeInOut(duration: 0.2)) {
+                                    if selectedTemplate?.id == template.id {
+                                        selectedTemplate = nil
+                                    }
+                                    modelContext.delete(template)
+                                }
                             }
-                        }
+                        )
                     }
                 }
             }
@@ -154,15 +174,19 @@ struct DayPlanSheet: View {
                     ForEach(TemplateCategory.allCases, id: \.self) { category in
                         CategoryPlanButton(
                             category: category,
-                            isSelected: selectedTemplate?.category == category
+                            isSelected: filterCategory == category
                         ) {
                             withAnimation(.easeInOut(duration: 0.2)) {
-                                if selectedTemplate?.category == category {
-                                    selectedTemplate = nil
-                                } else if let existing = templates.first(where: { $0.category == category }) {
-                                    selectedTemplate = existing
+                                if filterCategory == category {
+                                    filterCategory = nil
                                 } else {
-                                    newTemplateCategory = category
+                                    filterCategory = category
+                                    // Also auto-select a matching template if one exists
+                                    if let existing = userTemplates.first(where: { $0.category == category }) {
+                                        selectedTemplate = existing
+                                    } else {
+                                        newTemplateCategory = category
+                                    }
                                 }
                             }
                         }
@@ -213,40 +237,52 @@ struct DayPlanSheet: View {
 struct TemplatePlanRow: View {
     let template: WorkoutTemplate
     let isSelected: Bool
-    let action: () -> Void
+    let onSelect: () -> Void
+    let onDelete: () -> Void
 
     var body: some View {
-        Button(action: action) {
-            HStack(spacing: 12) {
-                Image(systemName: "doc.text.fill")
-                    .foregroundStyle(isSelected ? .white : Color.groveSage)
+        HStack(spacing: 0) {
+            Button(action: onSelect) {
+                HStack(spacing: 12) {
+                    Image(systemName: "doc.text.fill")
+                        .foregroundStyle(isSelected ? .white : Color.groveSage)
 
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(template.name)
-                        .font(.subheadline)
-                        .fontWeight(.medium)
-                    Text("\(template.exerciseIDs.count) exercises")
-                        .font(.caption)
-                        .foregroundStyle(isSelected ? .white.opacity(0.7) : .secondary)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(template.name)
+                            .font(.subheadline)
+                            .fontWeight(.medium)
+                        Text("\(template.exerciseIDs.count) exercises")
+                            .font(.caption)
+                            .foregroundStyle(isSelected ? .white.opacity(0.7) : .secondary)
+                    }
+
+                    Spacer()
+
+                    if isSelected {
+                        Image(systemName: "checkmark.circle.fill")
+                            .foregroundStyle(.white)
+                    }
                 }
-
-                Spacer()
-
-                if isSelected {
-                    Image(systemName: "checkmark.circle.fill")
-                        .foregroundStyle(.white)
-                }
+                .contentShape(Rectangle())
             }
-            .padding(12)
-            .background(isSelected ? Color.groveSage : Color.groveCardBackground)
-            .foregroundStyle(isSelected ? .white : Color.groveText)
-            .clipShape(RoundedRectangle(cornerRadius: 10))
-            .overlay(
-                RoundedRectangle(cornerRadius: 10)
-                    .stroke(isSelected ? Color.groveSage : Color.groveWarmSand.opacity(0.5), lineWidth: 1)
-            )
+            .buttonStyle(.plain)
+
+            Button(action: onDelete) {
+                Image(systemName: "trash")
+                    .font(.subheadline)
+                    .foregroundStyle(Color.groveMutedRust)
+                    .padding(.leading, 12)
+            }
+            .buttonStyle(.plain)
         }
-        .buttonStyle(.plain)
+        .padding(12)
+        .background(isSelected ? Color.groveSage : Color.groveCardBackground)
+        .foregroundStyle(isSelected ? .white : Color.groveText)
+        .clipShape(RoundedRectangle(cornerRadius: 10))
+        .overlay(
+            RoundedRectangle(cornerRadius: 10)
+                .stroke(isSelected ? Color.groveSage : Color.groveWarmSand.opacity(0.5), lineWidth: 1)
+        )
     }
 }
 
@@ -417,6 +453,7 @@ struct NewTemplateSheet: View {
                                 .buttonStyle(.secondary)
                             }
                             .frame(maxWidth: .infinity)
+                            .padding(.horizontal, 16)
                             .padding(.vertical, 24)
                             .background(Color.groveCardBackground)
                             .clipShape(RoundedRectangle(cornerRadius: 12))

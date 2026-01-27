@@ -164,15 +164,18 @@ class Workout {
   - Full-screen week planner with Mon–Sun layout
   - Week navigator (< This Week >) with chevron buttons
   - Summary bar (X workouts, Y rest days, Z unplanned)
-  - Tap day to open DayPlanSheet
+  - Tap day to open DayPlanSheet (completed days locked from editing)
+  - Completed days show checkmark icon (including today)
 - [x] Day plan sheet (DayPlanSheet.swift)
   - Assign workout template or rest day to any date
   - Rest day toggle with moon icon
-  - Template picker (user templates + category grid)
+  - Template picker (user templates + category grid with filter)
+  - Template deletion from row
   - New template creation with exercise picker + suggested exercises
+  - Cancelling template creation resets category selection
   - Clear plan option for existing plans
 - [x] Assign workouts to days via calendar strip tap or weekly planner
-- [x] Calendar strip shows fixed Mon–Sun week (rolls over on Monday)
+- [x] Calendar strip shows fixed Mon–Sun week (highlight stays on today, completed days locked)
 - [x] Streak tracking logic (StreakManager.swift)
   - recordWorkout: increments/resets streak based on gap
   - recordRestDay: preserves streak (up to 3 consecutive)
@@ -185,6 +188,8 @@ class Workout {
   - Next workout preview (replaces empty card)
   - Plan My Week button
   - Rest day card
+  - Completed workout card with "what's next" section (tomorrow's plan or plan nudge)
+  - Start workout from today's plan card
 
 ### 📋 Not Started
 
