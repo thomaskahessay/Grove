@@ -120,7 +120,7 @@ struct CalendarDayCell: View {
         case .incomplete:
             return "exclamationmark"
         case .planned:
-            return categoryIconName(for: plan.template?.category)
+            return categoryIconName(for: plan.template?.category) ?? "dumbbell.fill"
         case .rest:
             return "moon.fill"
         }
@@ -186,5 +186,5 @@ struct CalendarDayCell: View {
 #Preview {
     CalendarStripView()
         .padding()
-        .modelContainer(for: [WorkoutPlan.self])
+        .modelContainer(for: [WorkoutPlan.self, WorkoutTemplate.self], inMemory: true)
 }

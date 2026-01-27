@@ -18,7 +18,8 @@ struct DayPlanSheet: View {
         self.date = date
         self.existingPlan = existingPlan
         _isRestDay = State(initialValue: existingPlan?.isRestDay ?? false)
-        _selectedTemplate = State(initialValue: existingPlan?.template)
+        let template = existingPlan?.template
+        _selectedTemplate = State(initialValue: (template?.isArchived == true) ? nil : template)
     }
 
     private var dateHeader: String {
@@ -28,7 +29,7 @@ struct DayPlanSheet: View {
     }
 
     private var userTemplates: [WorkoutTemplate] {
-        templates.filter { !$0.isBuiltIn }
+        templates.filter { !$0.isBuiltIn && !$0.isArchived }
     }
 
     private var filteredUserTemplates: [WorkoutTemplate] {
@@ -153,7 +154,12 @@ struct DayPlanSheet: View {
                                     if selectedTemplate?.id == template.id {
                                         selectedTemplate = nil
                                     }
-                                    modelContext.delete(template)
+                                    let isLastForCategory = filterCategory != nil &&
+                                        userTemplates.filter({ $0.category == filterCategory && $0.id != template.id }).isEmpty
+                                    template.isArchived = true
+                                    if isLastForCategory {
+                                        newTemplateCategory = filterCategory
+                                    }
                                 }
                             }
                         )
@@ -547,5 +553,5 @@ struct NewTemplateSheet: View {
 
 #Preview {
     DayPlanSheet(date: Date())
-        .modelContainer(for: [WorkoutPlan.self, WorkoutTemplate.self, Exercise.self])
+        .modelContainer(for: [WorkoutPlan.self, WorkoutTemplate.self, Exercise.self], inMemory: true)
 }

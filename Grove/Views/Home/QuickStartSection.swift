@@ -14,8 +14,8 @@ struct QuickStartSection: View {
     @State private var workoutConfig: WorkoutCreationConfig?
 
     private var suggestedTemplates: [WorkoutTemplate] {
-        // Show up to 5 most used templates, or built-in categories if none
-        Array(templates.prefix(5))
+        // Show up to 5 most used non-archived templates, or built-in categories if none
+        Array(templates.filter { !$0.isArchived }.prefix(5))
     }
 
     private var defaultCategories: [TemplateCategory] {

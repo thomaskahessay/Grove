@@ -14,6 +14,9 @@ class WorkoutTemplate {
     var defaultSets: Int = 3
     var defaultReps: Int = 10
 
+    // Soft delete — hidden from user but preserves data integrity
+    var isArchived: Bool = false
+
     // For smart suggestions
     var usageCount: Int = 0
     var lastUsedDate: Date?

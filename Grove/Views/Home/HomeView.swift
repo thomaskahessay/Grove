@@ -741,7 +741,7 @@ struct RecentWorkoutRow: View {
 #Preview("Home - Empty") {
     HomeView()
         .environment(WorkoutSessionManager())
-        .modelContainer(for: [User.self, WorkoutPlan.self, WorkoutTemplate.self, Workout.self, Exercise.self])
+        .modelContainer(for: [User.self, WorkoutPlan.self, WorkoutTemplate.self, Workout.self, Exercise.self], inMemory: true)
 }
 
 #Preview("Home - With Workouts") {

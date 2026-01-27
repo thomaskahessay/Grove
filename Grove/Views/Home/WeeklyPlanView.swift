@@ -291,5 +291,5 @@ struct IdentifiableDate: Identifiable {
 
 #Preview {
     WeeklyPlanView()
-        .modelContainer(for: [WorkoutPlan.self, WorkoutTemplate.self])
+        .modelContainer(for: [WorkoutPlan.self, WorkoutTemplate.self], inMemory: true)
 }

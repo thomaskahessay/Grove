@@ -113,16 +113,14 @@ struct ContentView: View {
 }
 
 #Preview {
+    let config = ModelConfiguration(isStoredInMemoryOnly: true)
+    let container = try! ModelContainer(
+        for: User.self, Exercise.self, Workout.self, ExerciseLog.self,
+        SetLog.self, WorkoutTemplate.self, WorkoutPlan.self, Achievement.self,
+        configurations: config
+    )
+
     ContentView()
         .environment(WorkoutSessionManager())
-        .modelContainer(for: [
-            User.self,
-            Exercise.self,
-            Workout.self,
-            ExerciseLog.self,
-            SetLog.self,
-            WorkoutTemplate.self,
-            WorkoutPlan.self,
-            Achievement.self
-        ])
+        .modelContainer(container)
 }
