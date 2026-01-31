@@ -7,6 +7,7 @@ struct WorkoutCreationView: View {
     @Environment(WorkoutSessionManager.self) private var sessionManager
     @Query(sort: \Exercise.name) private var allExercises: [Exercise]
     @Query private var allExerciseLogs: [ExerciseLog]
+    @Query(sort: \WorkoutTemplate.usageCount, order: .reverse) private var allTemplates: [WorkoutTemplate]
 
     // Optional initial category passed from Quick Start
     var initialCategory: TemplateCategory?
@@ -18,6 +19,11 @@ struct WorkoutCreationView: View {
     @State private var defaultSets = 3
     @State private var defaultReps = 10
     @State private var hasAppliedInitialCategory = false
+    @State private var selectedTemplate: WorkoutTemplate?
+
+    private var userTemplates: [WorkoutTemplate] {
+        allTemplates.filter { !$0.isBuiltIn && !$0.isArchived }
+    }
 
     private var suggestedExercises: [Exercise] {
         guard let category = selectedCategory else { return [] }
@@ -37,6 +43,11 @@ struct WorkoutCreationView: View {
                 VStack(spacing: 24) {
                     // Workout Name
                     workoutNameSection
+
+                    // User Templates (if any)
+                    if !userTemplates.isEmpty {
+                        userTemplatesSection
+                    }
 
                     // Category Selection
                     categorySelectionSection
@@ -97,6 +108,29 @@ struct WorkoutCreationView: View {
 
             TextField("e.g., Push Day, Leg Day", text: $workoutName)
                 .textFieldStyle(.roundedBorder)
+        }
+    }
+
+    private var userTemplatesSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Your Templates")
+                .font(.headline)
+                .foregroundStyle(Color.groveText)
+
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 12) {
+                    ForEach(userTemplates) { template in
+                        TemplateButton(
+                            template: template,
+                            isSelected: selectedTemplate?.id == template.id
+                        ) {
+                            withAnimation(.easeInOut(duration: 0.2)) {
+                                selectTemplate(template)
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
 
@@ -358,6 +392,28 @@ struct WorkoutCreationView: View {
             .map { (weight: $0.weight, reps: $0.reps) }
     }
 
+    private func selectTemplate(_ template: WorkoutTemplate) {
+        if selectedTemplate?.id == template.id {
+            // Deselect template
+            selectedTemplate = nil
+            selectedExercises.removeAll()
+            selectedCategory = nil
+            workoutName = ""
+        } else {
+            // Select template and load its exercises
+            selectedTemplate = template
+            selectedCategory = template.category
+            workoutName = template.name
+            defaultSets = template.defaultSets
+            defaultReps = template.defaultReps
+
+            // Load exercises from template
+            selectedExercises = template.exerciseIDs.compactMap { id in
+                allExercises.first { $0.id == id }
+            }
+        }
+    }
+
     // MARK: - Helpers
 
     private func muscleGroupsForCategory(_ category: TemplateCategory) -> [MuscleGroup] {
@@ -523,6 +579,44 @@ struct SelectedExerciseRow: View {
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
+    }
+}
+
+struct TemplateButton: View {
+    let template: WorkoutTemplate
+    let isSelected: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            VStack(alignment: .leading, spacing: 6) {
+                Image(systemName: "doc.text.fill")
+                    .font(.title2)
+                    .foregroundStyle(isSelected ? .white : Color.groveTerracotta)
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(template.name)
+                        .font(.subheadline)
+                        .fontWeight(.semibold)
+                        .lineLimit(2)
+                        .minimumScaleFactor(0.8)
+
+                    Text("\(template.exerciseIDs.count) exercises")
+                        .font(.caption)
+                        .foregroundStyle(isSelected ? .white.opacity(0.7) : .secondary)
+                }
+            }
+            .frame(width: 110, height: 90, alignment: .topLeading)
+            .padding(12)
+            .background(isSelected ? Color.groveTerracotta : Color.groveCardBackground)
+            .foregroundStyle(isSelected ? .white : Color.groveText)
+            .clipShape(RoundedRectangle(cornerRadius: 12))
+            .overlay(
+                RoundedRectangle(cornerRadius: 12)
+                    .stroke(isSelected ? Color.groveTerracotta : Color.groveWarmSand.opacity(0.5), lineWidth: 1)
+            )
+        }
+        .buttonStyle(.plain)
     }
 }
 

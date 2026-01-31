@@ -10,7 +10,6 @@ struct ActiveWorkoutView: View {
 
     @State private var currentExerciseIndex = 0
     @State private var showingCardView = false
-    @State private var showingEndWorkoutAlert = false
     @State private var showingAddExercise = false
     @State private var restTimerSeconds: Int = 0
     @State private var restTimerActive = false
@@ -49,10 +48,17 @@ struct ActiveWorkoutView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
-                    Button("End") {
-                        showingEndWorkoutAlert = true
+                    Menu {
+                        Button("Save Workout", systemImage: "checkmark.circle") {
+                            endWorkout()
+                        }
+                        Button("Discard Workout", systemImage: "trash", role: .destructive) {
+                            discardWorkout()
+                        }
+                    } label: {
+                        Text("End")
+                            .foregroundStyle(Color.groveMutedRust)
                     }
-                    .foregroundStyle(Color.groveMutedRust)
                 }
 
                 ToolbarItem(placement: .principal) {
@@ -80,14 +86,6 @@ struct ActiveWorkoutView: View {
                         .tint(Color.groveSage)
                     }
                 }
-            }
-            .alert("End Workout?", isPresented: $showingEndWorkoutAlert) {
-                Button("Cancel", role: .cancel) { }
-                Button("End", role: .destructive) {
-                    endWorkout()
-                }
-            } message: {
-                Text("Your progress will be saved.")
             }
             .sheet(isPresented: $showingAddExercise) {
                 AddExerciseToWorkoutView(workout: workout)
@@ -345,6 +343,10 @@ struct ActiveWorkoutView: View {
 
     private func endWorkout() {
         sessionManager.endWorkout()
+    }
+
+    private func discardWorkout() {
+        sessionManager.discardWorkout(context: modelContext)
     }
 }
 

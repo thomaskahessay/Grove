@@ -79,4 +79,21 @@ class WorkoutSessionManager {
         showingSummary = false
         completedWorkout = nil
     }
+
+    func discardWorkout(context: ModelContext) {
+        guard let workout = activeWorkout else { return }
+
+        // Delete all related data (sets, exercise logs, workout)
+        for exerciseLog in workout.exercises {
+            for setLog in exerciseLog.sets {
+                context.delete(setLog)
+            }
+            context.delete(exerciseLog)
+        }
+        context.delete(workout)
+
+        activeWorkout = nil
+        isMinimized = false
+        isFullScreenPresented = false
+    }
 }

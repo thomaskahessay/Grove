@@ -135,6 +135,7 @@ class Workout {
 - [x] Add custom exercise form
 - [x] Workout creation flow
   - WorkoutCreationView with category selection grid
+  - "Your Templates" section showing saved user templates (tap to load exercises)
   - Suggested exercises based on category (tap to add)
   - ExercisePickerView modal for browsing full library
   - FAB (floating action button) with liquid glass styling
@@ -150,7 +151,7 @@ class Workout {
   - Manual rest timer with countdown, +30s/-30s controls
   - Add exercise mid-workout
   - Skip/unskip exercise functionality
-  - End workout with confirmation
+  - End workout with save or discard options (Menu dropdown)
   - Minimize workout to floating card (swipe down or button)
   - Exercise auto-completes when all sets marked done
 - [x] Minimized workout card (MinimizedWorkoutCardView.swift)
@@ -211,6 +212,10 @@ class Workout {
 - [x] Day plan sheet improvements
   - When template selected, shows exercise list instead of categories
   - "Change" button to switch back to template picker
+- [x] Active workout improvements
+  - End button uses Menu dropdown (Save/Discard options appear below button)
+  - Discard workout option deletes all workout data without saving
+  - WorkoutSessionManager.discardWorkout() handles cleanup
 
 ### 📋 Not Started
 

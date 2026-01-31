@@ -8,14 +8,18 @@ struct WorkoutCreationConfig: Identifiable {
 }
 
 struct QuickStartSection: View {
+    @Environment(\.modelContext) private var modelContext
+    @Environment(WorkoutSessionManager.self) private var sessionManager
     @Query(sort: \WorkoutTemplate.usageCount, order: .reverse)
     private var templates: [WorkoutTemplate]
+    @Query(sort: \Exercise.name) private var allExercises: [Exercise]
+    @Query private var allExerciseLogs: [ExerciseLog]
 
     @State private var workoutConfig: WorkoutCreationConfig?
 
-    private var suggestedTemplates: [WorkoutTemplate] {
-        // Show up to 5 most used non-archived templates, or built-in categories if none
-        Array(templates.filter { !$0.isArchived }.prefix(5))
+    private var userTemplates: [WorkoutTemplate] {
+        // Show up to 5 most used user templates (non-built-in, non-archived)
+        Array(templates.filter { !$0.isBuiltIn && !$0.isArchived }.prefix(5))
     }
 
     private var defaultCategories: [TemplateCategory] {
@@ -40,29 +44,27 @@ struct QuickStartSection: View {
                         workoutConfig = WorkoutCreationConfig(category: nil)
                     }
 
-                    if suggestedTemplates.isEmpty {
-                        // Show default category buttons if no templates
-                        ForEach(defaultCategories, id: \.self) { category in
-                            QuickStartButton(
-                                title: category.rawValue,
-                                subtitle: "Quick start",
-                                icon: iconName(for: category),
-                                color: Color.groveSage
-                            ) {
-                                workoutConfig = WorkoutCreationConfig(category: category)
-                            }
+                    // Show user's templates first
+                    ForEach(userTemplates) { template in
+                        QuickStartButton(
+                            title: template.name,
+                            subtitle: "\(template.exerciseIDs.count) exercises",
+                            icon: iconName(for: template.category),
+                            color: Color.groveTerracotta
+                        ) {
+                            startWorkoutFromTemplate(template)
                         }
-                    } else {
-                        // Show user's templates
-                        ForEach(suggestedTemplates) { template in
-                            QuickStartButton(
-                                title: template.name,
-                                subtitle: "\(template.exerciseIDs.count) exercises",
-                                icon: iconName(for: template.category),
-                                color: Color.groveSage
-                            ) {
-                                workoutConfig = WorkoutCreationConfig(category: template.category)
-                            }
+                    }
+
+                    // Then show default category buttons
+                    ForEach(defaultCategories, id: \.self) { category in
+                        QuickStartButton(
+                            title: category.rawValue,
+                            subtitle: "Quick start",
+                            icon: iconName(for: category),
+                            color: Color.groveSage
+                        ) {
+                            workoutConfig = WorkoutCreationConfig(category: category)
                         }
                     }
                 }
@@ -86,6 +88,63 @@ struct QuickStartSection: View {
         case .shoulders: return "figure.boxing"
         case .custom: return "star.circle.fill"
         }
+    }
+
+    private func startWorkoutFromTemplate(_ template: WorkoutTemplate) {
+        let exercises = template.exerciseIDs.compactMap { id in
+            allExercises.first { $0.id == id }
+        }
+        guard !exercises.isEmpty else { return }
+
+        let defaultSets = template.defaultSets
+        let defaultReps = template.defaultReps
+
+        let workout = Workout(name: template.name, templateUsed: template)
+        modelContext.insert(workout)
+
+        for (index, exercise) in exercises.enumerated() {
+            let lastSets = getLastSetsForExercise(exercise)
+            let numberOfSets = lastSets.isEmpty ? defaultSets : lastSets.count
+
+            let exerciseLog = ExerciseLog(
+                exercise: exercise,
+                orderIndex: index,
+                targetSets: numberOfSets,
+                targetReps: defaultReps
+            )
+            exerciseLog.workout = workout
+            modelContext.insert(exerciseLog)
+
+            for setNumber in 1...numberOfSets {
+                let lastSetData = lastSets.indices.contains(setNumber - 1) ? lastSets[setNumber - 1] : nil
+                let setLog = SetLog(
+                    setNumber: setNumber,
+                    weight: lastSetData?.weight,
+                    reps: lastSetData?.reps
+                )
+                setLog.exerciseLog = exerciseLog
+                exerciseLog.sets.append(setLog)
+                modelContext.insert(setLog)
+            }
+        }
+
+        template.usageCount += 1
+        template.lastUsedDate = Date()
+
+        sessionManager.startWorkout(workout)
+    }
+
+    private func getLastSetsForExercise(_ exercise: Exercise) -> [(weight: Double?, reps: Int?)] {
+        let completedLogs = allExerciseLogs
+            .filter { $0.exercise?.id == exercise.id && $0.workout?.completedAt != nil }
+            .sorted { ($0.workout?.completedAt ?? .distantPast) > ($1.workout?.completedAt ?? .distantPast) }
+
+        guard let lastLog = completedLogs.first else { return [] }
+
+        return lastLog.sets
+            .filter { $0.isCompleted }
+            .sorted { $0.setNumber < $1.setNumber }
+            .map { (weight: $0.weight, reps: $0.reps) }
     }
 }
 

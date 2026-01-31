@@ -560,8 +560,9 @@ enum AchievementType: String, Codable, CaseIterable {
 
 1. Tap planned workout from calendar OR tap + to create new
 2. If new:
-   - Select template category (Legs, Push, Pull, etc.) OR start blank
-   - View randomized suggested exercises for category
+   - Select from "Your Templates" (saved user templates) to auto-load exercises
+   - OR select template category (Legs, Push, Pull, etc.) to see suggested exercises
+   - OR start blank
 3. Modify as needed:
    - Add exercises from library
    - Remove exercises (swipe to delete)
@@ -581,9 +582,11 @@ enum AchievementType: String, Codable, CaseIterable {
    - Add exercise (opens library picker)
    - Skip exercise (marks with strikethrough, still visible)
    - Reorder exercises
-8. Tap **End Workout**
-9. Prompt: "Connect Apple Watch health data?" (if overlapping workout detected)
-10. Summary screen with stats → **Save**
+8. End workout via Menu dropdown:
+   - **Save Workout**: Saves all data and shows summary
+   - **Discard Workout**: Deletes workout and all logged data without saving
+9. If saved: Prompt "Connect Apple Watch health data?" (if overlapping workout detected)
+10. Summary screen with stats
 
 ### Weekly Planning Flow
 
@@ -682,7 +685,7 @@ The primary hub users see after login.
 │    ←  Previous    Next  →          │
 ├────────────────────────────────────┤
 │ ┌──────┐  ┌──────┐  ┌──────────┐  │
-│ │ Skip │  │ Add  │  │   End    │  │
+│ │ Skip │  │ Add  │  │End (Menu)│  │
 │ └──────┘  └──────┘  └──────────┘  │
 │        ~~~~ glass effect ~~~~      │
 └────────────────────────────────────┘
@@ -694,6 +697,7 @@ The primary hub users see after login.
 - Pre-filled values from last time user did this exercise
 - Swipe left/right or use arrows to navigate
 - Bottom toolbar has glass effect
+- End button opens Menu with Save/Discard options (dropdown appears below button)
 
 ### Active Workout Screen - Card View
 
