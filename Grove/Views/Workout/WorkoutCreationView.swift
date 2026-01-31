@@ -6,6 +6,7 @@ struct WorkoutCreationView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(WorkoutSessionManager.self) private var sessionManager
     @Query(sort: \Exercise.name) private var allExercises: [Exercise]
+    @Query private var allExerciseLogs: [ExerciseLog]
 
     // Optional initial category passed from Quick Start
     var initialCategory: TemplateCategory?
@@ -310,18 +311,26 @@ struct WorkoutCreationView: View {
 
         // Create ExerciseLogs for each selected exercise
         for (index, exercise) in selectedExercises.enumerated() {
+            let lastSets = getLastSetsForExercise(exercise)
+            let numberOfSets = lastSets.isEmpty ? defaultSets : lastSets.count
+
             let exerciseLog = ExerciseLog(
                 exercise: exercise,
                 orderIndex: index,
-                targetSets: defaultSets,
+                targetSets: numberOfSets,
                 targetReps: defaultReps
             )
             exerciseLog.workout = workout
             modelContext.insert(exerciseLog)
 
-            // Create SetLogs for each set
-            for setNumber in 1...defaultSets {
-                let setLog = SetLog(setNumber: setNumber)
+            // Create SetLogs for each set, pre-filled with last values if available
+            for setNumber in 1...numberOfSets {
+                let lastSetData = lastSets.indices.contains(setNumber - 1) ? lastSets[setNumber - 1] : nil
+                let setLog = SetLog(
+                    setNumber: setNumber,
+                    weight: lastSetData?.weight,
+                    reps: lastSetData?.reps
+                )
                 setLog.exerciseLog = exerciseLog
                 exerciseLog.sets.append(setLog)
                 modelContext.insert(setLog)
@@ -331,6 +340,22 @@ struct WorkoutCreationView: View {
         // Start workout via session manager and dismiss sheet
         sessionManager.startWorkout(workout)
         dismiss()
+    }
+
+    /// Gets the most recent completed sets for an exercise
+    private func getLastSetsForExercise(_ exercise: Exercise) -> [(weight: Double?, reps: Int?)] {
+        // Find the most recent completed ExerciseLog for this exercise
+        let completedLogs = allExerciseLogs
+            .filter { $0.exercise?.id == exercise.id && $0.workout?.completedAt != nil }
+            .sorted { ($0.workout?.completedAt ?? .distantPast) > ($1.workout?.completedAt ?? .distantPast) }
+
+        guard let lastLog = completedLogs.first else { return [] }
+
+        // Get completed sets sorted by set number
+        return lastLog.sets
+            .filter { $0.isCompleted }
+            .sorted { $0.setNumber < $1.setNumber }
+            .map { (weight: $0.weight, reps: $0.reps) }
     }
 
     // MARK: - Helpers

@@ -596,6 +596,17 @@ enum AchievementType: String, Codable, CaseIterable {
 4. Can plan unlimited days ahead
 5. Swipe to see future weeks
 
+**Missed Workout Days:**
+- Past days with incomplete workouts can only be converted to rest days
+- Cannot reassign missed days to a different workout template
+- Info message explains option to mark as rest to preserve streak
+- Prevents retroactive "planning" of workouts that weren't done
+
+**Day Plan Sheet Enhancements:**
+- When a template is selected, shows list of exercises in that template
+- Exercise list shows name, muscle group, and order number
+- "Change" button allows switching to a different template
+
 ---
 
 ## 6. Screen Specifications
@@ -607,8 +618,8 @@ The primary hub users see after login.
 **Layout (top to bottom):**
 
 1. **Header**
-   - Grove logo (left)
-   - Streak count with flame icon (center-right)
+   - Streak count with flame icon (left)
+   - App logo image (center)
    - Profile icon (right)
 
 2. **Quick Start Section**
@@ -634,7 +645,14 @@ The primary hub users see after login.
    - Estimated duration (based on template)
    - Large "Start" button with terracotta background
 
-5. **Recent Activity** (bottom, less prominent)
+5. **Recent Workouts Section**
+   - Header: "Recent Workouts"
+   - List of last 5 completed workouts
+   - Each shows: workout name, date, duration, exercise count
+   - Chevron indicates tappable → opens WorkoutDetailView
+   - WorkoutDetailView shows full details: all exercises, sets, weight × reps, total volume
+
+6. **Recent Activity** (future - social feed)
    - "Friends" section header
    - Compact list of shared workouts
    - Each shows: Avatar, name, workout name, time ago
@@ -874,7 +892,12 @@ Approximately 100 built-in exercises distributed across muscle groups:
 - When user selects a category, show randomized subset (5-6 exercises) from that category's pool
 - User can refresh for new suggestions
 - Track which exercises user consistently removes → stop suggesting those for this template
-- Pre-fill weight/reps from last session
+
+**Auto-fill from Previous Workouts:**
+- When starting a workout, each exercise is pre-filled with data from the most recent completed session
+- Weight and reps values copied from last time user did that exercise
+- Number of sets matches previous session (falls back to default 3 if no history)
+- If exercise has never been done before, sets default to 3 with blank weight/reps
 
 ### Streak System
 

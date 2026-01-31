@@ -5,6 +5,7 @@ struct DayPlanSheet: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
     @Query(sort: \WorkoutTemplate.usageCount, order: .reverse) private var templates: [WorkoutTemplate]
+    @Query(sort: \Exercise.name) private var allExercises: [Exercise]
 
     let date: Date
     var existingPlan: WorkoutPlan?
@@ -22,6 +23,12 @@ struct DayPlanSheet: View {
         _selectedTemplate = State(initialValue: (template?.isArchived == true) ? nil : template)
     }
 
+    /// A missed day is a past day that had a workout planned but wasn't completed
+    private var isMissedWorkoutDay: Bool {
+        guard let plan = existingPlan else { return false }
+        return plan.status == .incomplete
+    }
+
     private var dateHeader: String {
         let formatter = DateFormatter()
         formatter.dateFormat = "EEEE, MMM d"
@@ -35,6 +42,13 @@ struct DayPlanSheet: View {
     private var filteredUserTemplates: [WorkoutTemplate] {
         guard let category = filterCategory else { return userTemplates }
         return userTemplates.filter { $0.category == category }
+    }
+
+    private var selectedTemplateExercises: [Exercise] {
+        guard let template = selectedTemplate else { return [] }
+        return template.exerciseIDs.compactMap { id in
+            allExercises.first { $0.id == id }
+        }
     }
 
     var body: some View {
@@ -54,13 +68,18 @@ struct DayPlanSheet: View {
                     // Rest day toggle
                     restDaySection
 
-                    // Template picker (hidden when rest day)
-                    if !isRestDay {
+                    // Template picker (hidden when rest day or missed day)
+                    if !isRestDay && !isMissedWorkoutDay {
                         templatePickerSection
                     }
 
-                    // Clear plan button
-                    if existingPlan != nil {
+                    // Missed day explanation
+                    if isMissedWorkoutDay && !isRestDay {
+                        missedDayMessage
+                    }
+
+                    // Clear plan button (not shown for missed days)
+                    if existingPlan != nil && !isMissedWorkoutDay {
                         clearPlanButton
                     }
 
@@ -167,32 +186,96 @@ struct DayPlanSheet: View {
                 }
             }
 
-            // Category-based quick picks
-            VStack(alignment: .leading, spacing: 8) {
-                Text("Categories")
+            // Show exercises if a template is selected, otherwise show categories
+            if let template = selectedTemplate, !selectedTemplateExercises.isEmpty {
+                templateExercisesSection(template: template)
+            } else {
+                categoriesSection
+            }
+        }
+    }
+
+    private func templateExercisesSection(template: WorkoutTemplate) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Text("Exercises in \(template.name)")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
 
-                LazyVGrid(columns: [
-                    GridItem(.flexible()),
-                    GridItem(.flexible())
-                ], spacing: 10) {
-                    ForEach(TemplateCategory.allCases, id: \.self) { category in
-                        CategoryPlanButton(
-                            category: category,
-                            isSelected: filterCategory == category
-                        ) {
-                            withAnimation(.easeInOut(duration: 0.2)) {
-                                if filterCategory == category {
-                                    filterCategory = nil
+                Spacer()
+
+                Button {
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        selectedTemplate = nil
+                        filterCategory = nil
+                    }
+                } label: {
+                    Text("Change")
+                        .font(.caption)
+                        .fontWeight(.medium)
+                        .foregroundStyle(Color.groveSage)
+                }
+            }
+
+            VStack(spacing: 0) {
+                ForEach(Array(selectedTemplateExercises.enumerated()), id: \.element.id) { index, exercise in
+                    HStack(spacing: 12) {
+                        Text("\(index + 1)")
+                            .font(.subheadline)
+                            .fontWeight(.semibold)
+                            .foregroundStyle(Color.groveSage)
+                            .frame(width: 24)
+
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(exercise.name)
+                                .font(.subheadline)
+                                .foregroundStyle(Color.groveText)
+                            Text(exercise.muscleGroup.rawValue)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+
+                        Spacer()
+                    }
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 10)
+
+                    if index < selectedTemplateExercises.count - 1 {
+                        Divider()
+                            .padding(.leading, 48)
+                    }
+                }
+            }
+            .background(Color.groveCardBackground)
+            .clipShape(RoundedRectangle(cornerRadius: 10))
+        }
+    }
+
+    private var categoriesSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Categories")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+
+            LazyVGrid(columns: [
+                GridItem(.flexible()),
+                GridItem(.flexible())
+            ], spacing: 10) {
+                ForEach(TemplateCategory.allCases, id: \.self) { category in
+                    CategoryPlanButton(
+                        category: category,
+                        isSelected: filterCategory == category
+                    ) {
+                        withAnimation(.easeInOut(duration: 0.2)) {
+                            if filterCategory == category {
+                                filterCategory = nil
+                            } else {
+                                filterCategory = category
+                                // Also auto-select a matching template if one exists
+                                if let existing = userTemplates.first(where: { $0.category == category }) {
+                                    selectedTemplate = existing
                                 } else {
-                                    filterCategory = category
-                                    // Also auto-select a matching template if one exists
-                                    if let existing = userTemplates.first(where: { $0.category == category }) {
-                                        selectedTemplate = existing
-                                    } else {
-                                        newTemplateCategory = category
-                                    }
+                                    newTemplateCategory = category
                                 }
                             }
                         }
@@ -200,6 +283,28 @@ struct DayPlanSheet: View {
                 }
             }
         }
+    }
+
+    private var missedDayMessage: some View {
+        HStack(spacing: 12) {
+            Image(systemName: "info.circle.fill")
+                .font(.title2)
+                .foregroundStyle(Color.groveWarmSand)
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Missed Workout")
+                    .font(.subheadline)
+                    .fontWeight(.medium)
+                    .foregroundStyle(Color.groveText)
+                Text("You can mark this day as a rest day to preserve your streak")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color.groveWarmSand.opacity(0.2))
+        .clipShape(RoundedRectangle(cornerRadius: 12))
     }
 
     private var clearPlanButton: some View {

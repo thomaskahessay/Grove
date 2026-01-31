@@ -63,7 +63,8 @@ Grove/
 │   │   ├── MinimizedWorkoutCardView.swift  # Floating card for minimized workouts
 │   │   ├── ExerciseFullScreenView.swift
 │   │   ├── SetRowView.swift
-│   │   └── WorkoutSummaryView.swift
+│   │   ├── WorkoutSummaryView.swift
+│   │   └── WorkoutDetailView.swift         # Past workout detail view
 │   ├── Progress/
 │   │   ├── ProgressView.swift
 │   │   └── ExerciseChartView.swift
@@ -190,6 +191,26 @@ class Workout {
   - Rest day card
   - Completed workout card with "what's next" section (tomorrow's plan or plan nudge)
   - Start workout from today's plan card
+  - App logo in navigation bar (replaces text)
+  - Recent workouts tappable → WorkoutDetailView
+
+**Phase 3b: Workout History & Auto-fill**
+- [x] WorkoutDetailView (Views/Workout/WorkoutDetailView.swift)
+  - Shows workout date, duration, total volume
+  - Stats grid: exercises completed, total sets, total volume
+  - Exercise list with sets (weight × reps for each)
+  - Status icons for completed/skipped exercises
+- [x] Auto-fill from previous workouts
+  - When starting a workout, weight/reps pre-filled from last completed session for each exercise
+  - Number of sets matches previous session (or defaults to 3 if no history)
+  - Works for both quick start and planned workouts
+- [x] Missed workout day restrictions
+  - Past days with incomplete workouts can only be changed to rest days
+  - Cannot reassign missed days to different workout templates
+  - Info message explains user can mark as rest to preserve streak
+- [x] Day plan sheet improvements
+  - When template selected, shows exercise list instead of categories
+  - "Change" button to switch back to template picker
 
 ### 📋 Not Started
 

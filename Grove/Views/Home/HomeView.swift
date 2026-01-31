@@ -19,6 +19,7 @@ struct HomeView: View {
     ) private var completedWorkouts: [Workout]
 
     @Query(sort: \Exercise.name) private var allExercises: [Exercise]
+    @Query private var allExerciseLogs: [ExerciseLog]
 
     @State private var showingWeeklyPlan = false
 
@@ -41,7 +42,7 @@ struct HomeView: View {
     }
 
     private var welcomeMessage: String {
-        let name = currentUser?.displayName ?? "there"
+        let name = currentUser?.displayName ?? "Thomas"
         let messages = [
             "\(greeting), \(name)!",
             "Welcome back, \(name)!",
@@ -60,6 +61,10 @@ struct HomeView: View {
         return workoutPlans.first { plan in
             calendar.isDate(plan.date, inSameDayAs: today)
         }
+    }
+
+    private var appIconImage: Image {
+        Image("Grove-Logo-Transparent")
     }
 
     // MARK: - Weekly Stats
@@ -175,33 +180,34 @@ struct HomeView: View {
                     // Calendar Strip
                     CalendarStripView()
 
-                    // Plan My Week Button
-                    Button {
-                        showingWeeklyPlan = true
-                    } label: {
-                        HStack(spacing: 8) {
-                            Image(systemName: "calendar.badge.plus")
-                                .foregroundStyle(Color.groveSage)
-                            Text("Plan My Week")
-                                .font(.subheadline)
-                                .fontWeight(.medium)
-                                .foregroundStyle(Color.groveText)
-                            Spacer()
-                            Image(systemName: "chevron.right")
-                                .font(.caption)
-                                .foregroundStyle(.tertiary)
+                    // Plan My Week + Weekly Stats (grouped with tighter spacing)
+                    VStack(spacing: 12) {
+                        Button {
+                            showingWeeklyPlan = true
+                        } label: {
+                            HStack(spacing: 8) {
+                                Image(systemName: "calendar.badge.plus")
+                                    .foregroundStyle(Color.groveSage)
+                                Text("Plan My Week")
+                                    .font(.subheadline)
+                                    .fontWeight(.medium)
+                                    .foregroundStyle(Color.groveText)
+                                Spacer()
+                                Image(systemName: "chevron.right")
+                                    .font(.caption)
+                                    .foregroundStyle(.tertiary)
+                            }
+                            .padding(12)
+                            .background(Color.groveCardBackground)
+                            .clipShape(RoundedRectangle(cornerRadius: 10))
                         }
-                        .padding(12)
-                        .background(Color.groveCardBackground)
-                        .clipShape(RoundedRectangle(cornerRadius: 10))
-                    }
-                    .buttonStyle(.plain)
+                        .buttonStyle(.plain)
 
-                    // Weekly Stats
-                    WeeklyStatsCard(
-                        completed: workoutsThisWeek,
-                        planned: plannedThisWeek
-                    )
+                        WeeklyStatsCard(
+                            completed: workoutsThisWeek,
+                            planned: plannedThisWeek
+                        )
+                    }
 
                     // Recent Workouts Section
                     if !recentWorkouts.isEmpty {
@@ -220,10 +226,11 @@ struct HomeView: View {
                     StreakBadge(streak: currentUser?.currentStreak ?? 0)
                 }
                 ToolbarItem(placement: .principal) {
-                    Text("Grove")
-                        .font(.headline)
-                        .fontWeight(.semibold)
-                        .foregroundStyle(Color.groveSage)
+                    appIconImage
+                        .resizable()
+                        .aspectRatio(contentMode: .fit)
+                        .frame(width: 32, height: 32)
+                        .clipShape(RoundedRectangle(cornerRadius: 7))
                 }
                 ToolbarItem(placement: .topBarTrailing) {
                     NavigationLink(destination: Text("Profile")) {
@@ -265,17 +272,25 @@ struct HomeView: View {
         modelContext.insert(workout)
 
         for (index, exercise) in exercises.enumerated() {
+            let lastSets = getLastSetsForExercise(exercise)
+            let numberOfSets = lastSets.isEmpty ? defaultSets : lastSets.count
+
             let exerciseLog = ExerciseLog(
                 exercise: exercise,
                 orderIndex: index,
-                targetSets: defaultSets,
+                targetSets: numberOfSets,
                 targetReps: defaultReps
             )
             exerciseLog.workout = workout
             modelContext.insert(exerciseLog)
 
-            for setNumber in 1...defaultSets {
-                let setLog = SetLog(setNumber: setNumber)
+            for setNumber in 1...numberOfSets {
+                let lastSetData = lastSets.indices.contains(setNumber - 1) ? lastSets[setNumber - 1] : nil
+                let setLog = SetLog(
+                    setNumber: setNumber,
+                    weight: lastSetData?.weight,
+                    reps: lastSetData?.reps
+                )
                 setLog.exerciseLog = exerciseLog
                 exerciseLog.sets.append(setLog)
                 modelContext.insert(setLog)
@@ -286,6 +301,20 @@ struct HomeView: View {
         template.lastUsedDate = Date()
 
         sessionManager.startWorkout(workout)
+    }
+
+    /// Gets the most recent completed sets for an exercise
+    private func getLastSetsForExercise(_ exercise: Exercise) -> [(weight: Double?, reps: Int?)] {
+        let completedLogs = allExerciseLogs
+            .filter { $0.exercise?.id == exercise.id && $0.workout?.completedAt != nil }
+            .sorted { ($0.workout?.completedAt ?? .distantPast) > ($1.workout?.completedAt ?? .distantPast) }
+
+        guard let lastLog = completedLogs.first else { return [] }
+
+        return lastLog.sets
+            .filter { $0.isCompleted }
+            .sorted { $0.setNumber < $1.setNumber }
+            .map { (weight: $0.weight, reps: $0.reps) }
     }
 }
 
@@ -665,7 +694,10 @@ struct RecentWorkoutsSection: View {
 
             VStack(spacing: 0) {
                 ForEach(Array(workouts.enumerated()), id: \.element.id) { index, workout in
-                    RecentWorkoutRow(workout: workout)
+                    NavigationLink(destination: WorkoutDetailView(workout: workout)) {
+                        RecentWorkoutRow(workout: workout)
+                    }
+                    .buttonStyle(.plain)
 
                     if index < workouts.count - 1 {
                         Divider()
