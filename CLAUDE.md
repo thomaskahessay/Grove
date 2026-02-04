@@ -222,10 +222,21 @@ class Workout {
   - Discard workout option deletes all workout data without saving
   - WorkoutSessionManager.discardWorkout() handles cleanup
 
+**Phase 3c: Progress Charts**
+- [x] Progress charts (ProgressView.swift)
+  - Exercise picker modal with search (sorted by workout count)
+  - Large exercise name header with workout count, tap to open picker
+  - Three metrics via dropdown menu: Estimated 1RM (Brzycki/Epley), Best Set, Total Volume
+  - Time range picker via dropdown: 1M / 3M / 6M / All
+  - Swift Charts with line + area + point marks
+  - Interactive tooltips on tap/drag showing value and date
+  - Stats card: Current, Change, Best, Max (highest weight ever)
+  - Pill-style filter buttons with subtle background
+  - Empty states for no data
+
 ### 📋 Not Started
 
-**Phase 3b: Progress & Achievements**
-- [ ] Progress charts (1RM, weight×reps)
+**Phase 3d: Progress & Achievements**
 - [ ] Personal record detection
 - [ ] Achievements system
 

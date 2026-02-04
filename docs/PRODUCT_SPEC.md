@@ -779,30 +779,29 @@ The primary hub users see after login.
 
 ```
 ┌────────────────────────────────────┐
-│            PROGRESS                │
+│ ┌────────────────────────────────┐ │
+│ │ Bench Press              ▼     │ │
+│ │ 12 workouts                    │ │
+│ └────────────────────────────────┘ │
 ├────────────────────────────────────┤
-│  Exercise: [Bench Press      ▼]   │
-│  Period:   [Last 90 Days     ▼]   │
+│ ┌────────────────────────────────┐ │
+│ │ Current  Change  Best   Max   │ │
+│ │  185     +10    195    185    │ │
+│ └────────────────────────────────┘ │
 ├────────────────────────────────────┤
-│  Estimated 1RM                     │
 │  ┌────────────────────────────────┐│
-│  │     📈 Chart showing          ││
-│  │     1RM trend over time       ││
-│  │     Current: 185 lbs          ││
+│  │     📈 Interactive Chart      ││
+│  │     Line + Area + Points      ││
+│  │     Tap for tooltip           ││
+│  │     (value + date)            ││
 │  └────────────────────────────────┘│
 ├────────────────────────────────────┤
-│  Weight × Reps                     │
-│  ┌────────────────────────────────┐│
-│  │     📈 Chart showing          ││
-│  │     weight and reps over time ││
-│  └────────────────────────────────┘│
-├────────────────────────────────────┤
-│  🏆 Personal Records               │
-│  ┌────────────────────────────────┐│
-│  │ Heaviest: 175 lbs × 6 (Jan 15)││
-│  │ Most Reps: 135 lbs × 12 (Jan 8)│
-│  └────────────────────────────────┘│
+│  [1RM ▾]  [3M ▾]                   │
+│  (metric)  (time range)            │
 └────────────────────────────────────┘
+
+Metrics: Est. 1RM, Best Set, Volume
+Time Ranges: 1M, 3M, 6M, All
 ```
 
 ### Social Feed Screen

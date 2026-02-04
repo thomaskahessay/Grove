@@ -25,7 +25,7 @@ struct ContentView: View {
                 }
 
                 Tab("Progress", systemImage: "chart.line.uptrend.xyaxis") {
-                    Text("Progress")
+                    ProgressView()
                 }
 
                 Tab("Social", systemImage: "person.2.fill") {
