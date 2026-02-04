@@ -138,7 +138,7 @@ struct CalendarDayCell: View {
         case .chestTriceps: return "arrowtriangle.down.fill"
         case .backBiceps: return "dumbbell.fill"
         case .shoulders: return "figure.boxing"
-        case .custom: return "star.circle.fill"
+        case .custom: return "slider.horizontal.3"
         }
     }
 

@@ -155,9 +155,24 @@ struct DayPlanSheet: View {
             // User templates
             if !filteredUserTemplates.isEmpty {
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("Your Templates")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
+                    HStack {
+                        Text("Your Templates")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+
+                        Spacer()
+
+                        if let category = filterCategory {
+                            Button {
+                                newTemplateCategory = category
+                            } label: {
+                                Label("New", systemImage: "plus")
+                                    .font(.caption)
+                                    .fontWeight(.medium)
+                            }
+                            .tint(.groveSage)
+                        }
+                    }
 
                     ForEach(filteredUserTemplates) { template in
                         TemplatePlanRow(
@@ -271,10 +286,9 @@ struct DayPlanSheet: View {
                                 filterCategory = nil
                             } else {
                                 filterCategory = category
-                                // Also auto-select a matching template if one exists
-                                if let existing = userTemplates.first(where: { $0.category == category }) {
-                                    selectedTemplate = existing
-                                } else {
+                                selectedTemplate = nil
+                                // Only open new template sheet if no templates exist for this category
+                                if userTemplates.filter({ $0.category == category }).isEmpty {
                                     newTemplateCategory = category
                                 }
                             }
@@ -450,6 +464,7 @@ struct NewTemplateSheet: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
     @Query(sort: \Exercise.name) private var allExercises: [Exercise]
+    @Query private var allTemplates: [WorkoutTemplate]
 
     let category: TemplateCategory
     let onCreated: (WorkoutTemplate) -> Void
@@ -457,6 +472,7 @@ struct NewTemplateSheet: View {
     @State private var templateName: String
     @State private var selectedExercises: [Exercise] = []
     @State private var showingExercisePicker = false
+    @State private var suggestedExerciseIDs: [UUID] = []
 
     init(category: TemplateCategory, onCreated: @escaping (WorkoutTemplate) -> Void) {
         self.category = category
@@ -464,14 +480,28 @@ struct NewTemplateSheet: View {
         _templateName = State(initialValue: category.rawValue)
     }
 
+    private var trimmedName: String {
+        templateName.trimmingCharacters(in: .whitespaces)
+    }
+
+    private var nameAlreadyExists: Bool {
+        let name = trimmedName.isEmpty ? category.rawValue : trimmedName
+        return allTemplates.contains { !$0.isArchived && $0.name.lowercased() == name.lowercased() }
+    }
+
     private var suggestedExercises: [Exercise] {
+        suggestedExerciseIDs.compactMap { id in
+            allExercises.first { $0.id == id }
+        }.filter { !selectedExercises.contains($0) }
+    }
+
+    private func refreshSuggestions() {
         let muscleGroups = muscleGroupsForCategory(category)
-        return allExercises
+        suggestedExerciseIDs = allExercises
             .filter { muscleGroups.contains($0.muscleGroup) }
-            .filter { !selectedExercises.contains($0) }
             .shuffled()
-            .prefix(6)
-            .map { $0 }
+            .prefix(8)
+            .map { $0.id }
     }
 
     private func muscleGroupsForCategory(_ category: TemplateCategory) -> [MuscleGroup] {
@@ -501,14 +531,32 @@ struct NewTemplateSheet: View {
 
                         TextField("e.g., Push Day, Leg Day", text: $templateName)
                             .textFieldStyle(.roundedBorder)
+
+                        if nameAlreadyExists {
+                            Label("A template with this name already exists", systemImage: "exclamationmark.triangle.fill")
+                                .font(.caption)
+                                .foregroundStyle(Color.groveMutedRust)
+                        }
                     }
 
                     // Suggested Exercises
                     if !suggestedExercises.isEmpty {
                         VStack(alignment: .leading, spacing: 12) {
-                            Text("Suggested")
-                                .font(.headline)
-                                .foregroundStyle(Color.groveText)
+                            HStack {
+                                Text("Suggested")
+                                    .font(.headline)
+                                    .foregroundStyle(Color.groveText)
+
+                                Spacer()
+
+                                Button {
+                                    refreshSuggestions()
+                                } label: {
+                                    Label("Refresh", systemImage: "arrow.clockwise")
+                                        .font(.subheadline)
+                                }
+                                .tint(.groveSage)
+                            }
 
                             Text("Tap to add")
                                 .font(.caption)
@@ -630,7 +678,7 @@ struct NewTemplateSheet: View {
                         createTemplate()
                     }
                     .fontWeight(.semibold)
-                    .disabled(templateName.trimmingCharacters(in: .whitespaces).isEmpty)
+                    .disabled(trimmedName.isEmpty || nameAlreadyExists)
                 }
             }
             .sheet(isPresented: $showingExercisePicker) {
@@ -639,13 +687,15 @@ struct NewTemplateSheet: View {
                     filterCategory: category
                 )
             }
+            .onAppear {
+                refreshSuggestions()
+            }
         }
     }
 
     private func createTemplate() {
-        let name = templateName.trimmingCharacters(in: .whitespaces)
         let template = WorkoutTemplate(
-            name: name.isEmpty ? category.rawValue : name,
+            name: trimmedName.isEmpty ? category.rawValue : trimmedName,
             category: category,
             isBuiltIn: false
         )

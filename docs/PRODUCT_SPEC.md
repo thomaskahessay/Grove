@@ -90,6 +90,7 @@ Grove/
 ├── Components/
 │   ├── GlassCard.swift
 │   ├── GlassButton.swift
+│   ├── ConfettiView.swift
 │   └── ColorExtensions.swift
 └── Data/
     └── ExerciseSeeds.swift
@@ -738,6 +739,12 @@ The primary hub users see after login.
 
 ### Workout Summary Screen
 
+**Features:**
+- Confetti animation plays on screen appear (celebratory moment)
+- Stats display: duration, exercises completed, volume
+- PR callout for new personal records
+- Comparison with previous workout of same type
+
 ```
 ┌────────────────────────────────────┐
 │           WORKOUT COMPLETE         │
@@ -894,8 +901,15 @@ Approximately 100 built-in exercises distributed across muscle groups:
 
 **Smart Suggestions:**
 - When user selects a category, show randomized subset (5-6 exercises) from that category's pool
-- User can refresh for new suggestions
+- Suggestions stay stable when user adds exercises (don't re-shuffle on every selection)
+- User can tap refresh button for new suggestions
 - Track which exercises user consistently removes → stop suggesting those for this template
+
+**Template Management:**
+- Multiple templates per category allowed (e.g., "Push Day A", "Push Day B")
+- "+ New" button appears in template list header when category is selected
+- Template names must be unique (case-insensitive validation)
+- Duplicate name shows error and disables Create button
 
 **Auto-fill from Previous Workouts:**
 - When starting a workout, each exercise is pre-filled with data from the most recent completed session

@@ -20,21 +20,30 @@ struct WorkoutCreationView: View {
     @State private var defaultReps = 10
     @State private var hasAppliedInitialCategory = false
     @State private var selectedTemplate: WorkoutTemplate?
+    @State private var suggestedExerciseIDs: [UUID] = []
 
     private var userTemplates: [WorkoutTemplate] {
         allTemplates.filter { !$0.isBuiltIn && !$0.isArchived }
     }
 
     private var suggestedExercises: [Exercise] {
-        guard let category = selectedCategory else { return [] }
+        suggestedExerciseIDs.compactMap { id in
+            allExercises.first { $0.id == id }
+        }.filter { !selectedExercises.contains($0) }
+    }
+
+    private func refreshSuggestions() {
+        guard let category = selectedCategory else {
+            suggestedExerciseIDs = []
+            return
+        }
 
         let muscleGroups = muscleGroupsForCategory(category)
-        return allExercises
+        suggestedExerciseIDs = allExercises
             .filter { muscleGroups.contains($0.muscleGroup) }
-            .filter { !selectedExercises.contains($0) }
             .shuffled()
-            .prefix(6)
-            .map { $0 }
+            .prefix(8)
+            .map { $0.id }
     }
 
     var body: some View {
@@ -92,6 +101,7 @@ struct WorkoutCreationView: View {
                 if !hasAppliedInitialCategory, let category = initialCategory {
                     selectedCategory = category
                     workoutName = category.rawValue
+                    refreshSuggestions()
                     hasAppliedInitialCategory = true
                 }
             }
@@ -153,9 +163,11 @@ struct WorkoutCreationView: View {
                         withAnimation(.easeInOut(duration: 0.2)) {
                             if selectedCategory == category {
                                 selectedCategory = nil
+                                suggestedExerciseIDs = []
                             } else {
                                 selectedCategory = category
                                 selectedExercises.removeAll()
+                                refreshSuggestions()
                                 if workoutName.isEmpty || TemplateCategory.allCases.map(\.rawValue).contains(workoutName) {
                                     workoutName = category.rawValue
                                 }
@@ -177,12 +189,7 @@ struct WorkoutCreationView: View {
                 Spacer()
 
                 Button {
-                    // Force refresh by toggling category
-                    let current = selectedCategory
-                    selectedCategory = nil
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                        selectedCategory = current
-                    }
+                    refreshSuggestions()
                 } label: {
                     Label("Refresh", systemImage: "arrow.clockwise")
                         .font(.subheadline)
@@ -621,13 +628,14 @@ struct TemplateButton: View {
 }
 
 #Preview {
-    WorkoutCreationView()
+    let config = ModelConfiguration(isStoredInMemoryOnly: true)
+    let container = try! ModelContainer(
+        for: Exercise.self, Workout.self, ExerciseLog.self, SetLog.self, WorkoutTemplate.self,
+        configurations: config
+    )
+    ExerciseSeeds.seedExercises(context: container.mainContext)
+
+    return WorkoutCreationView()
         .environment(WorkoutSessionManager())
-        .modelContainer(for: [
-            Exercise.self,
-            Workout.self,
-            ExerciseLog.self,
-            SetLog.self,
-            WorkoutTemplate.self
-        ])
+        .modelContainer(container)
 }

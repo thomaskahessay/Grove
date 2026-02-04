@@ -79,6 +79,7 @@ Grove/
 ├── Components/
 │   ├── GlassCard.swift            # Reusable Liquid Glass components
 │   ├── GlassButton.swift
+│   ├── ConfettiView.swift         # Celebratory confetti animation
 │   └── ColorExtensions.swift      # Color palette extension
 ├── Data/
 │   └── ExerciseSeeds.swift        # ~100 built-in exercises
@@ -136,11 +137,12 @@ class Workout {
 - [x] Workout creation flow
   - WorkoutCreationView with category selection grid
   - "Your Templates" section showing saved user templates (tap to load exercises)
-  - Suggested exercises based on category (tap to add)
+  - Suggested exercises based on category (tap to add, stable until refresh)
   - ExercisePickerView modal for browsing full library
   - FAB (floating action button) with liquid glass styling
   - Quick start buttons with category pre-selection
   - Categories: Push, Pull, Legs, Upper, Lower, Full Body, Chest & Triceps, Back & Biceps, Shoulders, Custom
+  - Custom category uses slider icon (consistent across app)
 - [x] Active workout view (ActiveWorkoutView.swift)
   - Full-screen exercise view with swipe navigation (TabView)
   - Card view toggle to see all exercises at once
@@ -161,7 +163,7 @@ class Workout {
 - [x] Profile view with light/dark mode toggle
 
 **Phase 3a: Weekly Planning & Streaks**
-- [x] Workout summary screen (post-workout stats + PR callout)
+- [x] Workout summary screen (post-workout stats + PR callout + confetti celebration)
 - [x] Weekly calendar planning view (WeeklyPlanView.swift)
   - Full-screen week planner with Mon–Sun layout
   - Week navigator (< This Week >) with chevron buttons
@@ -172,8 +174,11 @@ class Workout {
   - Assign workout template or rest day to any date
   - Rest day toggle with moon icon
   - Template picker (user templates + category grid with filter)
+  - Multiple templates per category supported (+ New button in header)
   - Template deletion from row
   - New template creation with exercise picker + suggested exercises
+  - Suggested exercises stay stable until refresh button tapped
+  - Duplicate template name validation (case-insensitive)
   - Cancelling template creation resets category selection
   - Clear plan option for existing plans
 - [x] Assign workouts to days via calendar strip tap or weekly planner

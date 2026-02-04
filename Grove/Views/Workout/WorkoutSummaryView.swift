@@ -73,6 +73,8 @@ struct WorkoutSummaryView: View {
         }
     }
 
+    @State private var showConfetti = false
+
     var body: some View {
         NavigationStack {
             ScrollView {
@@ -106,6 +108,14 @@ struct WorkoutSummaryView: View {
             .background(Color.groveBackground)
             .navigationTitle("Workout Complete")
             .navigationBarTitleDisplayMode(.inline)
+            .overlay {
+                if showConfetti {
+                    ConfettiView()
+                }
+            }
+            .onAppear {
+                showConfetti = true
+            }
         }
     }
 
