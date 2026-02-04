@@ -6,7 +6,6 @@ struct WorkoutCreationView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(WorkoutSessionManager.self) private var sessionManager
     @Query(sort: \Exercise.name) private var allExercises: [Exercise]
-    @Query private var allExerciseLogs: [ExerciseLog]
     @Query(sort: \WorkoutTemplate.usageCount, order: .reverse) private var allTemplates: [WorkoutTemplate]
 
     // Optional initial category passed from Quick Start
@@ -383,16 +382,19 @@ struct WorkoutCreationView: View {
         dismiss()
     }
 
-    /// Gets the most recent completed sets for an exercise
+    /// Gets the most recent completed sets for an exercise (fetches on-demand to avoid memory bloat)
     private func getLastSetsForExercise(_ exercise: Exercise) -> [(weight: Double?, reps: Int?)] {
-        // Find the most recent completed ExerciseLog for this exercise
-        let completedLogs = allExerciseLogs
-            .filter { $0.exercise?.id == exercise.id && $0.workout?.completedAt != nil }
-            .sorted { ($0.workout?.completedAt ?? .distantPast) > ($1.workout?.completedAt ?? .distantPast) }
+        let exerciseID = exercise.id
+        let descriptor = FetchDescriptor<ExerciseLog>(
+            predicate: #Predicate<ExerciseLog> { log in
+                log.exercise?.id == exerciseID
+            },
+            sortBy: [SortDescriptor(\.workout?.completedAt, order: .reverse)]
+        )
 
-        guard let lastLog = completedLogs.first else { return [] }
+        guard let logs = try? modelContext.fetch(descriptor) else { return [] }
+        guard let lastLog = logs.first(where: { $0.workout?.completedAt != nil }) else { return [] }
 
-        // Get completed sets sorted by set number
         return lastLog.sets
             .filter { $0.isCompleted }
             .sorted { $0.setNumber < $1.setNumber }

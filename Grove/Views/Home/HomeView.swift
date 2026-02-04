@@ -19,7 +19,6 @@ struct HomeView: View {
     ) private var completedWorkouts: [Workout]
 
     @Query(sort: \Exercise.name) private var allExercises: [Exercise]
-    @Query private var allExerciseLogs: [ExerciseLog]
 
     @State private var showingWeeklyPlan = false
 
@@ -303,13 +302,21 @@ struct HomeView: View {
         sessionManager.startWorkout(workout)
     }
 
-    /// Gets the most recent completed sets for an exercise
+    /// Gets the most recent completed sets for an exercise (fetches on-demand to avoid memory bloat)
     private func getLastSetsForExercise(_ exercise: Exercise) -> [(weight: Double?, reps: Int?)] {
-        let completedLogs = allExerciseLogs
-            .filter { $0.exercise?.id == exercise.id && $0.workout?.completedAt != nil }
-            .sorted { ($0.workout?.completedAt ?? .distantPast) > ($1.workout?.completedAt ?? .distantPast) }
+        // Query only completed exercise logs for this specific exercise
+        let exerciseID = exercise.id
+        let descriptor = FetchDescriptor<ExerciseLog>(
+            predicate: #Predicate<ExerciseLog> { log in
+                log.exercise?.id == exerciseID
+            },
+            sortBy: [SortDescriptor(\.workout?.completedAt, order: .reverse)]
+        )
 
-        guard let lastLog = completedLogs.first else { return [] }
+        guard let logs = try? modelContext.fetch(descriptor) else { return [] }
+
+        // Find the first log from a completed workout
+        guard let lastLog = logs.first(where: { $0.workout?.completedAt != nil }) else { return [] }
 
         return lastLog.sets
             .filter { $0.isCompleted }

@@ -3,10 +3,9 @@ import SwiftData
 
 struct WorkoutDetailView: View {
     let workout: Workout
-    @Query private var allExerciseLogs: [ExerciseLog]
 
     private var workoutExercises: [ExerciseLog] {
-        allExerciseLogs.filter { $0.workout?.id == workout.id }
+        workout.exercises
     }
 
     private var formattedDate: String {
