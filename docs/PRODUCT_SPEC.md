@@ -1,7 +1,7 @@
 # Grove - Product Specification
 
 **Version:** 1.0  
-**Last Updated:** January 2026
+**Last Updated:** February 2026
 
 ---
 
@@ -74,11 +74,15 @@ Grove/
 │   ├── SetLog.swift
 │   ├── WorkoutTemplate.swift
 │   ├── WorkoutPlan.swift
+│   ├── PersonalRecord.swift
 │   └── Enums.swift
 ├── Services/
 │   ├── AuthService.swift
 │   ├── HealthKitManager.swift
-│   └── NotificationService.swift
+│   ├── NotificationService.swift
+│   ├── StreakManager.swift
+│   ├── PRDetectionService.swift
+│   └── WorkoutSessionManager.swift
 ├── Views/
 │   ├── Onboarding/
 │   ├── Home/
@@ -93,7 +97,8 @@ Grove/
 │   ├── ConfettiView.swift
 │   └── ColorExtensions.swift
 └── Data/
-    └── ExerciseSeeds.swift
+    ├── ExerciseSeeds.swift
+    └── PreviewSampleData.swift
 ```
 
 ---
@@ -282,7 +287,10 @@ class User {
     
     @Relationship(deleteRule: .cascade, inverse: \Exercise.createdBy)
     var customExercises: [Exercise] = []
-    
+
+    @Relationship(deleteRule: .cascade, inverse: \PersonalRecord.user)
+    var personalRecords: [PersonalRecord] = []
+
     var createdAt: Date = Date()
     
     init(appleUserID: String, fitnessGoal: FitnessGoal = .stayActive, experienceLevel: ExperienceLevel = .beginner, preferredUnits: UnitSystem = .imperial) {
@@ -482,6 +490,49 @@ class WorkoutPlan {
         self.user = user
         self.template = template
         self.isRestDay = isRestDay
+    }
+}
+```
+
+### PersonalRecord Model
+
+```swift
+enum PRType: String, Codable {
+    case maxWeight = "Max Weight"
+    case estimatedOneRM = "Estimated 1RM"
+}
+
+@Model
+class PersonalRecord {
+    var id: UUID = UUID()
+    var user: User?
+    var exercise: Exercise?
+    var type: PRType
+    var weight: Double       // The weight lifted
+    var reps: Int            // The reps performed
+    var value: Double        // Calculated PR value (weight for maxWeight, 1RM for estimatedOneRM)
+    var achievedAt: Date
+    var setLogID: UUID?      // Links to the SetLog that achieved this PR
+
+    init(exercise: Exercise, type: PRType, weight: Double, reps: Int, achievedAt: Date = Date(), setLogID: UUID? = nil) {
+        self.exercise = exercise
+        self.type = type
+        self.weight = weight
+        self.reps = reps
+        self.achievedAt = achievedAt
+        self.setLogID = setLogID
+        switch type {
+        case .maxWeight: self.value = weight
+        case .estimatedOneRM: self.value = PersonalRecord.calculateOneRM(weight: weight, reps: reps)
+        }
+    }
+
+    /// Brzycki formula for ≤10 reps, Epley for >10 reps
+    static func calculateOneRM(weight: Double, reps: Int) -> Double {
+        guard reps > 0, weight > 0 else { return 0 }
+        if reps == 1 { return weight }
+        else if reps <= 10 { return weight * (36.0 / (37.0 - Double(reps))) }
+        else { return weight * (1.0 + Double(reps) / 30.0) }
     }
 }
 ```
@@ -741,9 +792,12 @@ The primary hub users see after login.
 
 **Features:**
 - Confetti animation plays on screen appear (celebratory moment)
-- Stats display: duration, exercises completed, volume
-- PR callout for new personal records
-- Comparison with previous workout of same type
+- Stats display: exercises completed, volume, sets
+- Comparison with previous workout of same type (volume change %)
+- New Personal Records section (if any PRs hit during workout)
+  - Trophy icon header with terracotta styling
+  - PRRow cards for each PR (Max Weight and/or Est. 1RM per exercise)
+- Exercise breakdown with per-exercise volume and best set indicators
 
 ```
 ┌────────────────────────────────────┐
@@ -946,20 +1000,27 @@ Approximately 100 built-in exercises distributed across muscle groups:
 
 ### Personal Records
 
-**Tracked per exercise:**
-- Heaviest weight (with rep count)
-- Most reps (with weight)
-- Estimated 1RM (calculated)
+**Two PR types tracked per exercise:**
+- **Max Weight**: Heaviest weight lifted (with rep count)
+- **Estimated 1RM**: Calculated using Brzycki (≤10 reps) or Epley (>10 reps) formula
 
-**1RM Formula (Brzycki):**
+**1RM Formulas:**
 ```
-1RM = weight × (36 / (37 - reps))
+Brzycki (≤10 reps): 1RM = weight × (36 / (37 - reps))
+Epley (>10 reps):   1RM = weight × (1 + reps/30)
+Single rep:         1RM = weight
 ```
 
-**PR Detection:**
-- After each set is logged, compare to stored PRs
-- If new PR, show notification/badge
-- Store PR history (not just current best)
+**PR Detection (implemented in PRDetectionService):**
+- Detected at workout completion (not per-set) via WorkoutSessionManager.endWorkout()
+- Compares best sets from completed workout against all-time stored PRs
+- New PRs saved as PersonalRecord entries in SwiftData (linked to SetLog via setLogID)
+- PR history preserved (all records kept, not just current best)
+
+**PR Display:**
+- **Workout Summary**: Trophy-styled section with terracotta accent, shows both PR types per exercise
+- **Past Workout Detail**: Same PR cards shown when viewing workout history (queried by setLogID match)
+- **PRRow component**: Reusable view showing exercise name, PR type, and value
 
 ### Data Export
 
@@ -1172,7 +1233,7 @@ class NotificationService {
 | Workout planning | High | Assign templates to days |
 | Rest day marking | Medium | Moon icon, streak preservation |
 | Progress charts | High | 1RM chart, weight×reps chart |
-| Personal record detection | Medium | Compare after each set |
+| Personal record detection | Medium | ✅ Detected at workout end, two types (max weight, est. 1RM) |
 | Streak tracking logic | Medium | In User model |
 | Achievements system | Low | Check criteria after workouts |
 
@@ -1255,6 +1316,7 @@ struct GroveApp: App {
             SetLog.self,
             WorkoutTemplate.self,
             WorkoutPlan.self,
+            PersonalRecord.self,
             Achievement.self
         ])
     }

@@ -39,12 +39,14 @@ Grove/
 │   ├── SetLog.swift               # @Model - individual set record
 │   ├── WorkoutTemplate.swift      # @Model - reusable workout templates
 │   ├── WorkoutPlan.swift          # @Model - scheduled workouts on calendar
+│   ├── PersonalRecord.swift       # @Model - PR tracking (max weight, est. 1RM)
 │   └── Enums.swift                # All enums (MuscleGroup, FitnessGoal, etc.)
 ├── Services/
 │   ├── AuthService.swift          # Sign in with Apple handling
 │   ├── HealthKitManager.swift     # HealthKit authorization and queries
 │   ├── NotificationService.swift  # Local notification scheduling
 │   ├── StreakManager.swift        # Streak calculation logic (static methods)
+│   ├── PRDetectionService.swift   # PR detection after workout completion
 │   └── WorkoutSessionManager.swift # @Observable - active workout state management
 ├── Views/
 │   ├── Onboarding/
@@ -63,8 +65,8 @@ Grove/
 │   │   ├── MinimizedWorkoutCardView.swift  # Floating card for minimized workouts
 │   │   ├── ExerciseFullScreenView.swift
 │   │   ├── SetRowView.swift
-│   │   ├── WorkoutSummaryView.swift
-│   │   └── WorkoutDetailView.swift         # Past workout detail view
+│   │   ├── WorkoutSummaryView.swift         # Post-workout stats + PR celebration
+│   │   └── WorkoutDetailView.swift         # Past workout detail view + PR display
 │   ├── Progress/
 │   │   ├── ProgressView.swift
 │   │   └── ExerciseChartView.swift
@@ -82,7 +84,8 @@ Grove/
 │   ├── ConfettiView.swift         # Celebratory confetti animation
 │   └── ColorExtensions.swift      # Color palette extension
 ├── Data/
-│   └── ExerciseSeeds.swift        # ~100 built-in exercises
+│   ├── ExerciseSeeds.swift        # ~100 built-in exercises
+│   └── PreviewSampleData.swift    # Sample data for SwiftUI previews
 └── docs/
     └── PRODUCT_SPEC.md            # Full product specification
 ```
@@ -234,10 +237,26 @@ class Workout {
   - Pill-style filter buttons with subtle background
   - Empty states for no data
 
+**Phase 3d: Personal Records**
+- [x] PersonalRecord model (PRType: maxWeight, estimatedOneRM)
+  - Brzycki formula for ≤10 reps, Epley for >10 reps
+  - Tracks weight, reps, calculated value, setLogID link
+- [x] PRDetectionService (Services/PRDetectionService.swift)
+  - Detects all-time PRs on workout completion (not per-set)
+  - Compares against stored PRs per exercise
+  - Saves new PersonalRecord entries to SwiftData
+- [x] PR display in workout summary (WorkoutSummaryView)
+  - Trophy-styled section with terracotta accent
+  - Shows both Max Weight and Est. 1RM PRs
+  - PRRow reusable component
+- [x] PR display in past workout detail (WorkoutDetailView)
+  - Queries PersonalRecords by matching setLogID to workout's sets
+  - Section appears between header stats and exercise list
+- [x] User ↔ PersonalRecord relationship (cascade delete)
+
 ### 📋 Not Started
 
-**Phase 3d: Progress & Achievements**
-- [ ] Personal record detection
+**Phase 3e: Achievements**
 - [ ] Achievements system
 
 **Phase 4: HealthKit & Social**
@@ -275,6 +294,7 @@ See `docs/PRODUCT_SPEC.md` for full specification including:
 User
  ├── workouts: [Workout]
  ├── plans: [WorkoutPlan]
+ ├── personalRecords: [PersonalRecord]
  └── customExercises: [Exercise]
 
 Workout
@@ -291,6 +311,11 @@ WorkoutPlan
  ├── user: User
  ├── template: WorkoutTemplate?
  └── completedWorkout: Workout?
+
+PersonalRecord
+ ├── user: User
+ ├── exercise: Exercise
+ └── setLogID: UUID? (links to SetLog that achieved the PR)
 ```
 
 ## Common Tasks
