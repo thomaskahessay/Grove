@@ -2,6 +2,7 @@ import SwiftUI
 import SwiftData
 
 struct WorkoutDetailView: View {
+    @Environment(\.modelContext) private var modelContext
     let workout: Workout
 
     private var workoutExercises: [ExerciseLog] {
@@ -57,11 +58,26 @@ struct WorkoutDetailView: View {
         workoutExercises.sorted { $0.orderIndex < $1.orderIndex }
     }
 
+    private var workoutPRs: [PersonalRecord] {
+        let setIDs = Set(workout.exercises.flatMap { $0.sets.map { $0.id } })
+        let descriptor = FetchDescriptor<PersonalRecord>()
+        guard let allPRs = try? modelContext.fetch(descriptor) else { return [] }
+        return allPRs.filter { pr in
+            guard let setLogID = pr.setLogID else { return false }
+            return setIDs.contains(setLogID)
+        }
+    }
+
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 24) {
                 // Header Stats
                 headerSection
+
+                // Personal Records (if any)
+                if !workoutPRs.isEmpty {
+                    prSection
+                }
 
                 // Exercises
                 exercisesSection
@@ -113,6 +129,28 @@ struct WorkoutDetailView: View {
         .padding(16)
         .background(Color.groveCardBackground)
         .clipShape(RoundedRectangle(cornerRadius: 12))
+    }
+
+    // MARK: - PR Section
+
+    private var prSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Label("Personal Records", systemImage: "trophy.fill")
+                .font(.headline)
+                .foregroundStyle(Color.groveTerracotta)
+
+            VStack(spacing: 8) {
+                ForEach(workoutPRs, id: \.id) { pr in
+                    PRRow(
+                        exerciseName: pr.exercise?.name ?? "Unknown",
+                        type: pr.type == .maxWeight ? "Max Weight" : "Est. 1RM",
+                        weight: pr.type == .maxWeight ? pr.weight : nil,
+                        reps: pr.type == .maxWeight ? pr.reps : nil,
+                        value: pr.type == .estimatedOneRM ? pr.value : nil
+                    )
+                }
+            }
+        }
     }
 
     // MARK: - Exercises Section
