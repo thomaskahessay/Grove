@@ -48,6 +48,9 @@ class User {
     @Relationship(deleteRule: .cascade, inverse: \Exercise.createdBy)
     var customExercises: [Exercise] = []
 
+    @Relationship(deleteRule: .cascade, inverse: \PersonalRecord.user)
+    var personalRecords: [PersonalRecord] = []
+
     var createdAt: Date = Date()
 
     init(

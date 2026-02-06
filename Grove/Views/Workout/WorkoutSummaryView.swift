@@ -53,24 +53,8 @@ struct WorkoutSummaryView: View {
         workout.exercises.filter { $0.status == .skipped }.count
     }
 
-    private var personalRecords: [(name: String, weight: Double, reps: Int)] {
-        workout.exercises.compactMap { exerciseLog in
-            guard exerciseLog.status != .skipped else { return nil }
-            let best = exerciseLog.sets.filter { $0.isCompleted }.max { a, b in
-                (a.weight ?? 0) * Double(a.reps ?? 0) < (b.weight ?? 0) * Double(b.reps ?? 0)
-            }
-            let prevLog = findPreviousExerciseLog(for: exerciseLog)
-            let prevBest = prevLog?.sets.filter { $0.isCompleted }.max { a, b in
-                (a.weight ?? 0) * Double(a.reps ?? 0) < (b.weight ?? 0) * Double(b.reps ?? 0)
-            }
-            guard let bestSet = best,
-                  let prevBestSet = prevBest,
-                  let bestWeight = bestSet.weight,
-                  let prevWeight = prevBestSet.weight,
-                  bestWeight > prevWeight,
-                  let reps = bestSet.reps else { return nil }
-            return (exerciseLog.exercise?.name ?? "Exercise", bestWeight, reps)
-        }
+    private var hasNewPRs: Bool {
+        !sessionManager.newPRs.isEmpty
     }
 
     @State private var showConfetti = false
@@ -91,7 +75,7 @@ struct WorkoutSummaryView: View {
                     }
 
                     // Personal records (if any)
-                    if !personalRecords.isEmpty {
+                    if hasNewPRs {
                         prSection
                     }
 
@@ -202,27 +186,27 @@ struct WorkoutSummaryView: View {
                 .foregroundStyle(Color.groveTerracotta)
 
             VStack(spacing: 8) {
-                ForEach(personalRecords, id: \.name) { record in
-                    HStack(spacing: 12) {
-                        Image(systemName: "star.fill")
-                            .font(.caption)
-                            .foregroundStyle(Color.groveTerracotta)
+                ForEach(sessionManager.newPRs, id: \.exercise.id) { result in
+                    VStack(spacing: 6) {
+                        // Max Weight PR
+                        if let pr = result.newMaxWeight {
+                            PRRow(
+                                exerciseName: result.exercise.name,
+                                type: "Max Weight",
+                                weight: pr.weight,
+                                reps: pr.reps
+                            )
+                        }
 
-                        Text(record.name)
-                            .font(.body)
-                            .fontWeight(.medium)
-                            .foregroundStyle(Color.groveText)
-
-                        Spacer()
-
-                        Text(formatPRWeight(record.weight) + " × \(record.reps)")
-                            .font(.subheadline)
-                            .fontWeight(.semibold)
-                            .foregroundStyle(Color.groveTerracotta)
+                        // Estimated 1RM PR
+                        if let pr = result.newEstimated1RM {
+                            PRRow(
+                                exerciseName: result.exercise.name,
+                                type: "Est. 1RM",
+                                value: pr.value
+                            )
+                        }
                     }
-                    .padding()
-                    .background(Color.groveTerracotta.opacity(0.1))
-                    .clipShape(RoundedRectangle(cornerRadius: 12))
                 }
             }
         }
@@ -261,13 +245,6 @@ struct WorkoutSummaryView: View {
     }
 
     // MARK: - Helpers
-
-    private func formatPRWeight(_ weight: Double) -> String {
-        if weight.truncatingRemainder(dividingBy: 1) == 0 {
-            return "\(Int(weight)) lbs"
-        }
-        return String(format: "%.1f lbs", weight)
-    }
 
     private func formatVolume(_ volume: Double) -> String {
         if volume >= 1000 {
@@ -495,6 +472,62 @@ struct ExerciseSummaryRow: View {
             return String(format: "%.1fk lbs", volume / 1000)
         }
         return String(format: "%.0f lbs", volume)
+    }
+}
+
+// MARK: - PR Row
+
+struct PRRow: View {
+    let exerciseName: String
+    let type: String
+    var weight: Double?
+    var reps: Int?
+    var value: Double?
+
+    private var displayValue: String {
+        if let value = value {
+            // Estimated 1RM - show calculated value
+            if value == floor(value) {
+                return "\(Int(value)) lbs"
+            }
+            return String(format: "%.1f lbs", value)
+        } else if let weight = weight, let reps = reps {
+            // Max weight - show weight × reps
+            if weight == floor(weight) {
+                return "\(Int(weight)) × \(reps)"
+            }
+            return String(format: "%.1f × %d", weight, reps)
+        }
+        return "—"
+    }
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Image(systemName: "star.fill")
+                .font(.caption)
+                .foregroundStyle(Color.groveTerracotta)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(exerciseName)
+                    .font(.body)
+                    .fontWeight(.medium)
+                    .foregroundStyle(Color.groveText)
+
+                Text(type)
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            }
+
+            Spacer()
+
+            Text(displayValue)
+                .font(.subheadline)
+                .fontWeight(.semibold)
+                .foregroundStyle(Color.groveTerracotta)
+        }
+        .padding()
+        .background(Color.groveTerracotta.opacity(0.1))
+        .clipShape(RoundedRectangle(cornerRadius: 12))
     }
 }
 

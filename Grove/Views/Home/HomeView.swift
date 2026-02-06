@@ -777,42 +777,8 @@ struct RecentWorkoutRow: View {
     }
 }
 
-#Preview("Home - Empty") {
+#Preview {
     HomeView()
         .environment(WorkoutSessionManager())
-        .modelContainer(for: [User.self, WorkoutPlan.self, WorkoutTemplate.self, Workout.self, Exercise.self], inMemory: true)
-}
-
-#Preview("Home - With Workouts") {
-    let config = ModelConfiguration(isStoredInMemoryOnly: true)
-    let container = try! ModelContainer(
-        for: User.self, Workout.self, ExerciseLog.self, WorkoutPlan.self, WorkoutTemplate.self, Exercise.self,
-        configurations: config
-    )
-
-    // Create sample workouts
-    let workout1 = Workout(name: "Push Day")
-    workout1.startedAt = Date().addingTimeInterval(-3600) // 1 hour ago
-    workout1.completedAt = Date()
-
-    let workout2 = Workout(name: "Leg Day")
-    workout2.startedAt = Calendar.current.date(byAdding: .day, value: -1, to: Date())!
-    workout2.completedAt = Calendar.current.date(byAdding: .day, value: -1, to: Date())!.addingTimeInterval(2700)
-
-    let workout3 = Workout(name: "Pull Day")
-    workout3.startedAt = Calendar.current.date(byAdding: .day, value: -3, to: Date())!
-    workout3.completedAt = Calendar.current.date(byAdding: .day, value: -3, to: Date())!.addingTimeInterval(3000)
-
-    let workout4 = Workout(name: "Upper Body")
-    workout4.startedAt = Calendar.current.date(byAdding: .day, value: -5, to: Date())!
-    workout4.completedAt = Calendar.current.date(byAdding: .day, value: -5, to: Date())!.addingTimeInterval(2400)
-
-    container.mainContext.insert(workout1)
-    container.mainContext.insert(workout2)
-    container.mainContext.insert(workout3)
-    container.mainContext.insert(workout4)
-
-    return HomeView()
-        .environment(WorkoutSessionManager())
-        .modelContainer(container)
+        .modelContainer(.preview)
 }

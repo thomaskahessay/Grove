@@ -342,7 +342,7 @@ struct ActiveWorkoutView: View {
     // MARK: - Actions
 
     private func endWorkout() {
-        sessionManager.endWorkout()
+        sessionManager.endWorkout(context: modelContext)
     }
 
     private func discardWorkout() {

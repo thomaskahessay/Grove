@@ -10,6 +10,7 @@ class WorkoutSessionManager {
     // Summary state
     var completedWorkout: Workout?
     var showingSummary: Bool = false
+    var newPRs: [PRDetectionService.PRResult] = []
 
     // Streak & plan linking
     var user: User?
@@ -42,7 +43,7 @@ class WorkoutSessionManager {
         isFullScreenPresented = true
     }
 
-    func endWorkout() {
+    func endWorkout(context: ModelContext? = nil) {
         activeWorkout?.completedAt = Date()
 
         // Mark any in-progress exercises as completed
@@ -57,6 +58,13 @@ class WorkoutSessionManager {
         // Update streak
         if let user = user {
             StreakManager.recordWorkout(for: user)
+        }
+
+        // Detect PRs
+        if let workout = activeWorkout, let user = user, let context = context {
+            newPRs = PRDetectionService.detectAndSavePRs(for: workout, user: user, context: context)
+        } else {
+            newPRs = []
         }
 
         // Store completed workout for summary

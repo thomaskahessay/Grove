@@ -179,8 +179,9 @@ struct ProgressView: View {
             .frame(maxWidth: .infinity)
             .padding(.horizontal, 16)
             .padding(.vertical, 12)
-            .background(Color.groveCardBackground)
-            .clipShape(RoundedRectangle(cornerRadius: 12))
+            .background(.ultraThinMaterial)
+            .clipShape(RoundedRectangle(cornerRadius: 16))
+            .shadow(color: .black.opacity(0.05), radius: 8, y: 2)
 
             // Chart with tooltip support
             ExerciseProgressChart(
@@ -691,44 +692,7 @@ struct TooltipView: View {
 
 // MARK: - Preview
 
-#Preview("With Data") {
-    let config = ModelConfiguration(isStoredInMemoryOnly: true)
-    let container = try! ModelContainer(
-        for: User.self, Exercise.self, Workout.self, ExerciseLog.self, SetLog.self,
-        configurations: config
-    )
-
-    let benchPress = Exercise(name: "Bench Press", muscleGroup: .chest)
-    let squat = Exercise(name: "Squat", muscleGroup: .legs)
-    container.mainContext.insert(benchPress)
-    container.mainContext.insert(squat)
-
-    for i in 0..<10 {
-        let workout = Workout(name: "Push Day")
-        workout.startedAt = Calendar.current.date(byAdding: .day, value: -i * 7, to: Date())!
-        workout.completedAt = workout.startedAt.addingTimeInterval(3600)
-        container.mainContext.insert(workout)
-
-        let log = ExerciseLog(exercise: benchPress, orderIndex: 0)
-        log.workout = workout
-        log.status = .completed
-        container.mainContext.insert(log)
-
-        let baseWeight = 135.0 + Double(10 - i) * 5
-        for setNum in 1...3 {
-            let set = SetLog(setNumber: setNum, weight: baseWeight, reps: 8)
-            set.isCompleted = true
-            set.exerciseLog = log
-            log.sets.append(set)
-            container.mainContext.insert(set)
-        }
-    }
-
-    return ProgressView()
-        .modelContainer(container)
-}
-
-#Preview("Empty") {
+#Preview {
     ProgressView()
-        .modelContainer(for: [Workout.self, Exercise.self, ExerciseLog.self, SetLog.self], inMemory: true)
+        .modelContainer(.preview)
 }
