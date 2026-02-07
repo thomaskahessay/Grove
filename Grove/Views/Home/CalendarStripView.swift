@@ -4,23 +4,39 @@ import SwiftData
 struct CalendarStripView: View {
     @Query private var workoutPlans: [WorkoutPlan]
 
+    @State private var weekOffset: Int = 0
     @State private var selectedDayForPlan: IdentifiableDate?
+    @State private var selectedWorkoutForDetail: Workout?
 
     private let calendar = Calendar.current
-    private let dateFormatter: DateFormatter = {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "EEE"
-        return formatter
-    }()
 
-    private var weekDates: [Date] {
+    private var weekStartDate: Date {
         let today = calendar.startOfDay(for: Date())
         let weekday = calendar.component(.weekday, from: today)
-        // Monday = 0 offset. weekday: Sun=1, Mon=2, ..., Sat=7
         let daysFromMonday = (weekday + 5) % 7
         let monday = calendar.date(byAdding: .day, value: -daysFromMonday, to: today)!
-        return (0..<7).compactMap { offset in
-            calendar.date(byAdding: .day, value: offset, to: monday)
+        return calendar.date(byAdding: .weekOfYear, value: weekOffset, to: monday)!
+    }
+
+    private var weekDates: [Date] {
+        (0..<7).compactMap { offset in
+            calendar.date(byAdding: .day, value: offset, to: weekStartDate)
+        }
+    }
+
+    private var weekLabel: String {
+        if weekOffset == 0 {
+            return "This Week"
+        } else if weekOffset == 1 {
+            return "Next Week"
+        } else if weekOffset == -1 {
+            return "Last Week"
+        } else {
+            let formatter = DateFormatter()
+            formatter.dateFormat = "MMM d"
+            let start = weekDates.first ?? Date()
+            let end = weekDates.last ?? Date()
+            return "\(formatter.string(from: start)) – \(formatter.string(from: end))"
         }
     }
 
@@ -32,23 +48,59 @@ struct CalendarStripView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("This Week")
-                .font(.headline)
-                .foregroundStyle(Color.groveText)
+            // Week navigator
+            HStack {
+                Button {
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        weekOffset -= 1
+                    }
+                } label: {
+                    Image(systemName: "chevron.left")
+                        .font(.headline)
+                        .foregroundStyle(Color.groveSage)
+                }
+
+                Spacer()
+
+                Text(weekLabel)
+                    .font(.headline)
+                    .foregroundStyle(Color.groveText)
+
+                Spacer()
+
+                Button {
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        weekOffset += 1
+                    }
+                } label: {
+                    Image(systemName: "chevron.right")
+                        .font(.headline)
+                        .foregroundStyle(Color.groveSage)
+                }
+            }
 
             HStack(spacing: 0) {
                 ForEach(weekDates, id: \.self) { date in
+                    let isCurrentWeek = weekOffset == 0
                     CalendarDayCell(
                         date: date,
-                        isSelected: calendar.isDateInToday(date),
-                        isToday: calendar.isDateInToday(date),
+                        isSelected: isCurrentWeek && calendar.isDateInToday(date),
+                        isToday: isCurrentWeek && calendar.isDateInToday(date),
                         plan: plan(for: date)
                     )
                     .frame(maxWidth: .infinity)
                     .onTapGesture {
                         let dayPlan = plan(for: date)
-                        guard dayPlan?.status != .completed else { return }
-                        selectedDayForPlan = IdentifiableDate(date: date)
+                        let isPast = date < calendar.startOfDay(for: Date())
+
+                        if isPast {
+                            if let completedWorkout = dayPlan?.completedWorkout {
+                                selectedWorkoutForDetail = completedWorkout
+                            }
+                        } else {
+                            guard dayPlan?.status != .completed else { return }
+                            selectedDayForPlan = IdentifiableDate(date: date)
+                        }
                     }
                 }
             }
@@ -58,6 +110,9 @@ struct CalendarStripView: View {
                 date: identifiableDate.date,
                 existingPlan: plan(for: identifiableDate.date)
             )
+        }
+        .navigationDestination(item: $selectedWorkoutForDetail) { workout in
+            WorkoutDetailView(workout: workout)
         }
     }
 }
@@ -184,7 +239,9 @@ struct CalendarDayCell: View {
 }
 
 #Preview {
-    CalendarStripView()
-        .padding()
-        .modelContainer(for: [WorkoutPlan.self, WorkoutTemplate.self], inMemory: true)
+    NavigationStack {
+        CalendarStripView()
+            .padding()
+    }
+    .modelContainer(for: [WorkoutPlan.self, WorkoutTemplate.self], inMemory: true)
 }
