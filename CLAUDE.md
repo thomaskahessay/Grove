@@ -47,7 +47,8 @@ Grove/
 │   ├── NotificationService.swift  # Local notification scheduling
 │   ├── StreakManager.swift        # Streak calculation logic (static methods)
 │   ├── PRDetectionService.swift   # PR detection after workout completion
-│   └── WorkoutSessionManager.swift # @Observable - active workout state management
+│   ├── AchievementService.swift   # Achievement detection + progress tracking
+│   └── WorkoutSessionManager.swift # @MainActor @Observable - active workout state management
 ├── Views/
 │   ├── Onboarding/
 │   │   ├── SignInView.swift
@@ -74,6 +75,7 @@ Grove/
 │   │   └── SocialFeedView.swift
 │   ├── Profile/
 │   │   ├── ProfileView.swift
+│   │   ├── AchievementsGalleryView.swift  # Achievement gallery with progress
 │   │   └── NotificationSettingsView.swift
 │   └── Library/
 │       ├── ExerciseLibraryView.swift
@@ -185,7 +187,13 @@ class Workout {
   - Cancelling template creation resets category selection
   - Clear plan option for existing plans
 - [x] Assign workouts to days via calendar strip tap or weekly planner
-- [x] Calendar strip shows fixed Mon–Sun week (highlight stays on today, completed days locked)
+- [x] Calendar strip with week navigation (CalendarStripView.swift)
+  - Chevron buttons and swipe gesture to navigate between weeks
+  - Week label: "This Week" / "Last Week" / "Next Week" / date range
+  - Today highlight only shows on current week
+  - Past completed days tap → WorkoutDetailView (navigation push)
+  - Past rest/empty days → no action
+  - Current/future days tap → DayPlanSheet (same as before)
 - [x] Streak tracking logic (StreakManager.swift)
   - recordWorkout: increments/resets streak based on gap
   - recordRestDay: preserves streak (up to 3 consecutive)
@@ -245,6 +253,8 @@ class Workout {
   - Detects all-time PRs on workout completion (not per-set)
   - Compares against stored PRs per exercise
   - Saves new PersonalRecord entries to SwiftData
+  - First workout saves baselines only (not flagged as PRs)
+  - Only flags as "new PR" when beating an existing record
 - [x] PR display in workout summary (WorkoutSummaryView)
   - Trophy-styled section with terracotta accent
   - Shows both Max Weight and Est. 1RM PRs
@@ -254,10 +264,27 @@ class Workout {
   - Section appears between header stats and exercise list
 - [x] User ↔ PersonalRecord relationship (cascade delete)
 
-### 📋 Not Started
-
 **Phase 3e: Achievements**
-- [ ] Achievements system
+- [x] Achievement model (Models/Achievement.swift)
+  - AchievementType enum: firstRep, weekWarrior, consistent, prCrusher, planner, centuryClub, ironWill
+  - User ↔ Achievement relationship (cascade delete)
+- [x] AchievementService (Services/AchievementService.swift)
+  - Checks all achievement conditions on workout completion
+  - Progress tracking for gallery (current/target values per type)
+  - prCrusher requires beating a previous record (not first-time baselines)
+- [x] Achievement display in workout summary (WorkoutSummaryView)
+  - Trophy-styled section for newly unlocked achievements
+  - AchievementRow reusable component
+- [x] AchievementsGalleryView (Views/Profile/AchievementsGalleryView.swift)
+  - Summary header (X/7 earned)
+  - Progress bars for locked achievements
+  - Completed achievements: green filled icon + checkmark badge
+  - Earned date display
+- [x] Achievements in Progress tab (segmented picker: Exercises / Achievements)
+- [x] Latest achievement card on Home screen (links to gallery)
+- [x] Workout linked to user on completion (WorkoutSessionManager.endWorkout)
+
+### 📋 Not Started
 
 **Phase 4: HealthKit & Social**
 - [ ] HealthKit authorization
@@ -273,8 +300,18 @@ class Workout {
 - [ ] Data export (CSV/PDF)
 - [ ] Vacation mode
 
-### Known Issues
+### Known Issues & Fixes
 - [x] Streak badge — now wired to StreakManager with recalculation on app launch
+- [x] Workout completion crash — fullScreenCover dismissal + sheet presentation conflict; fixed with 0.5s delay before showing summary
+- [x] PR predicate crash — SwiftData #Predicate cannot use .rawValue on enum properties; fixed by comparing enum directly
+- [x] PR predicate silent failure — SwiftData #Predicate cannot serialize captured enum values; fixed by filtering enum type in memory instead of in predicate
+- [x] Workouts not linked to user — workout.user was never set at creation time; now set in endWorkout()
+- [x] WorkoutSessionManager concurrency — added @MainActor for Swift 6 strict concurrency
+
+### SwiftData Gotchas
+- **Never use `.rawValue` in `#Predicate`** — SwiftData stores enums natively; `.rawValue` causes runtime crash
+- **Never compare captured enum variables in `#Predicate`** — SwiftData cannot serialize them; fetch broader results and filter in memory
+- **Use `try?` carefully** — it silently swallows predicate validation errors; prefer fetching broader and filtering in Swift when enum types are involved
 
 ---
 
@@ -316,6 +353,12 @@ PersonalRecord
  ├── user: User
  ├── exercise: Exercise
  └── setLogID: UUID? (links to SetLog that achieved the PR)
+
+Achievement
+ ├── user: User
+ ├── type: AchievementType
+ ├── unlockedAt: Date
+ └── relatedData: String?
 ```
 
 ## Common Tasks
