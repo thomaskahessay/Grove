@@ -115,7 +115,7 @@ struct AchievementService {
                 case .consistent:
                     return (min(completedWorkoutCount, 50), 50)
                 case .prCrusher:
-                    return (min(prCount, 1), 1)
+                    return (isUnlocked ? 1 : 0, 1)
                 case .planner:
                     return (isUnlocked ? 1 : 0, 1)
                 case .centuryClub:

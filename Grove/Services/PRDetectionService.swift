@@ -59,7 +59,7 @@ struct PRDetectionService {
             var newMaxWeightPR: PersonalRecord?
             var new1RMPR: PersonalRecord?
 
-            // Check if we beat max weight PR
+            // Check max weight: save baseline or record a true PR
             if bestWeight > (currentMaxWeight?.value ?? 0), let set = bestWeightSet {
                 let pr = PersonalRecord(
                     exercise: exercise,
@@ -71,10 +71,13 @@ struct PRDetectionService {
                 )
                 pr.user = user
                 context.insert(pr)
-                newMaxWeightPR = pr
+                // Only flag as a "new PR" if beating an existing record (not a first-time baseline)
+                if currentMaxWeight != nil {
+                    newMaxWeightPR = pr
+                }
             }
 
-            // Check if we beat estimated 1RM PR
+            // Check estimated 1RM: save baseline or record a true PR
             if best1RM > (current1RM?.value ?? 0), let set = best1RMSet {
                 let pr = PersonalRecord(
                     exercise: exercise,
@@ -86,7 +89,10 @@ struct PRDetectionService {
                 )
                 pr.user = user
                 context.insert(pr)
-                new1RMPR = pr
+                // Only flag as a "new PR" if beating an existing record (not a first-time baseline)
+                if current1RM != nil {
+                    new1RMPR = pr
+                }
             }
 
             if newMaxWeightPR != nil || new1RMPR != nil {
@@ -111,14 +117,16 @@ struct PRDetectionService {
     ) -> PersonalRecord? {
         let exerciseID = exercise.id
 
+        // Fetch all PRs for this exercise, then filter by type in memory.
+        // SwiftData #Predicate can't reliably serialize captured enum values.
         let descriptor = FetchDescriptor<PersonalRecord>(
             predicate: #Predicate<PersonalRecord> { pr in
-                pr.exercise?.id == exerciseID && pr.type == type
+                pr.exercise?.id == exerciseID
             },
             sortBy: [SortDescriptor(\.value, order: .reverse)]
         )
 
-        return try? context.fetch(descriptor).first
+        return (try? context.fetch(descriptor))?.first { $0.type == type }
     }
 
     /// Gets all PRs for a user, optionally filtered by exercise
