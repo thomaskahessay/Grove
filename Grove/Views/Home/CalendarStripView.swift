@@ -104,6 +104,21 @@ struct CalendarStripView: View {
                     }
                 }
             }
+            .contentShape(Rectangle())
+            .gesture(
+                DragGesture(minimumDistance: 30, coordinateSpace: .local)
+                    .onEnded { value in
+                        if value.translation.width < -30 {
+                            withAnimation(.easeInOut(duration: 0.2)) {
+                                weekOffset += 1
+                            }
+                        } else if value.translation.width > 30 {
+                            withAnimation(.easeInOut(duration: 0.2)) {
+                                weekOffset -= 1
+                            }
+                        }
+                    }
+            )
         }
         .sheet(item: $selectedDayForPlan) { identifiableDate in
             DayPlanSheet(

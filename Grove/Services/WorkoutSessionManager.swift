@@ -1,6 +1,7 @@
 import SwiftUI
 import SwiftData
 
+@MainActor
 @Observable
 class WorkoutSessionManager {
     var activeWorkout: Workout?
@@ -47,6 +48,11 @@ class WorkoutSessionManager {
     func endWorkout(context: ModelContext? = nil) {
         activeWorkout?.completedAt = Date()
 
+        // Link workout to user (needed for achievement/PR tracking via user.workouts)
+        if activeWorkout?.user == nil {
+            activeWorkout?.user = user
+        }
+
         // Mark any in-progress exercises as completed
         if let exercises = activeWorkout?.exercises {
             for exercise in exercises {
@@ -89,8 +95,11 @@ class WorkoutSessionManager {
         isMinimized = false
         isFullScreenPresented = false
 
-        // Show summary
-        showingSummary = true
+        // Delay summary presentation until fullScreenCover dismissal completes.
+        // SwiftUI crashes if a sheet is presented while a fullScreenCover is being dismissed.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+            self.showingSummary = true
+        }
     }
 
     func dismissSummary() {

@@ -110,11 +110,10 @@ struct PRDetectionService {
         context: ModelContext
     ) -> PersonalRecord? {
         let exerciseID = exercise.id
-        let typeRaw = type.rawValue
 
         let descriptor = FetchDescriptor<PersonalRecord>(
             predicate: #Predicate<PersonalRecord> { pr in
-                pr.exercise?.id == exerciseID && pr.type.rawValue == typeRaw
+                pr.exercise?.id == exerciseID && pr.type == type
             },
             sortBy: [SortDescriptor(\.value, order: .reverse)]
         )

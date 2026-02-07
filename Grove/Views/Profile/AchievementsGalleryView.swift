@@ -70,12 +70,22 @@ private struct AchievementGalleryCard: View {
 
     var body: some View {
         HStack(spacing: 16) {
-            Image(systemName: item.type.icon)
-                .font(.title)
-                .foregroundStyle(item.isUnlocked ? Color.groveTerracotta : .secondary)
-                .frame(width: 48, height: 48)
-                .background(item.isUnlocked ? Color.groveTerracotta.opacity(0.15) : Color.groveWarmSand.opacity(0.3))
-                .clipShape(Circle())
+            ZStack(alignment: .bottomTrailing) {
+                Image(systemName: item.type.icon)
+                    .font(.title)
+                    .foregroundStyle(item.isUnlocked ? .white : .secondary)
+                    .frame(width: 48, height: 48)
+                    .background(item.isUnlocked ? Color.groveSage : Color.groveWarmSand.opacity(0.3))
+                    .clipShape(Circle())
+
+                if item.isUnlocked {
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(.system(size: 16))
+                        .foregroundStyle(Color.groveSage)
+                        .background(Circle().fill(Color.groveCardBackground).frame(width: 14, height: 14))
+                        .offset(x: 2, y: 2)
+                }
+            }
 
             VStack(alignment: .leading, spacing: 4) {
                 Text(item.type.rawValue)
