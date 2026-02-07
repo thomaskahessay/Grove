@@ -96,6 +96,11 @@ struct ContentView: View {
         }
         .preferredColorScheme(colorScheme)
         .task {
+            if users.isEmpty {
+                let defaultUser = User(appleUserID: "local-user")
+                defaultUser.displayName = "Thomas"
+                modelContext.insert(defaultUser)
+            }
             sessionManager.user = users.first
             sessionManager.onWorkoutCompleted = { workout in
                 // Link completed workout to today's plan

@@ -51,6 +51,9 @@ class User {
     @Relationship(deleteRule: .cascade, inverse: \PersonalRecord.user)
     var personalRecords: [PersonalRecord] = []
 
+    @Relationship(deleteRule: .cascade, inverse: \Achievement.user)
+    var achievements: [Achievement] = []
+
     var createdAt: Date = Date()
 
     init(

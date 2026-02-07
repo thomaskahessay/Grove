@@ -11,6 +11,7 @@ class WorkoutSessionManager {
     var completedWorkout: Workout?
     var showingSummary: Bool = false
     var newPRs: [PRDetectionService.PRResult] = []
+    var newAchievements: [AchievementService.AchievementResult] = []
 
     // Streak & plan linking
     var user: User?
@@ -67,6 +68,15 @@ class WorkoutSessionManager {
             newPRs = []
         }
 
+        // Detect achievements
+        if let user = user, let context = context {
+            newAchievements = AchievementService.checkAndAwardAchievements(
+                for: user, context: context, newPRs: newPRs
+            )
+        } else {
+            newAchievements = []
+        }
+
         // Store completed workout for summary
         completedWorkout = activeWorkout
 
@@ -86,6 +96,7 @@ class WorkoutSessionManager {
     func dismissSummary() {
         showingSummary = false
         completedWorkout = nil
+        newAchievements = []
     }
 
     func discardWorkout(context: ModelContext) {

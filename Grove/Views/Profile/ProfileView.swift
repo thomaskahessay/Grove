@@ -1,4 +1,5 @@
 import SwiftUI
+import SwiftData
 
 enum AppearanceMode: String, CaseIterable {
     case system = "System"

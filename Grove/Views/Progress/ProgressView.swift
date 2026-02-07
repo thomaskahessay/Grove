@@ -2,6 +2,11 @@ import SwiftUI
 import SwiftData
 import Charts
 
+enum ProgressTab: String, CaseIterable {
+    case exercises = "Exercises"
+    case achievements = "Achievements"
+}
+
 struct ProgressView: View {
     @Environment(\.modelContext) private var modelContext
     @Query(
@@ -10,6 +15,7 @@ struct ProgressView: View {
         order: .reverse
     ) private var completedWorkouts: [Workout]
 
+    @State private var selectedTab: ProgressTab = .exercises
     @State private var selectedExercise: Exercise?
     @State private var selectedMetric: ProgressMetric = .estimatedOneRM
     @State private var selectedTimeRange: TimeRange = .threeMonths
@@ -50,56 +56,74 @@ struct ProgressView: View {
 
     var body: some View {
         NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 16) {
-                    if exercisesWithHistory.isEmpty {
-                        emptyStateView
-                    } else {
-                        // Exercise header at top
-                        exerciseHeader
-
-                        if let exercise = selectedExercise {
-                            let dataPoints = getDataPoints(for: exercise)
-                            let highestWeight = getHighestWeight(for: exercise)
-
-                            // Chart with floating stats
-                            if dataPoints.isEmpty {
-                                noDataView
-                            } else {
-                                chartSection(dataPoints: dataPoints, highestWeight: highestWeight)
-                            }
-
-                            // Minimal filter row
-                            filterRow
-                        }
+            VStack(spacing: 0) {
+                Picker("Tab", selection: $selectedTab) {
+                    ForEach(ProgressTab.allCases, id: \.self) { tab in
+                        Text(tab.rawValue).tag(tab)
                     }
-
-                    Spacer(minLength: 100)
                 }
+                .pickerStyle(.segmented)
                 .padding(.horizontal)
-                .padding(.top, 24)
+                .padding(.top, 8)
+                .padding(.bottom, 4)
+
+                switch selectedTab {
+                case .exercises:
+                    exercisesContent
+                case .achievements:
+                    AchievementsGalleryView()
+                }
             }
             .background(Color.groveBackground)
             .navigationBarTitleDisplayMode(.inline)
-            .sheet(isPresented: $showingExercisePicker) {
-                ExercisePickerSheet(
-                    exercises: exercisesWithHistory,
-                    selectedExercise: $selectedExercise,
-                    searchText: $searchText
-                )
-                .presentationDetents([.medium, .large])
-            }
-            .onAppear {
-                if !hasAutoSelectedExercise && selectedExercise == nil,
-                   let first = exercisesWithHistory.first {
-                    selectedExercise = first.exercise
-                    hasAutoSelectedExercise = true
+        }
+    }
+
+    private var exercisesContent: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 16) {
+                if exercisesWithHistory.isEmpty {
+                    emptyStateView
+                } else {
+                    exerciseHeader
+
+                    if let exercise = selectedExercise {
+                        let dataPoints = getDataPoints(for: exercise)
+                        let highestWeight = getHighestWeight(for: exercise)
+
+                        if dataPoints.isEmpty {
+                            noDataView
+                        } else {
+                            chartSection(dataPoints: dataPoints, highestWeight: highestWeight)
+                        }
+
+                        filterRow
+                    }
                 }
+
+                Spacer(minLength: 100)
             }
-            .onChange(of: completedWorkouts.count) { _, _ in
-                if selectedExercise == nil, let first = exercisesWithHistory.first {
-                    selectedExercise = first.exercise
-                }
+            .padding(.horizontal)
+            .padding(.top, 24)
+        }
+        .sheet(isPresented: $showingExercisePicker) {
+            ExercisePickerSheet(
+                exercises: exercisesWithHistory,
+                selectedExercise: $selectedExercise,
+                searchText: $searchText
+            )
+            .presentationDetents([.medium, .large])
+        }
+        .onAppear {
+            if !hasAutoSelectedExercise && selectedExercise == nil,
+               let first = exercisesWithHistory.first {
+                selectedExercise = first.exercise
+                hasAutoSelectedExercise = true
+            }
+        }
+        .onChange(of: completedWorkouts.count) { _, _ in
+            if selectedExercise == nil, let first = exercisesWithHistory.first {
+                selectedExercise = first.exercise
             }
         }
     }

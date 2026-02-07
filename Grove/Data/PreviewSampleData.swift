@@ -196,6 +196,15 @@ struct PreviewSampleData {
         createPlan(date: calendar.date(byAdding: .day, value: 5, to: monday)!, template: pushTemplate, isRest: false, user: user, today: today, context: context)
         createPlan(date: calendar.date(byAdding: .day, value: 6, to: monday)!, template: nil, isRest: true, user: user, today: today, context: context)
 
+        // MARK: - Achievements
+        let firstRepAchievement = Achievement(type: .firstRep, user: user, relatedData: "Push Day")
+        firstRepAchievement.unlockedAt = calendar.date(byAdding: .day, value: -15, to: today)!
+        context.insert(firstRepAchievement)
+
+        let prCrusherAchievement = Achievement(type: .prCrusher, user: user, relatedData: "Barbell Bench Press")
+        prCrusherAchievement.unlockedAt = calendar.date(byAdding: .day, value: -1, to: today)!
+        context.insert(prCrusherAchievement)
+
         try? context.save()
     }
 

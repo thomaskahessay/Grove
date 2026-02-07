@@ -19,6 +19,7 @@ struct HomeView: View {
     ) private var completedWorkouts: [Workout]
 
     @Query(sort: \Exercise.name) private var allExercises: [Exercise]
+    @Query(sort: \Achievement.unlockedAt, order: .reverse) private var achievements: [Achievement]
 
     @State private var showingWeeklyPlan = false
 
@@ -206,6 +207,17 @@ struct HomeView: View {
                             completed: workoutsThisWeek,
                             planned: plannedThisWeek
                         )
+                    }
+
+                    // Latest Achievement
+                    if let latest = achievements.first {
+                        NavigationLink(destination: AchievementsGalleryView()) {
+                            LatestAchievementCard(
+                                achievement: latest,
+                                totalCount: achievements.count
+                            )
+                        }
+                        .buttonStyle(.plain)
                     }
 
                     // Recent Workouts Section
@@ -774,6 +786,44 @@ struct RecentWorkoutRow: View {
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
+    }
+}
+
+// MARK: - Latest Achievement Card
+
+struct LatestAchievementCard: View {
+    let achievement: Achievement
+    let totalCount: Int
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Image(systemName: achievement.type.icon)
+                .font(.title2)
+                .foregroundStyle(Color.groveTerracotta)
+                .frame(width: 40, height: 40)
+                .background(Color.groveTerracotta.opacity(0.15))
+                .clipShape(Circle())
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(achievement.type.rawValue)
+                    .font(.subheadline)
+                    .fontWeight(.medium)
+                    .foregroundStyle(Color.groveText)
+
+                Text("\(totalCount) of 7 achievements earned")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            Spacer()
+
+            Image(systemName: "chevron.right")
+                .font(.caption)
+                .foregroundStyle(.tertiary)
+        }
+        .padding(16)
+        .background(Color.groveCardBackground)
+        .clipShape(RoundedRectangle(cornerRadius: 12))
     }
 }
 

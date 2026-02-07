@@ -79,6 +79,11 @@ struct WorkoutSummaryView: View {
                         prSection
                     }
 
+                    // Achievements (if any newly earned)
+                    if !sessionManager.newAchievements.isEmpty {
+                        achievementSection
+                    }
+
                     // Exercise breakdown
                     exerciseBreakdownSection
 
@@ -207,6 +212,20 @@ struct WorkoutSummaryView: View {
                             )
                         }
                     }
+                }
+            }
+        }
+    }
+
+    private var achievementSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Label("Achievement Unlocked!", systemImage: "trophy.circle.fill")
+                .font(.headline)
+                .foregroundStyle(Color.groveTerracotta)
+
+            VStack(spacing: 8) {
+                ForEach(sessionManager.newAchievements, id: \.type) { result in
+                    AchievementRow(type: result.type, relatedData: result.achievement.relatedData)
                 }
             }
         }
@@ -524,6 +543,43 @@ struct PRRow: View {
                 .font(.subheadline)
                 .fontWeight(.semibold)
                 .foregroundStyle(Color.groveTerracotta)
+        }
+        .padding()
+        .background(Color.groveTerracotta.opacity(0.1))
+        .clipShape(RoundedRectangle(cornerRadius: 12))
+    }
+}
+
+// MARK: - Achievement Row
+
+struct AchievementRow: View {
+    let type: AchievementType
+    var relatedData: String?
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Image(systemName: type.icon)
+                .font(.title2)
+                .foregroundStyle(Color.groveTerracotta)
+                .frame(width: 40, height: 40)
+                .background(Color.groveTerracotta.opacity(0.15))
+                .clipShape(Circle())
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(type.rawValue)
+                    .font(.body)
+                    .fontWeight(.medium)
+                    .foregroundStyle(Color.groveText)
+
+                Text(relatedData ?? type.description)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            Spacer()
+
+            Image(systemName: "checkmark.circle.fill")
+                .foregroundStyle(Color.groveSage)
         }
         .padding()
         .background(Color.groveTerracotta.opacity(0.1))
