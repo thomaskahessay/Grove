@@ -7,6 +7,7 @@ struct ContentView: View {
     @Query private var users: [User]
     @Query(sort: \WorkoutPlan.date, order: .reverse) private var workoutPlans: [WorkoutPlan]
     @State private var showingWorkoutCreation = false
+    @State private var selectedTab: Int = 0
     @AppStorage("appearanceMode") private var appearanceMode: String = "System"
 
     private var colorScheme: ColorScheme? {
@@ -47,27 +48,27 @@ struct ContentView: View {
     @ViewBuilder
     private var mainAppView: some View {
         ZStack(alignment: .bottom) {
-            TabView {
-                Tab("Home", systemImage: "house.fill") {
+            TabView(selection: $selectedTab) {
+                Tab("Home", systemImage: "house.fill", value: 0) {
                     HomeView()
                 }
 
-                Tab("Progress", systemImage: "chart.line.uptrend.xyaxis") {
+                Tab("Progress", systemImage: "chart.line.uptrend.xyaxis", value: 1) {
                     ProgressView()
                 }
 
-                Tab("Social", systemImage: "person.2.fill") {
+                Tab("Social", systemImage: "person.2.fill", value: 2) {
                     Text("Social")
                 }
 
-                Tab("Profile", systemImage: "person.fill") {
+                Tab("Profile", systemImage: "person.fill", value: 3) {
                     ProfileView()
                 }
             }
             .tint(.groveSage)
 
-            // Floating Action Button (hidden when workout is active)
-            if !sessionManager.hasActiveWorkout {
+            // Floating Action Button (Home tab only, hidden when workout is active)
+            if !sessionManager.hasActiveWorkout && selectedTab == 0 {
                 HStack {
                     Spacer()
                     Button {

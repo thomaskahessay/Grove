@@ -42,7 +42,7 @@ struct HomeView: View {
     }
 
     private var welcomeMessage: String {
-        let name = currentUser?.displayName ?? "Thomas"
+        let name = currentUser?.displayName ?? "there"
         let messages = [
             "\(greeting), \(name)!",
             "Welcome back, \(name)!",
@@ -61,10 +61,6 @@ struct HomeView: View {
         return workoutPlans.first { plan in
             calendar.isDate(plan.date, inSameDayAs: today)
         }
-    }
-
-    private var appIconImage: Image {
-        Image("Grove-Logo-Transparent")
     }
 
     // MARK: - Weekly Stats
@@ -142,6 +138,7 @@ struct HomeView: View {
                         .font(.title)
                         .fontWeight(.bold)
                         .foregroundStyle(Color.groveText)
+                        .frame(maxWidth: .infinity, alignment: .leading)
 
                     // Today's Workout Card
                     if let plan = todaysPlan {
@@ -231,24 +228,11 @@ struct HomeView: View {
                 .padding(.top, 8)
             }
             .background(Color.groveBackground)
+            .navigationTitle("")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     StreakBadge(streak: currentUser?.currentStreak ?? 0)
-                }
-                ToolbarItem(placement: .principal) {
-                    appIconImage
-                        .resizable()
-                        .aspectRatio(contentMode: .fit)
-                        .frame(width: 32, height: 32)
-                        .clipShape(RoundedRectangle(cornerRadius: 7))
-                }
-                ToolbarItem(placement: .topBarTrailing) {
-                    NavigationLink(destination: Text("Profile")) {
-                        Image(systemName: "person.circle.fill")
-                            .font(.title2)
-                            .foregroundStyle(Color.groveSage)
-                    }
                 }
             }
             .sheet(isPresented: $showingWeeklyPlan) {

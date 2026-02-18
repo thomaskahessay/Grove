@@ -308,7 +308,15 @@ class Workout {
   - Resume logic: relaunch after sign-in but before completion resumes at ProfileSetup
   - Plans only created from today onward; rest days created with isRestDay=true
 - [ ] Notification system
-- [ ] Profile/Settings screen
+- [x] Profile/Settings screen
+  - Profile header with photo, name, streak, workout count
+  - Account: inline name edit, fitness goal + experience level pickers
+  - Preferences: weight units, vacation mode with date pickers
+  - Sharing Defaults: 4 toggles for social feed sharing
+  - Links: Notifications (→ NotificationSettingsView), Achievements (→ AchievementsGalleryView)
+  - Appearance: System/Light/Dark with checkmark indicator
+  - Data: Export History (coming soon), Delete Account with confirmation
+  - NotificationSettingsView: 5 notification toggles + quiet hours (From/To DatePickers)
 - [ ] Data export (CSV/PDF)
 - [ ] Vacation mode
 
@@ -319,6 +327,11 @@ class Workout {
 - [x] PR predicate silent failure — SwiftData #Predicate cannot serialize captured enum values; fixed by filtering enum type in memory instead of in predicate
 - [x] Workouts not linked to user — workout.user was never set at creation time; now set in endWorkout()
 - [x] WorkoutSessionManager concurrency — added @MainActor for Swift 6 strict concurrency
+- [x] FAB visible on all tabs — now hidden on Progress/Social/Profile; only shown on Home tab via TabView(selection:)
+- [x] Streak badge not showing on first login — added .navigationTitle("") to force nav bar render
+- [x] Welcome message width — added .frame(maxWidth: .infinity, alignment: .leading) to match card widths
+- [x] Home nav bar clutter — removed Grove logo from .principal and redundant profile button from toolbar
+- [x] Profile background grey in light mode — added .scrollContentBackground(.hidden) + .background(Color.groveBackground)
 
 ### SwiftData Gotchas
 - **Never use `.rawValue` in `#Predicate`** — SwiftData stores enums natively; `.rawValue` causes runtime crash
@@ -407,3 +420,15 @@ Key: We READ from Apple Fitness workouts, we don't create our own HKWorkout sess
 <key>NSHealthShareUsageDescription</key>
 <string>Grove reads your workout data to track heart rate and calories during your strength training sessions.</string>
 ```
+
+---
+
+## 💡 Future Ideas
+
+### Streak Plant ("Your Grove")
+- Visual plant/tree that grows with the user's streak
+- 8 growth stages: Seed (0) → Sprout (1-2) → Seedling (3-6) → Young Plant (7-13) → Bush (14-29) → Sapling (30-59) → Tree (60-99) → Grove Tree (100+)
+- Implemented with SwiftUI Canvas API (Bezier curves, no third-party deps)
+- Leaf sway animation, spring "pop" on new growth, wilting if streak breaks
+- Large view on Profile screen, small indicator next to streak badge on Home
+- Colors: sage green leaves, terracotta trunk, warm sand soil
