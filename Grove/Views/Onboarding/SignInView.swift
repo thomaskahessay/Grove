@@ -46,11 +46,18 @@ struct SignInView: View {
                 .clipShape(RoundedRectangle(cornerRadius: 14))
 
                 #if DEBUG
-                Button("Skip Sign In (Debug)") {
+                Button {
                     createDebugUser()
+                } label: {
+                    Text("Continue without Sign In")
+                        .font(.subheadline)
+                        .fontWeight(.medium)
+                        .foregroundStyle(Color.groveSage)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 50)
+                        .background(Color.groveSage.opacity(0.12))
+                        .clipShape(RoundedRectangle(cornerRadius: 14))
                 }
-                .font(.caption)
-                .foregroundStyle(.secondary)
                 #endif
             }
             .padding(.horizontal, 24)
