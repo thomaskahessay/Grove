@@ -194,6 +194,11 @@ class Workout {
   - Past completed days tap → WorkoutDetailView (navigation push)
   - Past rest/empty days → no action
   - Current/future days tap → DayPlanSheet (same as before)
+  - Month view toggle: tap the center label to switch between week strip and full month grid
+  - Month grid: LazyVGrid with M–S header, day circles (30×30), status dots (14×14)
+  - Chevrons and swipe navigate months when in month mode
+  - Week↔month offset sync keeps displayed time range consistent when toggling
+  - Same tap behavior and status indicators in both views
 - [x] Streak tracking logic (StreakManager.swift)
   - recordWorkout: increments/resets streak based on gap
   - recordRestDay: preserves streak (up to 3 consecutive)
@@ -294,7 +299,14 @@ class Workout {
 - [ ] Sharing preferences
 
 **Phase 5: Polish & Launch**
-- [ ] Sign in with Apple + Onboarding flow
+- [x] Sign in with Apple + Onboarding flow
+  - WelcomeCarouselView (3-slide carousel → Get Started)
+  - SignInView (Sign in with Apple + Debug skip button)
+  - ProfileSetupView (photo, name, units, fitness goal 2×2 grid, experience level)
+  - WeeklyPlanSetupView (preset split picker → schedule preview → template + plan creation)
+  - OnboardingReadyView ("You're all set! Let's grow." → sets onboardingCompletedAt)
+  - Resume logic: relaunch after sign-in but before completion resumes at ProfileSetup
+  - Plans only created from today onward; rest days created with isRestDay=true
 - [ ] Notification system
 - [ ] Profile/Settings screen
 - [ ] Data export (CSV/PDF)

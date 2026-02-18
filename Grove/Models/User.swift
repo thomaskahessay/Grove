@@ -54,6 +54,9 @@ class User {
     @Relationship(deleteRule: .cascade, inverse: \Achievement.user)
     var achievements: [Achievement] = []
 
+    var onboardingCompletedAt: Date?
+    var profileImageData: Data?
+
     var createdAt: Date = Date()
 
     init(

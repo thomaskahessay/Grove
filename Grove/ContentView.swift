@@ -17,7 +17,35 @@ struct ContentView: View {
         }
     }
 
+    private var isOnboardingComplete: Bool {
+        guard let user = users.first else { return false }
+        return user.onboardingCompletedAt != nil
+    }
+
     var body: some View {
+        if isOnboardingComplete {
+            mainAppView
+                .preferredColorScheme(colorScheme)
+                .task {
+                    sessionManager.user = users.first
+                    sessionManager.onWorkoutCompleted = { workout in
+                        let calendar = Calendar.current
+                        let today = calendar.startOfDay(for: Date())
+                        if let todaysPlan = workoutPlans.first(where: { calendar.isDate($0.date, inSameDayAs: today) && !$0.isRestDay }) {
+                            todaysPlan.completedWorkout = workout
+                        }
+                    }
+                }
+                .onChange(of: users.first?.appleUserID) {
+                    sessionManager.user = users.first
+                }
+        } else {
+            OnboardingContainerView()
+        }
+    }
+
+    @ViewBuilder
+    private var mainAppView: some View {
         ZStack(alignment: .bottom) {
             TabView {
                 Tab("Home", systemImage: "house.fill") {
@@ -93,26 +121,6 @@ struct ContentView: View {
             if let workout = sessionManager.completedWorkout {
                 WorkoutSummaryView(workout: workout)
             }
-        }
-        .preferredColorScheme(colorScheme)
-        .task {
-            if users.isEmpty {
-                let defaultUser = User(appleUserID: "local-user")
-                defaultUser.displayName = "Thomas"
-                modelContext.insert(defaultUser)
-            }
-            sessionManager.user = users.first
-            sessionManager.onWorkoutCompleted = { workout in
-                // Link completed workout to today's plan
-                let calendar = Calendar.current
-                let today = calendar.startOfDay(for: Date())
-                if let todaysPlan = workoutPlans.first(where: { calendar.isDate($0.date, inSameDayAs: today) && !$0.isRestDay }) {
-                    todaysPlan.completedWorkout = workout
-                }
-            }
-        }
-        .onChange(of: users.first?.appleUserID) {
-            sessionManager.user = users.first
         }
     }
 }

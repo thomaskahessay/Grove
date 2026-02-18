@@ -596,17 +596,24 @@ enum AchievementType: String, Codable, CaseIterable {
 
 ### Onboarding Flow
 
-1. **Launch** → Sign in with Apple button
-2. **Profile Setup**:
-   - Enter display name (can use Apple ID name as default)
-   - Select fitness goal (build muscle, lose weight, stay active, train for event)
-   - Select experience level (beginner, intermediate, advanced)
-   - Select preferred units (imperial/metric)
-3. **Weekly Plan Setup**:
-   - Choose a workout split OR skip
-   - Options: Push/Pull/Legs, Upper/Lower, Full Body 3x, Custom
-   - If chosen → Assign workouts to days, mark rest days
-4. **Complete** → Navigate to Home
+1. **Welcome Carousel** → 3-slide swipeable intro → "Get Started"
+2. **Sign in with Apple** → creates User in SwiftData (onboardingCompletedAt stays nil)
+3. **Profile Setup**:
+   - Profile photo (camera or photo library, resized to 512×512 @ 70% JPEG)
+   - Display name (pre-filled from Apple ID if available)
+   - Weight units (Imperial lbs / Metric kg)
+   - Fitness goal: 2×2 card grid (Build Muscle / Lose Weight / Stay Active / Train for Event)
+   - Experience level: 3-button row (Beginner / Intermediate / Advanced)
+4. **Weekly Plan Setup**:
+   - Choose a preset split OR "Skip for now"
+   - Presets: 3-day Full Body · 4-day Upper/Lower · 5-day Bro Split · 6-day Push/Pull/Legs
+   - Tapping a preset shows a Mon–Sun schedule preview
+   - Confirm → creates WorkoutTemplates (seeded with built-in exercises) + WorkoutPlans
+   - Plans only created from today onward to avoid false "missed" days
+   - Rest days explicitly created with isRestDay=true
+5. **Ready Screen** → animated leaf icon + "You're all set! Let's grow."
+   - "Start" button sets onboardingCompletedAt → ContentView transitions to main app
+6. **Relaunch resume**: if user exists but onboardingCompletedAt is nil, container resumes at Profile Setup
 
 ### Workout Creation Flow
 
@@ -1259,7 +1266,7 @@ class NotificationService {
 |------|----------|-------|
 | Notification system | Medium | All notification types |
 | Profile screen | Medium | All preferences |
-| Onboarding flow polish | High | Smooth, welcoming |
+| ~~Onboarding flow~~ | ~~High~~ | ✅ Complete (Steps 1–5 implemented) |
 | Crash recovery | High | Auto-save mid-workout |
 | Vacation mode | Low | Toggle and date range |
 | Data export | Low | CSV and PDF |

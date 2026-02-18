@@ -2,7 +2,11 @@
 
 ## Overview
 
-Full onboarding flow: Welcome carousel → Sign in with Apple → Profile setup → Weekly plan setup → Ready screen → Main app. Sign in is mandatory. Skip onboarding if CloudKit sync finds existing user data.
+Full onboarding flow: Welcome carousel → Sign in with Apple → Profile setup → Weekly plan setup → Ready screen → Main app. Sign in is mandatory.
+
+**Onboarding completion criteria**: A `User` record exists *and* `onboardingCompletedAt` is set. This prevents partially created users (e.g., after sign-in) from skipping remaining steps.
+
+**Existing user detection**: On launch, attempt CloudKit fetch for a `User` record. If found, skip onboarding and show main app. If fetch fails or times out, fall back to local cache and show a non-blocking retry banner.
 
 ## Flow Diagram
 
@@ -23,6 +27,7 @@ App Launch
          │     → Uses AuthenticationServices framework
          │     → Creates User model with appleUserID
          │     → Failure/decline shows error, stays on sign-in
+         │     → Cancel returns to Welcome (unless already signed in)
          │
          ├── Step 3: Profile Setup (multi-field form)
          │     - Display name (pre-filled from Apple ID if available)
@@ -46,6 +51,7 @@ App Launch
          │       → Create new templates (name + category + exercises)
          │       → Assign templates to days via DayPlanSheet-like UI
          │     - "Skip" option available (plan later from home screen)
+         │     - Skipping creates no plans/templates and shows "Plan My Week" CTA on Home
          │     → "Continue" button
          │
          ├── Step 5: Ready Screen
@@ -79,7 +85,7 @@ Grove/Views/Onboarding/
 ### Files to Modify
 
 - **`GroveApp.swift` or `ContentView.swift`** — Check for existing User on launch; show onboarding or main app
-- **`Models/User.swift`** — Ensure all profile fields exist (displayName, profileImageData, preferredUnits, fitnessGoal, experienceLevel)
+- **`Models/User.swift`** — Ensure all profile fields exist (displayName, profileImageData, preferredUnits, fitnessGoal, experienceLevel, onboardingCompletedAt)
 - **`Models/Enums.swift`** — Add FitnessGoal and ExperienceLevel enums if not present
 - **`Services/AuthService.swift`** — Implement Sign in with Apple handler
 
@@ -102,12 +108,14 @@ Grove/Views/Onboarding/
 - Create `User` model with `appleUserID = userIdentifier`
 - Pre-fill `displayName` from `fullName` (Apple only provides this on first sign-in)
 - Store credential in Keychain for session persistence
+- If sign-in succeeds but user cancels onboarding later, persist `appleUserID` and resume at Profile Setup on next launch
 - On failure: show alert, stay on sign-in screen
 
 ### Step 3: Profile Setup
 
 - **Photo**: `PhotosPicker` for library, camera button for live capture, default to initials circle (from display name)
 - Store photo as `Data?` on User model (`profileImageData`)
+- Compress photo to a reasonable size (e.g., JPEG ~70% quality) and store a thumbnail if used in lists
 - **Units**: segmented picker — Imperial (lbs) / Metric (kg)
 - **Fitness Goal**: picker or selection cards — Strength, Hypertrophy, General Fitness
 - **Experience Level**: picker or selection cards — Beginner, Intermediate, Advanced
@@ -141,27 +149,27 @@ Grove/Views/Onboarding/
 
 ```swift
 // Pseudocode
-if existingUser != nil {
-    // User exists (fresh install with CloudKit data, or returning)
+if existingUser != nil && existingUser.onboardingCompletedAt != nil {
+    // User exists and completed onboarding
     show ContentView
 } else {
-    // No user — first time
+    // No user or onboarding incomplete
     show OnboardingContainerView
-    // On completion, OnboardingContainerView sets a flag or the User now exists
-    // Transition to ContentView
+    // On completion, set onboardingCompletedAt and transition
 }
 ```
 
-- Use `@Query` to check for User existence
+- Use `@Query` to check for User existence and onboardingCompletedAt
 - OnboardingContainerView creates the User during sign-in step
-- After onboarding completes, the `@Query` updates and ContentView shows naturally
+- After onboarding completes, set onboardingCompletedAt and the `@Query` updates and ContentView shows naturally
 - Remove the auto-created "local-user" logic from ContentView.task
 
-### Existing Code Status
+## Existing Code Status
 
 - **Onboarding views**: None exist yet (folder is empty)
 - **User model**: `fitnessGoal` (FitnessGoal), `experienceLevel` (ExperienceLevel), `preferredUnits` already exist
 - **Missing on User**: `profileImageData: Data?` field for photo storage — needs to be added
+- **Missing on User**: `onboardingCompletedAt: Date?` — required to avoid partial users skipping onboarding
 - **Enums**: `FitnessGoal` (.buildMuscle, .loseWeight, .stayActive) and `ExperienceLevel` (.beginner, .intermediate, .advanced) already defined in Enums.swift
 - **AuthService.swift**: Listed in project structure but check if it has implementation
 - **ContentView.swift**: Currently auto-creates a local user in `.task {}` — this needs to be replaced with onboarding check
@@ -193,11 +201,12 @@ When a preset is selected, create these `WorkoutTemplate` entries:
 - "Pull" (category: .pull)
 - "Legs" (category: .legs)
 
-Templates should include suggested exercises from ExerciseSeeds matching their category (6-8 exercises per template).
+Templates should include suggested exercises from ExerciseSeeds matching their category (6-8 exercises per template). If seeds are missing, fall back to empty templates with a prompt to add exercises.
 
 ## Testing Checklist
 
 - [ ] Fresh install → onboarding shows
+- [ ] CloudKit fetch slow/fails → onboarding decision + retry banner
 - [ ] Welcome carousel swipe + page indicators
 - [ ] Sign in with Apple success → proceeds to profile
 - [ ] Sign in with Apple cancel/fail → stays on sign-in with error
@@ -209,3 +218,5 @@ Templates should include suggested exercises from ExerciseSeeds matching their c
 - [ ] Ready screen → transitions to main app
 - [ ] Returning user with CloudKit data → skips onboarding
 - [ ] App remembers sign-in state on relaunch (no re-onboarding)
+- [ ] Onboarding incomplete (user signed in, no completion) → resumes at Profile Setup
+- [ ] Accessibility: VoiceOver labels + Dynamic Type
