@@ -31,7 +31,6 @@ struct ProfileView: View {
 
     @State private var photoItem: PhotosPickerItem? = nil
     @State private var cameraImage: UIImage? = nil
-    @State private var showingImageSource = false
     @State private var showingPhotoPicker = false
     @State private var showingCamera = false
     @State private var showingDeleteConfirm = false
@@ -61,11 +60,6 @@ struct ProfileView: View {
             .scrollContentBackground(.hidden)
             .background(Color.groveBackground)
             .navigationTitle("Profile")
-        }
-        .confirmationDialog("Add Photo", isPresented: $showingImageSource, titleVisibility: .visible) {
-            Button("Choose from Library") { showingPhotoPicker = true }
-            Button("Take Photo") { showingCamera = true }
-            Button("Cancel", role: .cancel) {}
         }
         .photosPicker(isPresented: $showingPhotoPicker, selection: $photoItem, matching: .images)
         .onChange(of: photoItem) { _, newItem in
@@ -104,7 +98,18 @@ struct ProfileView: View {
         Section {
             if let user = user {
                 HStack(spacing: 16) {
-                    Button { showingImageSource = true } label: {
+                    Menu {
+                        Button {
+                            showingPhotoPicker = true
+                        } label: {
+                            Label("Choose from Library", systemImage: "photo.on.rectangle")
+                        }
+                        Button {
+                            showingCamera = true
+                        } label: {
+                            Label("Take Photo", systemImage: "camera")
+                        }
+                    } label: {
                         ZStack(alignment: .bottomTrailing) {
                             Circle()
                                 .fill(Color.groveSage.opacity(0.15))
@@ -134,6 +139,7 @@ struct ProfileView: View {
                                 .offset(x: 2, y: 2)
                         }
                     }
+                    .menuStyle(.button)
                     .buttonStyle(.plain)
 
                     VStack(alignment: .leading, spacing: 6) {
