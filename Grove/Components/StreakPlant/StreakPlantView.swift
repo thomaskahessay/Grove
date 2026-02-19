@@ -71,16 +71,55 @@ struct StreakPlantView: View {
     }
 }
 
+#Preview("All Stages") {
+    ScrollView {
+        VStack(spacing: 32) {
+            ForEach(PlantStage.allCases, id: \.self) { stage in
+                VStack(spacing: 8) {
+                    Text(stage.displayName)
+                        .font(.headline)
+                        .foregroundStyle(Color.groveSage)
+                    Text("Day \(stage.minStreak)\(stage.nextStage.map { "–\($0.minStreak - 1)" } ?? "+")")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    StreakPlantView(streak: stage.minStreak, size: 220, showLabel: false)
+                }
+                .padding()
+                .frame(maxWidth: .infinity)
+                .background(Color.groveBackground)
+                .clipShape(RoundedRectangle(cornerRadius: 16))
+            }
+
+            // Wilted variant
+            VStack(spacing: 8) {
+                Text("Wilted (Seedling)")
+                    .font(.headline)
+                    .foregroundStyle(Color.groveMutedRust)
+                Text("Streak broken")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                StreakPlantView(streak: 0, isWilted: true, wiltedAtStage: .seedling, size: 220, showLabel: false)
+            }
+            .padding()
+            .frame(maxWidth: .infinity)
+            .background(Color.groveBackground)
+            .clipShape(RoundedRectangle(cornerRadius: 16))
+        }
+        .padding()
+    }
+    .background(Color(.systemGroupedBackground))
+}
+
 #Preview("Seed") {
-    StreakPlantView(streak: 0, size: 200)
+    StreakPlantView(streak: 0, size: 250)
 }
 
 #Preview("Sprout") {
-    StreakPlantView(streak: 1, size: 200)
+    StreakPlantView(streak: 1, size: 250)
 }
 
 #Preview("Seedling") {
-    StreakPlantView(streak: 5, size: 200)
+    StreakPlantView(streak: 5, size: 250)
 }
 
 #Preview("Young Plant") {
@@ -92,5 +131,5 @@ struct StreakPlantView: View {
 }
 
 #Preview("Wilted") {
-    StreakPlantView(streak: 0, isWilted: true, wiltedAtStage: .seedling, size: 200)
+    StreakPlantView(streak: 0, isWilted: true, wiltedAtStage: .seedling, size: 250)
 }
