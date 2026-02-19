@@ -35,6 +35,12 @@ class User {
     var lastWorkoutDate: Date?
     var consecutiveRestDays: Int = 0
 
+    // Plant state
+    var previousStreak: Int = 0
+    var lastSeenPlantStage: Int = 0
+    var isStreakWilted: Bool = false
+    var wiltedAtStage: Int = 0
+
     // Relationships
     @Relationship(deleteRule: .cascade, inverse: \Workout.user)
     var workouts: [Workout] = []

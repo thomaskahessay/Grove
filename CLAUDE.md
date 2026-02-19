@@ -32,7 +32,7 @@ extension Color {
 Grove/
 ├── GroveApp.swift                 # @main entry point with modelContainer
 ├── Models/
-│   ├── User.swift                 # @Model - user profile, preferences, streak
+│   ├── User.swift                 # @Model - user profile, preferences, streak, plant state
 │   ├── Exercise.swift             # @Model - exercise library items
 │   ├── Workout.swift              # @Model - completed workout sessions
 │   ├── ExerciseLog.swift          # @Model - exercise within a workout
@@ -40,15 +40,17 @@ Grove/
 │   ├── WorkoutTemplate.swift      # @Model - reusable workout templates
 │   ├── WorkoutPlan.swift          # @Model - scheduled workouts on calendar
 │   ├── PersonalRecord.swift       # @Model - PR tracking (max weight, est. 1RM)
+│   ├── PlantStage.swift           # Enum: 5 growth stages with streak thresholds
 │   └── Enums.swift                # All enums (MuscleGroup, FitnessGoal, etc.)
 ├── Services/
 │   ├── AuthService.swift          # Sign in with Apple handling
 │   ├── HealthKitManager.swift     # HealthKit authorization and queries
 │   ├── NotificationService.swift  # Local notification scheduling
-│   ├── StreakManager.swift        # Streak calculation logic (static methods)
+│   ├── StreakManager.swift        # Streak calculation logic (static methods) + wilting
 │   ├── PRDetectionService.swift   # PR detection after workout completion
 │   ├── AchievementService.swift   # Achievement detection + progress tracking
-│   └── WorkoutSessionManager.swift # @MainActor @Observable - active workout state management
+│   ├── MotivationalMessages.swift # Plant-themed motivational messages
+│   └── WorkoutSessionManager.swift # @MainActor @Observable - active workout + streak moment state
 ├── Views/
 │   ├── Onboarding/
 │   │   ├── SignInView.swift
@@ -59,7 +61,8 @@ Grove/
 │   │   ├── CalendarStripView.swift
 │   │   ├── QuickStartSection.swift
 │   │   ├── DayPlanSheet.swift         # Sheet for assigning workout/rest to a day
-│   │   └── WeeklyPlanView.swift       # Full-screen weekly planner
+│   │   ├── WeeklyPlanView.swift       # Full-screen weekly planner
+│   │   └── StreakDetailView.swift     # Full streak detail: plant, stats, progress, timeline
 │   ├── Workout/
 │   │   ├── WorkoutCreationView.swift
 │   │   ├── ActiveWorkoutView.swift
@@ -67,7 +70,8 @@ Grove/
 │   │   ├── ExerciseFullScreenView.swift
 │   │   ├── SetRowView.swift
 │   │   ├── WorkoutSummaryView.swift         # Post-workout stats + PR celebration
-│   │   └── WorkoutDetailView.swift         # Past workout detail view + PR display
+│   │   ├── WorkoutDetailView.swift         # Past workout detail view + PR display
+│   │   └── StreakMomentView.swift          # Post-workout streak celebration screen
 │   ├── Progress/
 │   │   ├── ProgressView.swift
 │   │   └── ExerciseChartView.swift
@@ -84,7 +88,11 @@ Grove/
 │   ├── GlassCard.swift            # Reusable Liquid Glass components
 │   ├── GlassButton.swift
 │   ├── ConfettiView.swift         # Celebratory confetti animation
-│   └── ColorExtensions.swift      # Color palette extension
+│   ├── ColorExtensions.swift      # Color palette extension
+│   └── StreakPlant/
+│       ├── PlantCanvasRenderer.swift  # Canvas drawing logic for all plant stages
+│       ├── StreakPlantView.swift       # Reusable animated plant view
+│       └── EvolutionTimelineView.swift # Horizontal stage progression timeline
 ├── Data/
 │   ├── ExerciseSeeds.swift        # ~100 built-in exercises
 │   └── PreviewSampleData.swift    # Sample data for SwiftUI previews
@@ -289,6 +297,38 @@ class Workout {
 - [x] Latest achievement card on Home screen (links to gallery)
 - [x] Workout linked to user on completion (WorkoutSessionManager.endWorkout)
 
+**Phase 3f: Streak Plant ("Your Grove")**
+- [x] PlantStage enum (Models/PlantStage.swift)
+  - 5 stages: Seed (0), Sprout (1-2), Seedling (3-6), Young Plant (7-59), Tree (60+)
+  - Progress calculation, stage-up detection, display names
+- [x] User model additions: previousStreak, lastSeenPlantStage, isStreakWilted, wiltedAtStage
+- [x] StreakManager wilting support
+  - Records previousStreak on streak reset, sets wiltedAtStage/isStreakWilted on breaks
+- [x] PlantCanvasRenderer (Components/StreakPlant/PlantCanvasRenderer.swift)
+  - SwiftUI Canvas API with Bezier curves for all 5 stages + wilted variants
+  - Sage green leaves, terracotta trunk, warm sand soil
+  - swayOffset parameter for ambient leaf animation
+- [x] StreakPlantView (Components/StreakPlant/StreakPlantView.swift)
+  - TimelineView(.animation) for efficient ambient sway (sin wave)
+  - Stage-up pop animation, celebration pulse, configurable size/label
+- [x] MotivationalMessages (Services/MotivationalMessages.swift)
+  - Three categories: continuing, stageUp, streakBroken (~5-6 each)
+  - Day-of-year seeded selection (consistent within a day)
+- [x] EvolutionTimelineView (Components/StreakPlant/EvolutionTimelineView.swift)
+  - Horizontal scroll with colored stage circles and connector lines
+- [x] StreakDetailView (Views/Home/StreakDetailView.swift)
+  - Large plant (300pt), stage name, progress bar, stats row, evolution timeline, motivational message
+- [x] StreakMomentView (Views/Workout/StreakMomentView.swift)
+  - Post-workout celebration: plant (250pt), streak title, stage-up callout, dismiss button
+- [x] WorkoutSessionManager streak moment flow
+  - Captures pre/post PlantStage in endWorkout(), builds StreakMomentData
+  - Chains: summary dismiss → 0.5s delay → streak moment sheet → dismiss → update lastSeenPlantStage
+- [x] HomeView integration
+  - Hero StreakPlantView (200pt) between welcome and today's card
+  - NavigationLink to StreakDetailView (replaces old StreakBadge)
+- [x] ContentView integration: streak moment sheet after summary sheet
+- [x] ProfileView integration: leaf icon streak label → NavigationLink to StreakDetailView
+
 ### 📋 Not Started
 
 **Phase 4: HealthKit & Social**
@@ -425,10 +465,7 @@ Key: We READ from Apple Fitness workouts, we don't create our own HKWorkout sess
 
 ## 💡 Future Ideas
 
-### Streak Plant ("Your Grove")
-- Visual plant/tree that grows with the user's streak
-- 8 growth stages: Seed (0) → Sprout (1-2) → Seedling (3-6) → Young Plant (7-13) → Bush (14-29) → Sapling (30-59) → Tree (60-99) → Grove Tree (100+)
-- Implemented with SwiftUI Canvas API (Bezier curves, no third-party deps)
-- Leaf sway animation, spring "pop" on new growth, wilting if streak breaks
-- Large view on Profile screen, small indicator next to streak badge on Home
-- Colors: sage green leaves, terracotta trunk, warm sand soil
+### Streak Plant Expansion
+- Add 3 more growth stages: Bush (14-29), Sapling (30-59), Grove Tree (100+)
+  - Currently 5 stages implemented; PlantStage enum is extensible (insert cases + update thresholds)
+  - PlantCanvasRenderer needs new draw methods for each additional stage

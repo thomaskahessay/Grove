@@ -25,6 +25,7 @@ struct StreakManager {
                 user.currentStreak += 1
             } else {
                 // 5+ day gap — reset streak
+                user.previousStreak = user.currentStreak
                 user.currentStreak = 1
             }
         } else {
@@ -34,6 +35,7 @@ struct StreakManager {
 
         user.lastWorkoutDate = today
         user.consecutiveRestDays = 0
+        user.isStreakWilted = false
 
         if user.currentStreak > user.longestStreak {
             user.longestStreak = user.currentStreak
@@ -47,6 +49,9 @@ struct StreakManager {
         user.consecutiveRestDays += 1
 
         if user.consecutiveRestDays > 3 && !isOnVacation(user: user) {
+            user.previousStreak = user.currentStreak
+            user.wiltedAtStage = PlantStage.from(streak: user.currentStreak).rawValue
+            user.isStreakWilted = true
             user.currentStreak = 0
         }
     }
@@ -111,6 +116,13 @@ struct StreakManager {
             if daysBefore > 365 {
                 break
             }
+        }
+
+        // Detect if streak was lost
+        if streak == 0 && user.currentStreak > 0 {
+            user.previousStreak = user.currentStreak
+            user.wiltedAtStage = PlantStage.from(streak: user.currentStreak).rawValue
+            user.isStreakWilted = true
         }
 
         user.currentStreak = streak

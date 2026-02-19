@@ -14,6 +14,10 @@ class WorkoutSessionManager {
     var newPRs: [PRDetectionService.PRResult] = []
     var newAchievements: [AchievementService.AchievementResult] = []
 
+    // Streak moment state
+    var showingStreakMoment: Bool = false
+    var streakMomentData: StreakMomentData?
+
     // Streak & plan linking
     var user: User?
     var onWorkoutCompleted: ((Workout) -> Void)?
@@ -62,9 +66,23 @@ class WorkoutSessionManager {
             }
         }
 
-        // Update streak
+        // Update streak (capture pre/post stage for streak moment)
+        let preWorkoutStage = user.map { PlantStage.from(streak: $0.currentStreak) }
         if let user = user {
             StreakManager.recordWorkout(for: user)
+        }
+        let postWorkoutStage = user.map { PlantStage.from(streak: $0.currentStreak) }
+
+        // Build streak moment data
+        if let pre = preWorkoutStage, let post = postWorkoutStage, let user = user {
+            let isStageUp = post.rawValue > pre.rawValue
+            streakMomentData = StreakMomentData(
+                streak: user.currentStreak,
+                isStageUp: isStageUp,
+                previousStage: pre,
+                currentStage: post,
+                isWilted: false
+            )
         }
 
         // Detect PRs
@@ -106,6 +124,23 @@ class WorkoutSessionManager {
         showingSummary = false
         completedWorkout = nil
         newAchievements = []
+
+        // Chain streak moment after summary dismisses
+        if streakMomentData != nil {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                self.showingStreakMoment = true
+            }
+        }
+    }
+
+    func dismissStreakMoment() {
+        showingStreakMoment = false
+        streakMomentData = nil
+
+        // Update last seen plant stage
+        if let user = user {
+            user.lastSeenPlantStage = PlantStage.from(streak: user.currentStreak).rawValue
+        }
     }
 
     func discardWorkout(context: ModelContext) {

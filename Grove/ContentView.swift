@@ -123,18 +123,23 @@ struct ContentView: View {
                 WorkoutSummaryView(workout: workout)
             }
         }
+        .sheet(
+            isPresented: Binding(
+                get: { sessionManager.showingStreakMoment },
+                set: { sessionManager.showingStreakMoment = $0 }
+            )
+        ) {
+            if let data = sessionManager.streakMomentData {
+                StreakMomentView(data: data) {
+                    sessionManager.dismissStreakMoment()
+                }
+            }
+        }
     }
 }
 
 #Preview {
-    let config = ModelConfiguration(isStoredInMemoryOnly: true)
-    let container = try! ModelContainer(
-        for: User.self, Exercise.self, Workout.self, ExerciseLog.self,
-        SetLog.self, WorkoutTemplate.self, WorkoutPlan.self, Achievement.self,
-        configurations: config
-    )
-
     ContentView()
         .environment(WorkoutSessionManager())
-        .modelContainer(container)
+        .modelContainer(.preview)
 }

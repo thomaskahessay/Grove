@@ -75,6 +75,7 @@ Grove/
 │   ├── WorkoutTemplate.swift
 │   ├── WorkoutPlan.swift
 │   ├── PersonalRecord.swift
+│   ├── PlantStage.swift
 │   └── Enums.swift
 ├── Services/
 │   ├── AuthService.swift
@@ -82,11 +83,13 @@ Grove/
 │   ├── NotificationService.swift
 │   ├── StreakManager.swift
 │   ├── PRDetectionService.swift
+│   ├── AchievementService.swift
+│   ├── MotivationalMessages.swift
 │   └── WorkoutSessionManager.swift
 ├── Views/
 │   ├── Onboarding/
-│   ├── Home/
-│   ├── Workout/
+│   ├── Home/                      # Includes StreakDetailView
+│   ├── Workout/                   # Includes StreakMomentView
 │   ├── Progress/
 │   ├── Social/
 │   ├── Profile/
@@ -95,7 +98,11 @@ Grove/
 │   ├── GlassCard.swift
 │   ├── GlassButton.swift
 │   ├── ConfettiView.swift
-│   └── ColorExtensions.swift
+│   ├── ColorExtensions.swift
+│   └── StreakPlant/
+│       ├── PlantCanvasRenderer.swift
+│       ├── StreakPlantView.swift
+│       └── EvolutionTimelineView.swift
 └── Data/
     ├── ExerciseSeeds.swift
     └── PreviewSampleData.swift
@@ -274,6 +281,12 @@ class User {
     var longestStreak: Int = 0
     var lastWorkoutDate: Date?
     var consecutiveRestDays: Int = 0
+
+    // Streak plant state
+    var previousStreak: Int = 0
+    var lastSeenPlantStage: Int = 0
+    var isStreakWilted: Bool = false
+    var wiltedAtStage: Int = 0
     
     // Relationships
     @Relationship(deleteRule: .cascade, inverse: \Workout.user)
@@ -680,11 +693,15 @@ The primary hub users see after login.
 **Layout (top to bottom):**
 
 1. **Header**
-   - Streak count with flame icon (left)
-   - App logo image (center)
-   - Profile icon (right)
+   - Streak plant indicator with leaf icon → NavigationLink to StreakDetailView (left toolbar)
+   - Navigation title "Home"
 
-2. **Quick Start Section**
+2. **Streak Plant Hero**
+   - StreakPlantView (200pt) with ambient sway animation
+   - NavigationLink to StreakDetailView
+   - Shows "{n}-day streak" label or "Streak broken" when wilted
+
+3. **Quick Start Section**
    - Horizontal scroll of workout buttons
    - Based on: today's plan, recent templates, suggested based on split
    - Each button shows template name and primary muscle group icon
@@ -1029,6 +1046,55 @@ Single rep:         1RM = weight
 - **Past Workout Detail**: Same PR cards shown when viewing workout history (queried by setLogID match)
 - **PRRow component**: Reusable view showing exercise name, PR type, and value
 
+### Streak Plant ("Your Grove")
+
+A visual plant/tree drawn with SwiftUI Canvas (Bezier curves) that grows with the user's workout streak.
+
+**Growth Stages (5 implemented, 3 planned):**
+
+| Stage | Streak Range | Visual |
+|-------|-------------|--------|
+| Seed | 0 days | Oval on soil mound with crack line |
+| Sprout | 1-2 days | Thin stem, two cotyledon leaves |
+| Seedling | 3-6 days | Taller stem, 4-5 leaves, small branch |
+| Young Plant | 7-59 days | Trunk, two branches, 8-10 leaves |
+| Tree | 60+ days | Thick trunk, major branches, 15-20 leaf canopy |
+| *(Future) Bush* | *14-29 days* | *Planned* |
+| *(Future) Sapling* | *30-59 days* | *Planned* |
+| *(Future) Grove Tree* | *100+ days* | *Planned* |
+
+**Animations:**
+- Ambient leaf sway: `TimelineView(.animation)` with `sin(elapsed * 1.5) * 0.3` sway offset
+- Stage-up pop: `scaleEffect` springs 1.0 → 1.15 → 1.0
+- Celebration pulse: `scaleEffect` 1.0 → 1.05 → 1.0
+
+**Wilting:**
+- When streak breaks (5+ day gap or >3 consecutive rest days), plant enters wilted state
+- Wilted variant: same shapes but leaves droop (rotation shifted down), colors desaturated
+- Records `wiltedAtStage` so the wilted plant matches the stage when the streak broke
+
+**Colors:** Sage green leaves, terracotta trunk, warm sand soil
+
+**Integration Points:**
+- Home screen: Hero plant (200pt) between welcome message and today's card, NavigationLink to StreakDetailView
+- Profile: Leaf icon streak label → NavigationLink to StreakDetailView
+- Post-workout: Streak moment celebration screen (sheet) after workout summary dismisses
+
+**Streak Moment Flow (presentation chain):**
+```
+endWorkout() → dismiss fullScreenCover
+  → 0.5s delay → show summary sheet
+  → user taps Done → dismissSummary()
+  → dismiss summary sheet
+  → 0.5s delay → show streak moment sheet
+  → user taps Continue → dismissStreakMoment()
+  → clears all state, updates lastSeenPlantStage
+```
+
+**Motivational Messages:**
+- Three categories: continuing (~5 msgs), stageUp (~6 msgs), streakBroken (~5 msgs)
+- Day-of-year seeded selection (same message all day, varies across days)
+
 ### Data Export
 
 **Formats:**
@@ -1275,8 +1341,23 @@ class NotificationService {
 
 **Deliverable:** App ready for friends/family beta.
 
+### Phase 3f: Streak Plant (Completed)
+
+| Task | Priority | Notes |
+|------|----------|-------|
+| PlantStage enum | High | 5 stages with streak thresholds |
+| PlantCanvasRenderer | High | SwiftUI Canvas Bezier drawing for all stages |
+| StreakPlantView | High | Reusable animated plant component |
+| StreakDetailView | Medium | Full detail screen with stats + evolution timeline |
+| StreakMomentView | Medium | Post-workout celebration screen |
+| MotivationalMessages | Low | Plant-themed messages (3 categories) |
+| HomeView + ContentView integration | High | Hero plant, streak moment sheet chain |
+
+**Deliverable:** Visual streak plant on Home, detail view, post-workout streak celebration.
+
 ### Future Enhancements (Post-Launch)
 
+- Streak Plant expansion: 3 more stages (Bush, Sapling, Grove Tree)
 - Cardio workout support
 - Marathon training plans
 - AI-generated workout plans

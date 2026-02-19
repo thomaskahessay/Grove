@@ -149,9 +149,12 @@ struct ProfileView: View {
                             .foregroundStyle(Color.groveText)
 
                         HStack(spacing: 16) {
-                            Label("\(user.currentStreak) day streak", systemImage: "flame.fill")
-                                .font(.caption)
-                                .foregroundStyle(Color.groveTerracotta)
+                            NavigationLink(destination: StreakDetailView(user: user)) {
+                                Label("\(user.currentStreak) day streak", systemImage: "leaf.fill")
+                                    .font(.caption)
+                                    .foregroundStyle(Color.groveSage)
+                            }
+                            .buttonStyle(.plain)
 
                             Label("\(user.workouts.count) workouts", systemImage: "dumbbell.fill")
                                 .font(.caption)
@@ -383,4 +386,5 @@ struct ProfileView: View {
 
 #Preview {
     ProfileView()
+        .modelContainer(.preview)
 }

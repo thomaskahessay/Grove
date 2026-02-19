@@ -140,6 +140,21 @@ struct HomeView: View {
                         .foregroundStyle(Color.groveText)
                         .frame(maxWidth: .infinity, alignment: .leading)
 
+                    // Streak Plant Hero
+                    if let user = currentUser {
+                        NavigationLink(destination: StreakDetailView(user: user)) {
+                            StreakPlantView(
+                                streak: user.currentStreak,
+                                isWilted: user.isStreakWilted,
+                                wiltedAtStage: PlantStage(rawValue: user.wiltedAtStage) ?? .seed,
+                                size: 200,
+                                showLabel: true
+                            )
+                            .frame(maxWidth: .infinity)
+                        }
+                        .buttonStyle(.plain)
+                    }
+
                     // Today's Workout Card
                     if let plan = todaysPlan {
                         if plan.isRestDay {
@@ -232,7 +247,22 @@ struct HomeView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
-                    StreakBadge(streak: currentUser?.currentStreak ?? 0)
+                    if let user = currentUser {
+                        NavigationLink(destination: StreakDetailView(user: user)) {
+                            HStack(spacing: 4) {
+                                Image(systemName: "leaf.fill")
+                                    .foregroundStyle(user.currentStreak > 0 ? Color.groveSage : Color.gray)
+                                Text("\(user.currentStreak)")
+                                    .fontWeight(.semibold)
+                            }
+                            .font(.subheadline)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 6)
+                            .background(Color.groveWarmSand.opacity(0.5))
+                            .clipShape(Capsule())
+                        }
+                        .buttonStyle(.plain)
+                    }
                 }
             }
             .sheet(isPresented: $showingWeeklyPlan) {
@@ -318,26 +348,6 @@ struct HomeView: View {
             .filter { $0.isCompleted }
             .sorted { $0.setNumber < $1.setNumber }
             .map { (weight: $0.weight, reps: $0.reps) }
-    }
-}
-
-// MARK: - Streak Badge
-
-struct StreakBadge: View {
-    let streak: Int
-
-    var body: some View {
-        HStack(spacing: 4) {
-            Image(systemName: "flame.fill")
-                .foregroundStyle(streak > 0 ? Color.groveTerracotta : Color.gray)
-            Text("\(streak)")
-                .fontWeight(.semibold)
-        }
-        .font(.subheadline)
-        .padding(.horizontal, 10)
-        .padding(.vertical, 6)
-        .background(Color.groveWarmSand.opacity(0.5))
-        .clipShape(Capsule())
     }
 }
 
