@@ -63,37 +63,6 @@ struct HomeView: View {
         }
     }
 
-    // MARK: - Weekly Stats
-
-    private var weekStart: Date {
-        let calendar = Calendar.current
-        let today = calendar.startOfDay(for: Date())
-        let weekday = calendar.component(.weekday, from: today)
-        let daysFromMonday = (weekday + 5) % 7
-        return calendar.date(byAdding: .day, value: -daysFromMonday, to: today)!
-    }
-
-    private var weekEnd: Date {
-        Calendar.current.date(byAdding: .day, value: 6, to: weekStart)!
-    }
-
-    private var workoutsThisWeek: Int {
-        let calendar = Calendar.current
-        return completedWorkouts.filter { workout in
-            guard let completedAt = workout.completedAt else { return false }
-            let day = calendar.startOfDay(for: completedAt)
-            return day >= weekStart && day <= weekEnd
-        }.count
-    }
-
-    private var plannedThisWeek: Int {
-        let calendar = Calendar.current
-        return workoutPlans.filter { plan in
-            let day = calendar.startOfDay(for: plan.date)
-            return day >= weekStart && day <= weekEnd && !plan.isRestDay
-        }.count
-    }
-
     // MARK: - Next Upcoming Workout
 
     private var nextPlannedWorkout: (name: String, date: Date)? {
@@ -147,7 +116,7 @@ struct HomeView: View {
                                 streak: user.currentStreak,
                                 isWilted: user.isStreakWilted,
                                 wiltedAtStage: PlantStage(rawValue: user.wiltedAtStage) ?? .seed,
-                                size: 200,
+                                size: 160,
                                 showLabel: true
                             )
                             .frame(maxWidth: .infinity)
@@ -192,34 +161,27 @@ struct HomeView: View {
                     // Calendar Strip
                     CalendarStripView()
 
-                    // Plan My Week + Weekly Stats (grouped with tighter spacing)
-                    VStack(spacing: 12) {
-                        Button {
-                            showingWeeklyPlan = true
-                        } label: {
-                            HStack(spacing: 8) {
-                                Image(systemName: "calendar.badge.plus")
-                                    .foregroundStyle(Color.groveSage)
-                                Text("Plan My Week")
-                                    .font(.subheadline)
-                                    .fontWeight(.medium)
-                                    .foregroundStyle(Color.groveText)
-                                Spacer()
-                                Image(systemName: "chevron.right")
-                                    .font(.caption)
-                                    .foregroundStyle(.tertiary)
-                            }
-                            .padding(12)
-                            .background(Color.groveCardBackground)
-                            .clipShape(RoundedRectangle(cornerRadius: 10))
+                    // Plan My Week
+                    Button {
+                        showingWeeklyPlan = true
+                    } label: {
+                        HStack(spacing: 8) {
+                            Image(systemName: "calendar.badge.plus")
+                                .foregroundStyle(Color.groveSage)
+                            Text("Plan My Week")
+                                .font(.subheadline)
+                                .fontWeight(.medium)
+                                .foregroundStyle(Color.groveText)
+                            Spacer()
+                            Image(systemName: "chevron.right")
+                                .font(.caption)
+                                .foregroundStyle(.tertiary)
                         }
-                        .buttonStyle(.plain)
-
-                        WeeklyStatsCard(
-                            completed: workoutsThisWeek,
-                            planned: plannedThisWeek
-                        )
+                        .padding(12)
+                        .background(Color.groveCardBackground)
+                        .clipShape(RoundedRectangle(cornerRadius: 10))
                     }
+                    .buttonStyle(.plain)
 
                     // Latest Achievement
                     if let latest = achievements.first {
@@ -245,26 +207,7 @@ struct HomeView: View {
             .background(Color.groveBackground)
             .navigationTitle("")
             .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    if let user = currentUser {
-                        NavigationLink(destination: StreakDetailView(user: user)) {
-                            HStack(spacing: 4) {
-                                Image(systemName: "leaf.fill")
-                                    .foregroundStyle(user.currentStreak > 0 ? Color.groveSage : Color.gray)
-                                Text("\(user.currentStreak)")
-                                    .fontWeight(.semibold)
-                            }
-                            .font(.subheadline)
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 6)
-                            .background(Color.groveWarmSand.opacity(0.5))
-                            .clipShape(Capsule())
-                        }
-                        .buttonStyle(.plain)
-                    }
-                }
-            }
+            .toolbar {}
             .sheet(isPresented: $showingWeeklyPlan) {
                 WeeklyPlanView()
             }
@@ -420,77 +363,6 @@ struct EmptyTodayCard: View {
         }
         .padding(16)
         .frame(maxWidth: .infinity)
-        .background(Color.groveCardBackground)
-        .clipShape(RoundedRectangle(cornerRadius: 12))
-    }
-}
-
-// MARK: - Weekly Stats Card
-
-struct WeeklyStatsCard: View {
-    let completed: Int
-    let planned: Int
-
-    private var hasPlans: Bool { planned > 0 }
-
-    private var progress: Double {
-        guard planned > 0 else { return 0 }
-        return min(Double(completed) / Double(planned), 1.0)
-    }
-
-    private var summaryText: String {
-        if hasPlans {
-            return "\(completed) of \(planned) workouts"
-        } else {
-            return "\(completed) workout\(completed == 1 ? "" : "s")"
-        }
-    }
-
-    private var subtitleText: String {
-        if !hasPlans && completed == 0 {
-            return "Plan your week to set goals"
-        } else if completed >= planned && hasPlans {
-            return "Week complete!"
-        } else {
-            return "This week"
-        }
-    }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                Image(systemName: "chart.bar.fill")
-                    .foregroundStyle(Color.groveSage)
-                Text("Weekly Progress")
-                    .font(.headline)
-                    .foregroundStyle(Color.groveText)
-                Spacer()
-                Text(summaryText)
-                    .font(.subheadline)
-                    .fontWeight(.semibold)
-                    .foregroundStyle(Color.groveSage)
-            }
-
-            // Progress bar
-            GeometryReader { geo in
-                ZStack(alignment: .leading) {
-                    RoundedRectangle(cornerRadius: 4)
-                        .fill(Color.groveWarmSand.opacity(0.4))
-                        .frame(height: 8)
-
-                    RoundedRectangle(cornerRadius: 4)
-                        .fill(Color.groveSage)
-                        .frame(width: hasPlans ? geo.size.width * progress : (completed > 0 ? geo.size.width * 0.5 : 0), height: 8)
-                        .animation(.easeInOut(duration: 0.4), value: progress)
-                }
-            }
-            .frame(height: 8)
-
-            Text(subtitleText)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-        }
-        .padding(16)
         .background(Color.groveCardBackground)
         .clipShape(RoundedRectangle(cornerRadius: 12))
     }
