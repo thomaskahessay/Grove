@@ -104,25 +104,10 @@ struct HomeView: View {
                 VStack(alignment: .leading, spacing: 24) {
                     // Welcome Message
                     Text(welcomeMessage)
-                        .font(.title)
-                        .fontWeight(.bold)
+                        .font(.title2)
+                        .fontWeight(.semibold)
                         .foregroundStyle(Color.groveText)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-
-                    // Streak Plant Hero
-                    if let user = currentUser {
-                        NavigationLink(destination: StreakDetailView(user: user)) {
-                            StreakPlantView(
-                                streak: user.currentStreak,
-                                isWilted: user.isStreakWilted,
-                                wiltedAtStage: PlantStage(rawValue: user.wiltedAtStage) ?? .seed,
-                                size: 160,
-                                showLabel: true
-                            )
-                            .frame(maxWidth: .infinity)
-                        }
-                        .buttonStyle(.plain)
-                    }
+                        .frame(maxWidth: .infinity)
 
                     // Today's Workout Card
                     if let plan = todaysPlan {
@@ -156,6 +141,21 @@ struct HomeView: View {
                         NextWorkoutCard(name: next.name, date: next.date)
                     } else {
                         EmptyTodayCard()
+                    }
+
+                    // Streak Plant
+                    if let user = currentUser {
+                        NavigationLink(destination: StreakDetailView(user: user)) {
+                            StreakPlantView(
+                                streak: user.currentStreak,
+                                isWilted: user.isStreakWilted,
+                                wiltedAtStage: PlantStage(rawValue: user.wiltedAtStage) ?? .seed,
+                                size: 120,
+                                showLabel: true
+                            )
+                            .frame(maxWidth: .infinity)
+                        }
+                        .buttonStyle(.plain)
                     }
 
                     // Calendar Strip
