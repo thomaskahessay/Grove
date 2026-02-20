@@ -135,21 +135,29 @@ struct WorkoutDetailView: View {
 
     private var prSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Label("Personal Records", systemImage: "trophy.fill")
-                .font(.headline)
-                .foregroundStyle(Color.groveTerracotta)
+            HStack {
+                Label("Personal Records", systemImage: "trophy.fill")
+                    .font(.headline)
+                    .foregroundStyle(Color.groveTerracotta)
 
-            VStack(spacing: 8) {
-                ForEach(workoutPRs, id: \.id) { pr in
-                    PRRow(
-                        exerciseName: pr.exercise?.name ?? "Unknown",
-                        type: pr.type == .maxWeight ? "Max Weight" : "Est. 1RM",
-                        weight: pr.type == .maxWeight ? pr.weight : nil,
-                        reps: pr.type == .maxWeight ? pr.reps : nil,
-                        value: pr.type == .estimatedOneRM ? pr.value : nil
-                    )
-                }
+                Spacer()
+
+                Text("\(workoutPRs.count)")
+                    .font(.subheadline)
+                    .fontWeight(.medium)
+                    .foregroundStyle(.secondary)
             }
+
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 12) {
+                    ForEach(workoutPRs, id: \.id) { pr in
+                        PRCard(pr: pr)
+                    }
+                }
+                .padding(.horizontal)
+            }
+            .scrollClipDisabled()
+            .padding(.horizontal, -16)
         }
     }
 
@@ -203,6 +211,57 @@ private struct StatBox: View {
         .padding(.vertical, 12)
         .background(Color.groveWarmSand.opacity(0.3))
         .clipShape(RoundedRectangle(cornerRadius: 8))
+    }
+}
+
+// MARK: - PR Card
+
+private struct PRCard: View {
+    let pr: PersonalRecord
+
+    private var exerciseName: String {
+        pr.exercise?.name ?? "Unknown"
+    }
+
+    private var typeLabel: String {
+        pr.type == .maxWeight ? "Max Weight" : "Est. 1RM"
+    }
+
+    private var displayValue: String {
+        if pr.type == .estimatedOneRM {
+            let v = pr.value
+            return v == floor(v) ? "\(Int(v)) lbs" : String(format: "%.1f lbs", v)
+        } else {
+            let w = pr.weight == floor(pr.weight) ? "\(Int(pr.weight))" : String(format: "%.1f", pr.weight)
+            return "\(w) × \(pr.reps)"
+        }
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Image(systemName: "star.fill")
+                .font(.caption)
+                .foregroundStyle(Color.groveTerracotta)
+
+            Text(exerciseName)
+                .font(.subheadline)
+                .fontWeight(.semibold)
+                .foregroundStyle(Color.groveText)
+                .lineLimit(1)
+
+            Text(typeLabel)
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+
+            Text(displayValue)
+                .font(.subheadline)
+                .fontWeight(.bold)
+                .foregroundStyle(Color.groveTerracotta)
+        }
+        .padding(12)
+        .frame(width: 140, alignment: .leading)
+        .background(Color.groveTerracotta.opacity(0.1))
+        .clipShape(RoundedRectangle(cornerRadius: 12))
     }
 }
 
