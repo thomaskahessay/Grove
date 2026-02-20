@@ -6,6 +6,15 @@ struct StreakManager {
     // MARK: - Record a Workout
 
     /// Called after a workout is completed. Updates streak based on gap since last workout.
+    ///
+    /// Streak rule: after completing a workout, the user has until the end of the next calendar
+    /// day to either complete another workout (increments streak) or mark it as a rest day
+    /// (preserves streak). If neither happens by midnight, the streak breaks.
+    ///
+    /// - daysBetween 0: same day — no streak change
+    /// - daysBetween 1: next day — streak continues (increment)
+    /// - daysBetween 2+: gap too large — streak resets (rest days in between are handled
+    ///   by recalculateStreak which checks each day individually)
     static func recordWorkout(for user: User, on date: Date = Date()) {
         let calendar = Calendar.current
         let today = calendar.startOfDay(for: date)
@@ -17,16 +26,23 @@ struct StreakManager {
             if daysBetween == 0 {
                 // Same day — no streak change
             } else if daysBetween == 1 {
-                // Consecutive day — increment streak
-                user.currentStreak += 1
-            } else if daysBetween <= 4 {
-                // 2–4 day gap: streak continues if rest days cover the gap
-                // (rest days are tracked via consecutiveRestDays)
+                // Next day — streak continues
                 user.currentStreak += 1
             } else {
-                // 5+ day gap — reset streak
-                user.previousStreak = user.currentStreak
-                user.currentStreak = 1
+                // 2+ day gap — check if rest days bridge the gap
+                // Walk forward from lastDay+1 to today-1 and verify each day is a rest day
+                // This is handled more accurately by recalculateStreak, but for immediate
+                // feedback we do a simple check: if the user had consecutiveRestDays covering
+                // the gap, the streak was preserved
+                let gapDays = daysBetween - 1 // days between last workout and today
+                if gapDays <= user.consecutiveRestDays && user.consecutiveRestDays <= 3 {
+                    // Rest days bridged the gap
+                    user.currentStreak += 1
+                } else {
+                    // Gap not covered by rest days — streak broken, start fresh
+                    user.previousStreak = user.currentStreak
+                    user.currentStreak = 1
+                }
             }
         } else {
             // First workout ever
@@ -44,7 +60,9 @@ struct StreakManager {
 
     // MARK: - Record a Rest Day
 
-    /// Increments consecutive rest days. Resets streak if too many consecutive rest days without vacation.
+    /// Preserves the streak for today without incrementing it. The user must mark
+    /// a rest day before midnight or their streak breaks. Max 3 consecutive rest days
+    /// before the streak breaks regardless.
     static func recordRestDay(for user: User) {
         user.consecutiveRestDays += 1
 
@@ -58,7 +76,15 @@ struct StreakManager {
 
     // MARK: - Full Recalculation
 
-    /// Walks backwards from today counting consecutive valid days (workout or planned rest, max 3 consecutive rest).
+    /// Recalculates the streak by walking backwards from today.
+    ///
+    /// Rules:
+    /// - Today is a "grace period": if no workout and no rest day yet, but yesterday had
+    ///   a workout or valid rest day, the streak is still alive (user has until midnight).
+    /// - A workout day increments the streak.
+    /// - A rest day (or vacation day) preserves the streak without incrementing, up to
+    ///   3 consecutive rest days max (vacation days don't count toward the limit).
+    /// - Any day with no workout, no rest day, and no vacation breaks the streak.
     static func recalculateStreak(for user: User, workouts: [Workout], plans: [WorkoutPlan]) {
         let calendar = Calendar.current
         let today = calendar.startOfDay(for: Date())
@@ -79,6 +105,7 @@ struct StreakManager {
         var streak = 0
         var consecutiveRest = 0
         var currentDate = today
+        var isFirstDay = true // today gets grace period treatment
 
         // Walk backwards day by day
         while true {
@@ -89,20 +116,21 @@ struct StreakManager {
             if isWorkoutDay {
                 streak += 1
                 consecutiveRest = 0
+                isFirstDay = false
             } else if isRestDay || onVacation {
                 consecutiveRest += 1
                 if consecutiveRest > 3 && !onVacation {
                     break
                 }
-                // Rest days preserve streak but don't increment it
-                // Only count if there's already a streak going
-                if streak == 0 {
-                    // Haven't found a workout yet — keep looking back
-                } else {
-                    // Valid rest day within streak
-                }
+                isFirstDay = false
+                // Rest/vacation days preserve streak but don't increment
+            } else if isFirstDay {
+                // Today has no workout and no rest day yet — grace period.
+                // The streak is still alive as long as yesterday continues the chain.
+                // Don't increment, don't break — just move to yesterday.
+                isFirstDay = false
             } else {
-                // No workout, no rest day, no vacation — streak broken
+                // Past day with no workout, no rest day, no vacation — streak broken
                 break
             }
 

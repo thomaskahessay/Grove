@@ -208,9 +208,10 @@ class Workout {
   - Week↔month offset sync keeps displayed time range consistent when toggling
   - Same tap behavior and status indicators in both views
 - [x] Streak tracking logic (StreakManager.swift)
-  - recordWorkout: increments/resets streak based on gap
-  - recordRestDay: preserves streak (up to 3 consecutive)
-  - recalculateStreak: full audit on app launch
+  - recordWorkout: increments streak; user has until end of next calendar day to act
+  - recordRestDay: preserves streak without incrementing (max 3 consecutive)
+  - recalculateStreak: full audit on app launch with today as grace period
+  - Streak breaks at midnight if user doesn't complete a workout or mark rest day
   - Vacation mode support
 - [x] Streak wired into workout completion (WorkoutSessionManager)
 - [x] Plan linking: completed workouts auto-link to today's plan

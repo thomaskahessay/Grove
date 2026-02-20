@@ -997,9 +997,12 @@ Approximately 100 built-in exercises distributed across muscle groups:
 ### Streak System
 
 **Rules:**
-- Any logged workout increments consecutive day count
-- Rest days preserve streak (do not break it)
-- Maximum 3 consecutive rest days before streak resets
+- Completing a workout increments the streak and starts a 24-hour grace window
+- After a workout, the user has until the end of the next calendar day (11:59:59 PM local time) to either complete another workout or mark the day as a rest day
+- If neither happens by midnight, the streak breaks at 12:00 AM
+- Rest days preserve the streak (do not increment it) and extend the grace window to the next day
+- Maximum 3 consecutive rest days before streak resets regardless
+- On app launch, today is treated as a grace period — if yesterday had a workout or valid rest day, the streak is still alive
 - Vacation mode: Unlimited rest days without breaking streak
 
 **Vacation Mode:**
@@ -1069,7 +1072,7 @@ A visual plant/tree drawn with SwiftUI Canvas (Bezier curves) that grows with th
 - Celebration pulse: `scaleEffect` 1.0 → 1.05 → 1.0
 
 **Wilting:**
-- When streak breaks (5+ day gap or >3 consecutive rest days), plant enters wilted state
+- When streak breaks (missed deadline without workout or rest day, or >3 consecutive rest days), plant enters wilted state
 - Wilted variant: same shapes but leaves droop (rotation shifted down), colors desaturated
 - Records `wiltedAtStage` so the wilted plant matches the stage when the streak broke
 
