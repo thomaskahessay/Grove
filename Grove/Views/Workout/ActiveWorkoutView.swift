@@ -14,6 +14,7 @@ struct ActiveWorkoutView: View {
     @State private var restTimerSeconds: Int = 0
     @State private var restTimerActive = false
     @State private var restTimerDuration: Int = 90 // Default 90 seconds
+    @State private var exerciseNameVisible = true
 
     private var exercises: [ExerciseLog] {
         workout.exercises.sorted { $0.orderIndex < $1.orderIndex }
@@ -62,9 +63,12 @@ struct ActiveWorkoutView: View {
                 }
 
                 ToolbarItem(placement: .principal) {
-                    Text(workout.name)
+                    Text(!exerciseNameVisible && !showingCardView
+                         ? (currentExercise?.exercise?.name ?? workout.name)
+                         : workout.name)
                         .font(.headline)
                         .foregroundStyle(Color.groveText)
+                        .animation(.easeInOut(duration: 0.2), value: exerciseNameVisible)
                 }
 
                 ToolbarItem(placement: .topBarTrailing) {
@@ -100,6 +104,9 @@ struct ActiveWorkoutView: View {
                         }
                     }
             )
+            .onChange(of: currentExerciseIndex) {
+                exerciseNameVisible = true
+            }
         }
     }
 
@@ -129,7 +136,10 @@ struct ActiveWorkoutView: View {
                 ForEach(Array(exercises.enumerated()), id: \.element.id) { index, exerciseLog in
                     ExerciseFullScreenCard(
                         exerciseLog: exerciseLog,
-                        onStartTimer: { startRestTimer() }
+                        onStartTimer: { startRestTimer() },
+                        onNameVisibilityChanged: index == currentExerciseIndex ? { visible in
+                            exerciseNameVisible = visible
+                        } : nil
                     )
                     .tag(index)
                 }
@@ -198,7 +208,7 @@ struct ActiveWorkoutView: View {
             }
         }
         .padding()
-        .background(.ultraThinMaterial)
+        .background(Color.groveBackground)
     }
 
     // MARK: - Card View
@@ -356,6 +366,7 @@ struct ExerciseFullScreenCard: View {
     @Environment(\.modelContext) private var modelContext
     @Bindable var exerciseLog: ExerciseLog
     let onStartTimer: () -> Void
+    var onNameVisibilityChanged: ((Bool) -> Void)? = nil
 
     private var sortedSets: [SetLog] {
         exerciseLog.sets.sorted { $0.setNumber < $1.setNumber }
@@ -375,10 +386,36 @@ struct ExerciseFullScreenCard: View {
                         .fontWeight(.bold)
                         .foregroundStyle(Color.groveText)
                         .multilineTextAlignment(.center)
+                        .onScrollVisibilityChange { visible in
+                            onNameVisibilityChanged?(visible)
+                        }
 
                     Text(exerciseLog.exercise?.muscleGroup.rawValue ?? "")
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
+
+                    // Set progress bar
+                    HStack(spacing: 8) {
+                        let completed = sortedSets.filter(\.isCompleted).count
+                        let total = sortedSets.count
+
+                        GeometryReader { geo in
+                            Capsule()
+                                .fill(Color.groveWarmSand.opacity(0.3))
+                                .overlay(alignment: .leading) {
+                                    Capsule()
+                                        .fill(Color.groveSage)
+                                        .frame(width: total > 0 ? geo.size.width * CGFloat(completed) / CGFloat(total) : 0)
+                                        .animation(.easeInOut(duration: 0.3), value: completed)
+                                }
+                        }
+                        .frame(width: 120, height: 6)
+
+                        Text("\(sortedSets.filter(\.isCompleted).count)/\(sortedSets.count)")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    }
+                    .padding(.top, 4)
                 }
                 .padding(.top, 20)
 
@@ -423,18 +460,6 @@ struct ExerciseFullScreenCard: View {
                 }
                 .padding(.horizontal)
 
-                // Rest timer button
-                Button {
-                    onStartTimer()
-                } label: {
-                    HStack {
-                        Image(systemName: "timer")
-                        Text("Start Rest Timer")
-                    }
-                }
-                .buttonStyle(.secondary)
-                .padding(.horizontal)
-
                 // Skip/Unskip exercise button
                 if exerciseLog.status == .skipped {
                     Button {
@@ -444,7 +469,6 @@ struct ExerciseFullScreenCard: View {
                             .font(.subheadline)
                             .foregroundStyle(Color.groveSage)
                     }
-                    .padding(.top, 8)
                 } else {
                     Button {
                         exerciseLog.status = .skipped
@@ -453,12 +477,12 @@ struct ExerciseFullScreenCard: View {
                             .font(.subheadline)
                             .foregroundStyle(Color.groveMutedRust)
                     }
-                    .padding(.top, 8)
                 }
 
-                Spacer(minLength: 100)
             }
+            .padding(.bottom, 16)
         }
+        .scrollBounceBehavior(.basedOnSize)
         .scrollDismissesKeyboard(.immediately)
         .onTapGesture {
             UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
@@ -534,6 +558,10 @@ struct SetRowView: View {
     @FocusState private var weightFocused: Bool
     @FocusState private var repsFocused: Bool
 
+    private var isEditing: Bool {
+        weightFocused || repsFocused
+    }
+
     var body: some View {
         HStack(spacing: 12) {
             // Set number
@@ -542,28 +570,28 @@ struct SetRowView: View {
                 .foregroundStyle(setLog.isCompleted ? Color.groveSage : .secondary)
                 .frame(width: 24)
 
-            // Weight stepper with editable field
+            // Weight input
             VStack(spacing: 4) {
                 Text("Weight")
                     .font(.caption2)
                     .foregroundStyle(.secondary)
 
                 HStack(spacing: 4) {
-                    Button {
-                        decrementWeight()
-                    } label: {
-                        Image(systemName: "minus")
-                            .font(.caption)
-                            .frame(width: 28, height: 28)
-                            .background(Color.groveWarmSand.opacity(0.5))
-                            .clipShape(Circle())
+                    if weightFocused {
+                        Button {
+                            decrementWeight()
+                        } label: {
+                            Text("-5")
+                                .font(.caption2)
+                                .fontWeight(.semibold)
+                                .foregroundStyle(Color.groveText)
+                        }
+                        .buttonStyle(.plain)
                     }
-                    .buttonStyle(.plain)
 
                     TextField("0", text: $weightText)
                         .font(.headline)
                         .multilineTextAlignment(.center)
-                        .frame(width: 56)
                         .keyboardType(.decimalPad)
                         .focused($weightFocused)
                         .onSubmit { syncWeightFromText() }
@@ -571,41 +599,52 @@ struct SetRowView: View {
                             if !focused { syncWeightFromText() }
                         }
 
-                    Button {
-                        incrementWeight()
-                    } label: {
-                        Image(systemName: "plus")
-                            .font(.caption)
-                            .frame(width: 28, height: 28)
-                            .background(Color.groveWarmSand.opacity(0.5))
-                            .clipShape(Circle())
+                    if weightFocused {
+                        Button {
+                            incrementWeight()
+                        } label: {
+                            Text("+5")
+                                .font(.caption2)
+                                .fontWeight(.semibold)
+                                .foregroundStyle(Color.groveText)
+                        }
+                        .buttonStyle(.plain)
                     }
-                    .buttonStyle(.plain)
                 }
+                .padding(.horizontal, 8)
+                .padding(.vertical, 6)
+                .frame(height: 34)
+                .background(Color.groveWarmSand.opacity(weightFocused ? 0.2 : 0.15))
+                .clipShape(RoundedRectangle(cornerRadius: 8))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 8)
+                        .stroke(weightFocused ? Color.groveSage.opacity(0.5) : Color.groveWarmSand.opacity(0.4), lineWidth: 1)
+                )
             }
+            .frame(maxWidth: .infinity)
 
-            // Reps stepper with editable field
+            // Reps input
             VStack(spacing: 4) {
                 Text("Reps")
                     .font(.caption2)
                     .foregroundStyle(.secondary)
 
                 HStack(spacing: 4) {
-                    Button {
-                        decrementReps()
-                    } label: {
-                        Image(systemName: "minus")
-                            .font(.caption)
-                            .frame(width: 28, height: 28)
-                            .background(Color.groveWarmSand.opacity(0.5))
-                            .clipShape(Circle())
+                    if repsFocused {
+                        Button {
+                            decrementReps()
+                        } label: {
+                            Text("-1")
+                                .font(.caption2)
+                                .fontWeight(.semibold)
+                                .foregroundStyle(Color.groveText)
+                        }
+                        .buttonStyle(.plain)
                     }
-                    .buttonStyle(.plain)
 
                     TextField("0", text: $repsText)
                         .font(.headline)
                         .multilineTextAlignment(.center)
-                        .frame(width: 36)
                         .keyboardType(.numberPad)
                         .focused($repsFocused)
                         .onSubmit { syncRepsFromText() }
@@ -613,20 +652,29 @@ struct SetRowView: View {
                             if !focused { syncRepsFromText() }
                         }
 
-                    Button {
-                        incrementReps()
-                    } label: {
-                        Image(systemName: "plus")
-                            .font(.caption)
-                            .frame(width: 28, height: 28)
-                            .background(Color.groveWarmSand.opacity(0.5))
-                            .clipShape(Circle())
+                    if repsFocused {
+                        Button {
+                            incrementReps()
+                        } label: {
+                            Text("+1")
+                                .font(.caption2)
+                                .fontWeight(.semibold)
+                                .foregroundStyle(Color.groveText)
+                        }
+                        .buttonStyle(.plain)
                     }
-                    .buttonStyle(.plain)
                 }
+                .padding(.horizontal, 8)
+                .padding(.vertical, 6)
+                .frame(height: 34)
+                .background(Color.groveWarmSand.opacity(repsFocused ? 0.2 : 0.15))
+                .clipShape(RoundedRectangle(cornerRadius: 8))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 8)
+                        .stroke(repsFocused ? Color.groveSage.opacity(0.5) : Color.groveWarmSand.opacity(0.4), lineWidth: 1)
+                )
             }
-
-            Spacer()
+            .frame(maxWidth: .infinity)
 
             // Complete checkbox
             Button {
@@ -648,9 +696,12 @@ struct SetRowView: View {
                 .buttonStyle(.plain)
             }
         }
-        .padding()
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
         .background(setLog.isCompleted ? Color.groveSage.opacity(0.1) : Color.groveCardBackground)
         .clipShape(RoundedRectangle(cornerRadius: 12))
+        .animation(.easeInOut(duration: 0.15), value: weightFocused)
+        .animation(.easeInOut(duration: 0.15), value: repsFocused)
         .onAppear {
             syncTextFromSetLog()
         }
@@ -949,6 +1000,10 @@ struct AddExerciseToWorkoutView: View {
 
     @State private var searchText = ""
 
+    private var existingExerciseIDs: Set<UUID> {
+        Set(workout.exercises.compactMap { $0.exercise?.id })
+    }
+
     private var filteredExercises: [Exercise] {
         if searchText.isEmpty {
             return allExercises
@@ -961,22 +1016,24 @@ struct AddExerciseToWorkoutView: View {
     var body: some View {
         NavigationStack {
             List(filteredExercises) { exercise in
+                let alreadyAdded = existingExerciseIDs.contains(exercise.id)
                 Button {
                     addExercise(exercise)
                 } label: {
                     HStack {
                         VStack(alignment: .leading) {
                             Text(exercise.name)
-                                .foregroundStyle(Color.groveText)
+                                .foregroundStyle(alreadyAdded ? .secondary : Color.groveText)
                             Text(exercise.muscleGroup.rawValue)
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                         }
                         Spacer()
-                        Image(systemName: "plus.circle")
-                            .foregroundStyle(Color.groveSage)
+                        Image(systemName: alreadyAdded ? "checkmark.circle.fill" : "plus.circle")
+                            .foregroundStyle(alreadyAdded ? .secondary : Color.groveSage)
                     }
                 }
+                .disabled(alreadyAdded)
             }
             .searchable(text: $searchText, prompt: "Search exercises")
             .navigationTitle("Add Exercise")

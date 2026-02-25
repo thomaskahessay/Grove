@@ -124,7 +124,14 @@ struct HomeView: View {
                                 workoutName: template.name,
                                 exerciseCount: template.exerciseIDs.count,
                                 category: template.category,
-                                onStart: { startTodaysWorkout(plan: plan) }
+                                isResuming: sessionManager.activeWorkout != nil,
+                                onStart: {
+                                    if sessionManager.activeWorkout != nil {
+                                        sessionManager.expandWorkout()
+                                    } else {
+                                        startTodaysWorkout(plan: plan)
+                                    }
+                                }
                             )
                         } else if let next = nextPlannedWorkout {
                             NextWorkoutCard(name: next.name, date: next.date)
@@ -300,6 +307,7 @@ struct TodayWorkoutCard: View {
     let workoutName: String
     let exerciseCount: Int
     let category: TemplateCategory
+    var isResuming: Bool = false
     var onStart: (() -> Void)?
 
     var body: some View {
@@ -328,7 +336,7 @@ struct TodayWorkoutCard: View {
             Button(action: {
                 onStart?()
             }) {
-                Text("Start Workout")
+                Text(isResuming ? "Resume Workout" : "Start Workout")
             }
             .buttonStyle(.primary)
         }
