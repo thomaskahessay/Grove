@@ -219,7 +219,12 @@ struct HomeView: View {
                 WeeklyPlanView()
             }
             .onAppear {
-                if let user = currentUser {
+                // Skip recalculation when a workout was just completed — the streak
+                // was already updated by recordWorkout() and the @Query results may
+                // not yet include the new workout, which would cause recalculateStreak
+                // to temporarily reset the streak to a wrong value.
+                if let user = currentUser,
+                   sessionManager.completedWorkout == nil && !sessionManager.showingSummary && !sessionManager.showingStreakMoment {
                     StreakManager.recalculateStreak(
                         for: user,
                         workouts: completedWorkouts,

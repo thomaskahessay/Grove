@@ -73,6 +73,13 @@ class WorkoutSessionManager {
         }
         let postWorkoutStage = user.map { PlantStage.from(streak: $0.currentStreak) }
 
+        // Persist immediately so @Query results include this workout before
+        // HomeView.onAppear triggers recalculateStreak (which would otherwise
+        // overwrite the streak with stale query data).
+        if let context = context {
+            try? context.save()
+        }
+
         // Build streak moment data
         if let pre = preWorkoutStage, let post = postWorkoutStage, let user = user {
             let isStageUp = post.rawValue > pre.rawValue
