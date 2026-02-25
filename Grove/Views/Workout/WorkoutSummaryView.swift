@@ -186,34 +186,59 @@ struct WorkoutSummaryView: View {
 
     private var prSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Label("New Personal Records", systemImage: "trophy.fill")
-                .font(.headline)
-                .foregroundStyle(Color.groveTerracotta)
+            HStack {
+                Label("New Personal Records", systemImage: "trophy.fill")
+                    .font(.headline)
+                    .foregroundStyle(Color.groveTerracotta)
 
-            VStack(spacing: 8) {
-                ForEach(sessionManager.newPRs, id: \.exercise.id) { result in
-                    VStack(spacing: 6) {
-                        // Max Weight PR
-                        if let pr = result.newMaxWeight {
-                            PRRow(
-                                exerciseName: result.exercise.name,
-                                type: "Max Weight",
-                                weight: pr.weight,
-                                reps: pr.reps
-                            )
-                        }
+                Spacer()
 
-                        // Estimated 1RM PR
-                        if let pr = result.newEstimated1RM {
-                            PRRow(
-                                exerciseName: result.exercise.name,
-                                type: "Est. 1RM",
-                                value: pr.value
-                            )
-                        }
+                Text("\(prCards.count)")
+                    .font(.subheadline)
+                    .fontWeight(.medium)
+                    .foregroundStyle(.secondary)
+            }
+
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 12) {
+                    ForEach(prCards, id: \.id) { card in
+                        SummaryPRCard(
+                            exerciseName: card.exerciseName,
+                            typeLabel: card.typeLabel,
+                            displayValue: card.displayValue
+                        )
                     }
                 }
+                .padding(.horizontal)
             }
+            .scrollClipDisabled()
+            .padding(.horizontal, -16)
+        }
+    }
+
+    private var prCards: [PRCardData] {
+        sessionManager.newPRs.flatMap { result -> [PRCardData] in
+            var cards: [PRCardData] = []
+            if let pr = result.newMaxWeight {
+                let w = pr.weight == floor(pr.weight) ? "\(Int(pr.weight))" : String(format: "%.1f", pr.weight)
+                cards.append(PRCardData(
+                    id: "\(result.exercise.id)-maxWeight",
+                    exerciseName: result.exercise.name,
+                    typeLabel: "Max Weight",
+                    displayValue: "\(w) × \(pr.reps)"
+                ))
+            }
+            if let pr = result.newEstimated1RM {
+                let v = pr.value
+                let formatted = v == floor(v) ? "\(Int(v)) lbs" : String(format: "%.1f lbs", v)
+                cards.append(PRCardData(
+                    id: "\(result.exercise.id)-est1RM",
+                    exerciseName: result.exercise.name,
+                    typeLabel: "Est. 1RM",
+                    displayValue: formatted
+                ))
+            }
+            return cards
         }
     }
 
@@ -491,6 +516,50 @@ struct ExerciseSummaryRow: View {
             return String(format: "%.1fk lbs", volume / 1000)
         }
         return String(format: "%.0f lbs", volume)
+    }
+}
+
+// MARK: - PR Card Data
+
+private struct PRCardData {
+    let id: String
+    let exerciseName: String
+    let typeLabel: String
+    let displayValue: String
+}
+
+// MARK: - Summary PR Card
+
+private struct SummaryPRCard: View {
+    let exerciseName: String
+    let typeLabel: String
+    let displayValue: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Image(systemName: "star.fill")
+                .font(.caption)
+                .foregroundStyle(Color.groveTerracotta)
+
+            Text(exerciseName)
+                .font(.subheadline)
+                .fontWeight(.semibold)
+                .foregroundStyle(Color.groveText)
+                .lineLimit(1)
+
+            Text(typeLabel)
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+
+            Text(displayValue)
+                .font(.subheadline)
+                .fontWeight(.bold)
+                .foregroundStyle(Color.groveTerracotta)
+        }
+        .padding(12)
+        .frame(width: 140, alignment: .leading)
+        .background(Color.groveTerracotta.opacity(0.1))
+        .clipShape(RoundedRectangle(cornerRadius: 12))
     }
 }
 
