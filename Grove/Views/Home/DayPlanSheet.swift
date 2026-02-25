@@ -664,7 +664,8 @@ struct NewTemplateSheet: View {
                 }
                 .padding()
             }
-            .background(Color.groveBackground)
+            .scrollContentBackground(.hidden)
+            .background(Color.groveBackground.ignoresSafeArea())
             .navigationTitle("New Template")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
