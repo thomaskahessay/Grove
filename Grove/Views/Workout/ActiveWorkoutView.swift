@@ -587,6 +587,7 @@ struct SetRowView: View {
                                 .foregroundStyle(Color.groveText)
                         }
                         .buttonStyle(.plain)
+                        .transition(.opacity.combined(with: .scale(scale: 0.5)))
                     }
 
                     TextField("0", text: $weightText)
@@ -609,12 +610,13 @@ struct SetRowView: View {
                                 .foregroundStyle(Color.groveText)
                         }
                         .buttonStyle(.plain)
+                        .transition(.opacity.combined(with: .scale(scale: 0.5)))
                     }
                 }
                 .padding(.horizontal, 8)
                 .padding(.vertical, 6)
                 .frame(height: 34)
-                .background(Color.groveWarmSand.opacity(weightFocused ? 0.2 : 0.15))
+                .background(Color.groveWarmSand.opacity(weightFocused ? 0.25 : 0.15))
                 .clipShape(RoundedRectangle(cornerRadius: 8))
                 .overlay(
                     RoundedRectangle(cornerRadius: 8)
@@ -640,6 +642,7 @@ struct SetRowView: View {
                                 .foregroundStyle(Color.groveText)
                         }
                         .buttonStyle(.plain)
+                        .transition(.opacity.combined(with: .scale(scale: 0.5)))
                     }
 
                     TextField("0", text: $repsText)
@@ -662,12 +665,13 @@ struct SetRowView: View {
                                 .foregroundStyle(Color.groveText)
                         }
                         .buttonStyle(.plain)
+                        .transition(.opacity.combined(with: .scale(scale: 0.5)))
                     }
                 }
                 .padding(.horizontal, 8)
                 .padding(.vertical, 6)
                 .frame(height: 34)
-                .background(Color.groveWarmSand.opacity(repsFocused ? 0.2 : 0.15))
+                .background(Color.groveWarmSand.opacity(repsFocused ? 0.25 : 0.15))
                 .clipShape(RoundedRectangle(cornerRadius: 8))
                 .overlay(
                     RoundedRectangle(cornerRadius: 8)
@@ -700,8 +704,8 @@ struct SetRowView: View {
         .padding(.vertical, 10)
         .background(setLog.isCompleted ? Color.groveSage.opacity(0.1) : Color.groveCardBackground)
         .clipShape(RoundedRectangle(cornerRadius: 12))
-        .animation(.easeInOut(duration: 0.15), value: weightFocused)
-        .animation(.easeInOut(duration: 0.15), value: repsFocused)
+        .animation(.spring(response: 0.3, dampingFraction: 0.8), value: weightFocused)
+        .animation(.spring(response: 0.3, dampingFraction: 0.8), value: repsFocused)
         .onAppear {
             syncTextFromSetLog()
         }
