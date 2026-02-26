@@ -389,6 +389,10 @@ struct ExerciseFullScreenCard: View {
         sortedSets.first
     }
 
+    private var isSkipped: Bool {
+        exerciseLog.status == .skipped
+    }
+
     var body: some View {
         ScrollViewReader { proxy in
             ScrollView {
@@ -398,7 +402,8 @@ struct ExerciseFullScreenCard: View {
                         Text(exerciseLog.exercise?.name ?? "Exercise")
                             .font(.title)
                             .fontWeight(.bold)
-                            .foregroundStyle(Color.groveText)
+                            .foregroundStyle(isSkipped ? .secondary : Color.groveText)
+                            .strikethrough(isSkipped)
                             .multilineTextAlignment(.center)
                             .onScrollVisibilityChange { visible in
                                 onNameVisibilityChanged?(visible)
@@ -408,88 +413,131 @@ struct ExerciseFullScreenCard: View {
                             .font(.subheadline)
                             .foregroundStyle(.secondary)
 
-                        // Set progress bar
-                        HStack(spacing: 8) {
-                            let completed = sortedSets.filter(\.isCompleted).count
-                            let total = sortedSets.count
-
-                            GeometryReader { geo in
-                                Capsule()
-                                    .fill(Color.groveWarmSand.opacity(0.3))
-                                    .overlay(alignment: .leading) {
-                                        Capsule()
-                                            .fill(Color.groveSage)
-                                            .frame(width: total > 0 ? geo.size.width * CGFloat(completed) / CGFloat(total) : 0)
-                                            .animation(.easeInOut(duration: 0.3), value: completed)
-                                    }
+                        if isSkipped {
+                            // Skipped badge
+                            HStack(spacing: 6) {
+                                Image(systemName: "forward.fill")
+                                    .font(.caption)
+                                Text("Skipped")
+                                    .font(.caption)
+                                    .fontWeight(.medium)
                             }
-                            .frame(width: 120, height: 6)
+                            .foregroundStyle(Color.groveMutedRust)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 6)
+                            .background(Color.groveMutedRust.opacity(0.12))
+                            .clipShape(Capsule())
+                            .padding(.top, 4)
+                        } else {
+                            // Set progress bar
+                            HStack(spacing: 8) {
+                                let completed = sortedSets.filter(\.isCompleted).count
+                                let total = sortedSets.count
 
-                            Text("\(sortedSets.filter(\.isCompleted).count)/\(sortedSets.count)")
-                                .font(.caption2)
-                                .foregroundStyle(.secondary)
+                                GeometryReader { geo in
+                                    Capsule()
+                                        .fill(Color.groveWarmSand.opacity(0.3))
+                                        .overlay(alignment: .leading) {
+                                            Capsule()
+                                                .fill(Color.groveSage)
+                                                .frame(width: total > 0 ? geo.size.width * CGFloat(completed) / CGFloat(total) : 0)
+                                                .animation(.easeInOut(duration: 0.3), value: completed)
+                                        }
+                                }
+                                .frame(width: 120, height: 6)
+
+                                Text("\(sortedSets.filter(\.isCompleted).count)/\(sortedSets.count)")
+                                    .font(.caption2)
+                                    .foregroundStyle(.secondary)
+                            }
+                            .padding(.top, 4)
                         }
-                        .padding(.top, 4)
                     }
                     .padding(.top, 20)
 
-                    // Sets
-                    VStack(spacing: 12) {
-                        ForEach(Array(sortedSets.enumerated()), id: \.element.id) { index, setLog in
-                            SetRowView(
-                                setLog: setLog,
-                                setNumber: index + 1,
-                                onComplete: onStartTimer,
-                                onRemove: sortedSets.count > 1 ? {
-                                    removeSet(setLog)
-                                } : nil,
-                                onWeightChanged: index == 0 ? { newWeight in
-                                    autofillWeight(newWeight)
-                                } : nil,
-                                onRepsChanged: index == 0 ? { newReps in
-                                    autofillReps(newReps)
-                                } : nil,
-                                onSetStatusChanged: {
-                                    updateExerciseStatus()
-                                },
-                                onFocused: {
-                                    focusedSetID = setLog.id
+                    if isSkipped {
+                        // Skipped state: prominent message instead of sets
+                        VStack(spacing: 16) {
+                            Image(systemName: "forward.circle")
+                                .font(.system(size: 48))
+                                .foregroundStyle(Color.groveWarmSand)
+
+                            Text("This exercise has been skipped")
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+
+                            Button {
+                                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                                    exerciseLog.status = .planned
                                 }
-                            )
-                            .id(setLog.id)
-                        }
-
-                        // Add set button
-                        Button {
-                            addSet()
-                        } label: {
-                            HStack {
-                                Image(systemName: "plus")
-                                Text("Add Set")
+                            } label: {
+                                HStack(spacing: 6) {
+                                    Image(systemName: "arrow.uturn.backward")
+                                    Text("Unskip Exercise")
+                                }
+                                .font(.subheadline)
+                                .fontWeight(.medium)
+                                .foregroundStyle(Color.groveSage)
+                                .padding(.horizontal, 20)
+                                .padding(.vertical, 12)
+                                .background(Color.groveSage.opacity(0.12))
+                                .clipShape(Capsule())
                             }
-                            .font(.subheadline)
-                            .foregroundStyle(Color.groveSage)
-                            .padding(.vertical, 12)
-                            .frame(maxWidth: .infinity)
-                            .background(Color.groveCardBackground)
-                            .clipShape(RoundedRectangle(cornerRadius: 10))
+                            .buttonStyle(.plain)
                         }
-                        .buttonStyle(.plain)
-                    }
-                    .padding(.horizontal)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 40)
+                    } else {
+                        // Sets
+                        VStack(spacing: 12) {
+                            ForEach(Array(sortedSets.enumerated()), id: \.element.id) { index, setLog in
+                                SetRowView(
+                                    setLog: setLog,
+                                    setNumber: index + 1,
+                                    onComplete: onStartTimer,
+                                    onRemove: sortedSets.count > 1 ? {
+                                        removeSet(setLog)
+                                    } : nil,
+                                    onWeightChanged: index == 0 ? { newWeight in
+                                        autofillWeight(newWeight)
+                                    } : nil,
+                                    onRepsChanged: index == 0 ? { newReps in
+                                        autofillReps(newReps)
+                                    } : nil,
+                                    onSetStatusChanged: {
+                                        updateExerciseStatus()
+                                    },
+                                    onFocused: {
+                                        focusedSetID = setLog.id
+                                    }
+                                )
+                                .id(setLog.id)
+                            }
 
-                    // Skip/Unskip exercise button
-                    if exerciseLog.status == .skipped {
-                        Button {
-                            exerciseLog.status = .planned
-                        } label: {
-                            Text("Unskip Exercise")
+                            // Add set button
+                            Button {
+                                addSet()
+                            } label: {
+                                HStack {
+                                    Image(systemName: "plus")
+                                    Text("Add Set")
+                                }
                                 .font(.subheadline)
                                 .foregroundStyle(Color.groveSage)
+                                .padding(.vertical, 12)
+                                .frame(maxWidth: .infinity)
+                                .background(Color.groveCardBackground)
+                                .clipShape(RoundedRectangle(cornerRadius: 10))
+                            }
+                            .buttonStyle(.plain)
                         }
-                    } else {
+                        .padding(.horizontal)
+
+                        // Skip exercise button
                         Button {
-                            exerciseLog.status = .skipped
+                            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                                exerciseLog.status = .skipped
+                            }
                         } label: {
                             Text("Skip Exercise")
                                 .font(.subheadline)
