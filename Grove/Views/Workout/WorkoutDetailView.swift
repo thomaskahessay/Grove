@@ -125,6 +125,7 @@ struct WorkoutDetailView: View {
                     icon: "scalemass"
                 )
             }
+            .fixedSize(horizontal: false, vertical: true)
         }
         .padding(16)
         .background(Color.groveCardBackground)
@@ -197,17 +198,20 @@ private struct StatBox: View {
             Image(systemName: icon)
                 .font(.title3)
                 .foregroundStyle(Color.groveSage)
+                .frame(height: 24)
 
             Text(value)
                 .font(.title3)
                 .fontWeight(.bold)
                 .foregroundStyle(Color.groveText)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
 
             Text(title)
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }
-        .frame(maxWidth: .infinity)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
         .padding(.vertical, 12)
         .background(Color.groveWarmSand.opacity(0.3))
         .clipShape(RoundedRectangle(cornerRadius: 8))

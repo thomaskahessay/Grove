@@ -166,6 +166,7 @@ struct WorkoutSummaryView: View {
                 label: "Sets"
             )
         }
+        .fixedSize(horizontal: false, vertical: true)
     }
 
     private var comparisonSection: some View {
@@ -324,17 +325,20 @@ struct StatCard: View {
             Image(systemName: icon)
                 .font(.title2)
                 .foregroundStyle(Color.groveSage)
+                .frame(height: 28)
 
             Text(value)
                 .font(.title3)
                 .fontWeight(.bold)
                 .foregroundStyle(Color.groveText)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
 
             Text(label)
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }
-        .frame(maxWidth: .infinity)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
         .padding(.vertical, 16)
         .background(Color.groveCardBackground)
         .clipShape(RoundedRectangle(cornerRadius: 12))
