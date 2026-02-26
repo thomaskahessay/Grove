@@ -107,6 +107,7 @@ struct ActiveWorkoutView: View {
             )
             .onChange(of: currentExerciseIndex) {
                 exerciseNameVisible = true
+                UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
             }
         }
     }
@@ -132,7 +133,7 @@ struct ActiveWorkoutView: View {
             .padding(.horizontal)
             .padding(.top, 8)
 
-            // Exercise content with swipe
+            // Exercise content with swipe (disabled when keyboard is showing)
             TabView(selection: $currentExerciseIndex) {
                 ForEach(Array(exercises.enumerated()), id: \.element.id) { index, exerciseLog in
                     ExerciseFullScreenCard(
@@ -550,9 +551,6 @@ struct ExerciseFullScreenCard: View {
             }
             .scrollBounceBehavior(.basedOnSize)
             .scrollDismissesKeyboard(.interactively)
-            .onTapGesture {
-                UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
-            }
             .onChange(of: focusedSetID) { _, newID in
                 if let newID {
                     withAnimation(.easeInOut(duration: 0.25)) {
