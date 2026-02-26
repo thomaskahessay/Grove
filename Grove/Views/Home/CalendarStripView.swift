@@ -368,7 +368,7 @@ private struct MonthDayCell: View {
 
         switch plan.status {
         case .completed:
-            return "checkmark"
+            return categoryIconName(for: plan.template?.category) ?? "dumbbell.fill"
         case .incomplete:
             return "exclamationmark"
         case .planned:
@@ -480,7 +480,7 @@ struct CalendarDayCell: View {
 
         switch plan.status {
         case .completed:
-            return "checkmark"
+            return categoryIconName(for: plan.template?.category) ?? "dumbbell.fill"
         case .incomplete:
             return "exclamationmark"
         case .planned:
