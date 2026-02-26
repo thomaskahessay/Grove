@@ -14,6 +14,7 @@ struct DayPlanSheet: View {
     @State private var selectedTemplate: WorkoutTemplate?
     @State private var newTemplateCategory: TemplateCategory?
     @State private var filterCategory: TemplateCategory?
+    @State private var editingTemplate: WorkoutTemplate?
 
     init(date: Date, existingPlan: WorkoutPlan? = nil) {
         self.date = date
@@ -116,6 +117,9 @@ struct DayPlanSheet: View {
                 selectedTemplate = template
             }
         }
+        .sheet(item: $editingTemplate) { template in
+            EditTemplateSheet(template: template)
+        }
     }
 
     // MARK: - Sections
@@ -152,8 +156,8 @@ struct DayPlanSheet: View {
                 .font(.headline)
                 .foregroundStyle(Color.groveText)
 
-            // User templates
-            if !filteredUserTemplates.isEmpty {
+            // User templates (only show after a category is selected)
+            if filterCategory != nil && !filteredUserTemplates.isEmpty {
                 VStack(alignment: .leading, spacing: 8) {
                     HStack {
                         Text("Your Templates")
@@ -220,12 +224,21 @@ struct DayPlanSheet: View {
                 Spacer()
 
                 Button {
+                    editingTemplate = template
+                } label: {
+                    Label("Edit", systemImage: "pencil")
+                        .font(.caption)
+                        .fontWeight(.medium)
+                        .foregroundStyle(Color.groveSage)
+                }
+
+                Button {
                     withAnimation(.easeInOut(duration: 0.2)) {
                         selectedTemplate = nil
                         filterCategory = nil
                     }
                 } label: {
-                    Text("Change")
+                    Label("Change", systemImage: "arrow.triangle.2.circlepath")
                         .font(.caption)
                         .fontWeight(.medium)
                         .foregroundStyle(Color.groveSage)
@@ -703,6 +716,254 @@ struct NewTemplateSheet: View {
         template.exerciseIDs = selectedExercises.map { $0.id }
         modelContext.insert(template)
         onCreated(template)
+        dismiss()
+    }
+}
+
+// MARK: - Edit Template Sheet
+
+struct EditTemplateSheet: View {
+    @Environment(\.modelContext) private var modelContext
+    @Environment(\.dismiss) private var dismiss
+    @Query(sort: \Exercise.name) private var allExercises: [Exercise]
+    @Query private var allTemplates: [WorkoutTemplate]
+
+    @Bindable var template: WorkoutTemplate
+
+    @State private var templateName: String
+    @State private var selectedExercises: [Exercise] = []
+    @State private var showingExercisePicker = false
+    @State private var suggestedExerciseIDs: [UUID] = []
+
+    init(template: WorkoutTemplate) {
+        self.template = template
+        _templateName = State(initialValue: template.name)
+    }
+
+    private var trimmedName: String {
+        templateName.trimmingCharacters(in: .whitespaces)
+    }
+
+    private var nameAlreadyExists: Bool {
+        let name = trimmedName.isEmpty ? template.category.rawValue : trimmedName
+        return allTemplates.contains {
+            !$0.isArchived &&
+            $0.id != template.id &&
+            $0.name.lowercased() == name.lowercased()
+        }
+    }
+
+    private var suggestedExercises: [Exercise] {
+        suggestedExerciseIDs.compactMap { id in
+            allExercises.first { $0.id == id }
+        }.filter { !selectedExercises.contains($0) }
+    }
+
+    private func refreshSuggestions() {
+        let muscleGroups = muscleGroupsForCategory(template.category)
+        suggestedExerciseIDs = allExercises
+            .filter { muscleGroups.contains($0.muscleGroup) }
+            .shuffled()
+            .prefix(8)
+            .map { $0.id }
+    }
+
+    private func muscleGroupsForCategory(_ category: TemplateCategory) -> [MuscleGroup] {
+        switch category {
+        case .push: return [.chest, .shoulders, .triceps]
+        case .pull: return [.back, .biceps]
+        case .legs: return [.legs]
+        case .upper: return [.chest, .back, .shoulders, .biceps, .triceps]
+        case .lower: return [.legs, .core]
+        case .fullBody: return MuscleGroup.allCases
+        case .chestTriceps: return [.chest, .triceps]
+        case .backBiceps: return [.back, .biceps]
+        case .shoulders: return [.shoulders]
+        case .custom: return MuscleGroup.allCases
+        }
+    }
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 24) {
+                    // Template name
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Template Name")
+                            .font(.headline)
+                            .foregroundStyle(Color.groveText)
+
+                        TextField("e.g., Push Day, Leg Day", text: $templateName)
+                            .textFieldStyle(.roundedBorder)
+
+                        if nameAlreadyExists {
+                            Label("A template with this name already exists", systemImage: "exclamationmark.triangle.fill")
+                                .font(.caption)
+                                .foregroundStyle(Color.groveMutedRust)
+                        }
+                    }
+
+                    // Suggested Exercises
+                    if !suggestedExercises.isEmpty {
+                        VStack(alignment: .leading, spacing: 12) {
+                            HStack {
+                                Text("Suggested")
+                                    .font(.headline)
+                                    .foregroundStyle(Color.groveText)
+
+                                Spacer()
+
+                                Button {
+                                    refreshSuggestions()
+                                } label: {
+                                    Label("Refresh", systemImage: "arrow.clockwise")
+                                        .font(.subheadline)
+                                }
+                                .tint(.groveSage)
+                            }
+
+                            Text("Tap to add")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+
+                            ScrollView(.horizontal, showsIndicators: false) {
+                                HStack(spacing: 12) {
+                                    ForEach(suggestedExercises) { exercise in
+                                        SuggestedExerciseCard(exercise: exercise) {
+                                            withAnimation {
+                                                selectedExercises.append(exercise)
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // Exercises
+                    VStack(alignment: .leading, spacing: 12) {
+                        HStack {
+                            Text("Exercises")
+                                .font(.headline)
+                                .foregroundStyle(Color.groveText)
+
+                            Spacer()
+
+                            Button {
+                                showingExercisePicker = true
+                            } label: {
+                                Label("Add", systemImage: "plus")
+                                    .font(.subheadline)
+                            }
+                            .tint(.groveSage)
+                        }
+
+                        if selectedExercises.isEmpty {
+                            VStack(spacing: 12) {
+                                Image(systemName: "dumbbell")
+                                    .font(.largeTitle)
+                                    .foregroundStyle(Color.groveWarmSand)
+
+                                Text("No exercises added yet")
+                                    .font(.subheadline)
+                                    .foregroundStyle(.secondary)
+
+                                Button {
+                                    showingExercisePicker = true
+                                } label: {
+                                    Text("Browse Exercises")
+                                }
+                                .buttonStyle(.secondary)
+                            }
+                            .frame(maxWidth: .infinity)
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 24)
+                            .background(Color.groveCardBackground)
+                            .clipShape(RoundedRectangle(cornerRadius: 12))
+                        } else {
+                            VStack(spacing: 0) {
+                                ForEach(Array(selectedExercises.enumerated()), id: \.element.id) { index, exercise in
+                                    HStack(spacing: 12) {
+                                        Text("\(index + 1)")
+                                            .font(.headline)
+                                            .foregroundStyle(Color.groveSage)
+                                            .frame(width: 28)
+
+                                        VStack(alignment: .leading, spacing: 2) {
+                                            Text(exercise.name)
+                                                .font(.body)
+                                                .foregroundStyle(Color.groveText)
+                                            Text(exercise.muscleGroup.rawValue)
+                                                .font(.caption)
+                                                .foregroundStyle(.secondary)
+                                        }
+
+                                        Spacer()
+
+                                        Button {
+                                            withAnimation {
+                                                selectedExercises.removeAll { $0.id == exercise.id }
+                                            }
+                                        } label: {
+                                            Image(systemName: "xmark.circle.fill")
+                                                .foregroundStyle(Color.groveMutedRust.opacity(0.7))
+                                        }
+                                        .buttonStyle(.plain)
+                                    }
+                                    .padding(.horizontal, 16)
+                                    .padding(.vertical, 12)
+
+                                    if index < selectedExercises.count - 1 {
+                                        Divider()
+                                            .padding(.leading, 56)
+                                    }
+                                }
+                            }
+                            .background(Color.groveCardBackground)
+                            .clipShape(RoundedRectangle(cornerRadius: 12))
+                        }
+                    }
+
+                    Spacer(minLength: 40)
+                }
+                .padding()
+            }
+            .scrollContentBackground(.hidden)
+            .background(Color.groveBackground.ignoresSafeArea())
+            .navigationTitle("Edit Template")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") {
+                        dismiss()
+                    }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Save") {
+                        saveTemplate()
+                    }
+                    .fontWeight(.semibold)
+                    .disabled(trimmedName.isEmpty || nameAlreadyExists)
+                }
+            }
+            .sheet(isPresented: $showingExercisePicker) {
+                ExercisePickerView(
+                    selectedExercises: $selectedExercises,
+                    filterCategory: template.category
+                )
+            }
+            .onAppear {
+                selectedExercises = template.exerciseIDs.compactMap { id in
+                    allExercises.first { $0.id == id }
+                }
+                refreshSuggestions()
+            }
+        }
+    }
+
+    private func saveTemplate() {
+        template.name = trimmedName.isEmpty ? template.category.rawValue : trimmedName
+        template.exerciseIDs = selectedExercises.map { $0.id }
         dismiss()
     }
 }
