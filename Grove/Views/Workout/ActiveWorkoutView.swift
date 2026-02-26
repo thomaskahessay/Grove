@@ -15,6 +15,7 @@ struct ActiveWorkoutView: View {
     @State private var restTimerActive = false
     @State private var restTimerDuration: Int = 90 // Default 90 seconds
     @State private var exerciseNameVisible = true
+    @State private var keyboardVisible = false
 
     private var exercises: [ExerciseLog] {
         workout.exercises.sorted { $0.orderIndex < $1.orderIndex }
@@ -146,8 +147,18 @@ struct ActiveWorkoutView: View {
             }
             .tabViewStyle(.page(indexDisplayMode: .never))
 
-            // Navigation buttons
-            navigationButtons
+            // Navigation buttons (hidden when keyboard is showing)
+            if !keyboardVisible {
+                navigationButtons
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
+        }
+        .animation(.spring(response: 0.3, dampingFraction: 0.85), value: keyboardVisible)
+        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { _ in
+            keyboardVisible = true
+        }
+        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { _ in
+            keyboardVisible = false
         }
     }
 
@@ -368,6 +379,8 @@ struct ExerciseFullScreenCard: View {
     let onStartTimer: () -> Void
     var onNameVisibilityChanged: ((Bool) -> Void)? = nil
 
+    @State private var focusedSetID: UUID?
+
     private var sortedSets: [SetLog] {
         exerciseLog.sets.sorted { $0.setNumber < $1.setNumber }
     }
@@ -377,115 +390,128 @@ struct ExerciseFullScreenCard: View {
     }
 
     var body: some View {
-        ScrollView {
-            VStack(spacing: 24) {
-                // Exercise header
-                VStack(spacing: 8) {
-                    Text(exerciseLog.exercise?.name ?? "Exercise")
-                        .font(.title)
-                        .fontWeight(.bold)
-                        .foregroundStyle(Color.groveText)
-                        .multilineTextAlignment(.center)
-                        .onScrollVisibilityChange { visible in
-                            onNameVisibilityChanged?(visible)
-                        }
-
-                    Text(exerciseLog.exercise?.muscleGroup.rawValue ?? "")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-
-                    // Set progress bar
-                    HStack(spacing: 8) {
-                        let completed = sortedSets.filter(\.isCompleted).count
-                        let total = sortedSets.count
-
-                        GeometryReader { geo in
-                            Capsule()
-                                .fill(Color.groveWarmSand.opacity(0.3))
-                                .overlay(alignment: .leading) {
-                                    Capsule()
-                                        .fill(Color.groveSage)
-                                        .frame(width: total > 0 ? geo.size.width * CGFloat(completed) / CGFloat(total) : 0)
-                                        .animation(.easeInOut(duration: 0.3), value: completed)
-                                }
-                        }
-                        .frame(width: 120, height: 6)
-
-                        Text("\(sortedSets.filter(\.isCompleted).count)/\(sortedSets.count)")
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
-                    }
-                    .padding(.top, 4)
-                }
-                .padding(.top, 20)
-
-                // Sets
-                VStack(spacing: 12) {
-                    ForEach(Array(sortedSets.enumerated()), id: \.element.id) { index, setLog in
-                        SetRowView(
-                            setLog: setLog,
-                            setNumber: index + 1,
-                            onComplete: onStartTimer,
-                            onRemove: sortedSets.count > 1 ? {
-                                removeSet(setLog)
-                            } : nil,
-                            onWeightChanged: index == 0 ? { newWeight in
-                                autofillWeight(newWeight)
-                            } : nil,
-                            onRepsChanged: index == 0 ? { newReps in
-                                autofillReps(newReps)
-                            } : nil,
-                            onSetStatusChanged: {
-                                updateExerciseStatus()
+        ScrollViewReader { proxy in
+            ScrollView {
+                VStack(spacing: 24) {
+                    // Exercise header
+                    VStack(spacing: 8) {
+                        Text(exerciseLog.exercise?.name ?? "Exercise")
+                            .font(.title)
+                            .fontWeight(.bold)
+                            .foregroundStyle(Color.groveText)
+                            .multilineTextAlignment(.center)
+                            .onScrollVisibilityChange { visible in
+                                onNameVisibilityChanged?(visible)
                             }
-                        )
-                    }
 
-                    // Add set button
-                    Button {
-                        addSet()
-                    } label: {
-                        HStack {
-                            Image(systemName: "plus")
-                            Text("Add Set")
+                        Text(exerciseLog.exercise?.muscleGroup.rawValue ?? "")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+
+                        // Set progress bar
+                        HStack(spacing: 8) {
+                            let completed = sortedSets.filter(\.isCompleted).count
+                            let total = sortedSets.count
+
+                            GeometryReader { geo in
+                                Capsule()
+                                    .fill(Color.groveWarmSand.opacity(0.3))
+                                    .overlay(alignment: .leading) {
+                                        Capsule()
+                                            .fill(Color.groveSage)
+                                            .frame(width: total > 0 ? geo.size.width * CGFloat(completed) / CGFloat(total) : 0)
+                                            .animation(.easeInOut(duration: 0.3), value: completed)
+                                    }
+                            }
+                            .frame(width: 120, height: 6)
+
+                            Text("\(sortedSets.filter(\.isCompleted).count)/\(sortedSets.count)")
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
                         }
-                        .font(.subheadline)
-                        .foregroundStyle(Color.groveSage)
-                        .padding(.vertical, 12)
-                        .frame(maxWidth: .infinity)
-                        .background(Color.groveCardBackground)
-                        .clipShape(RoundedRectangle(cornerRadius: 10))
+                        .padding(.top, 4)
                     }
-                    .buttonStyle(.plain)
-                }
-                .padding(.horizontal)
+                    .padding(.top, 20)
 
-                // Skip/Unskip exercise button
-                if exerciseLog.status == .skipped {
-                    Button {
-                        exerciseLog.status = .planned
-                    } label: {
-                        Text("Unskip Exercise")
+                    // Sets
+                    VStack(spacing: 12) {
+                        ForEach(Array(sortedSets.enumerated()), id: \.element.id) { index, setLog in
+                            SetRowView(
+                                setLog: setLog,
+                                setNumber: index + 1,
+                                onComplete: onStartTimer,
+                                onRemove: sortedSets.count > 1 ? {
+                                    removeSet(setLog)
+                                } : nil,
+                                onWeightChanged: index == 0 ? { newWeight in
+                                    autofillWeight(newWeight)
+                                } : nil,
+                                onRepsChanged: index == 0 ? { newReps in
+                                    autofillReps(newReps)
+                                } : nil,
+                                onSetStatusChanged: {
+                                    updateExerciseStatus()
+                                },
+                                onFocused: {
+                                    focusedSetID = setLog.id
+                                }
+                            )
+                            .id(setLog.id)
+                        }
+
+                        // Add set button
+                        Button {
+                            addSet()
+                        } label: {
+                            HStack {
+                                Image(systemName: "plus")
+                                Text("Add Set")
+                            }
                             .font(.subheadline)
                             .foregroundStyle(Color.groveSage)
+                            .padding(.vertical, 12)
+                            .frame(maxWidth: .infinity)
+                            .background(Color.groveCardBackground)
+                            .clipShape(RoundedRectangle(cornerRadius: 10))
+                        }
+                        .buttonStyle(.plain)
                     }
-                } else {
-                    Button {
-                        exerciseLog.status = .skipped
-                    } label: {
-                        Text("Skip Exercise")
-                            .font(.subheadline)
-                            .foregroundStyle(Color.groveMutedRust)
+                    .padding(.horizontal)
+
+                    // Skip/Unskip exercise button
+                    if exerciseLog.status == .skipped {
+                        Button {
+                            exerciseLog.status = .planned
+                        } label: {
+                            Text("Unskip Exercise")
+                                .font(.subheadline)
+                                .foregroundStyle(Color.groveSage)
+                        }
+                    } else {
+                        Button {
+                            exerciseLog.status = .skipped
+                        } label: {
+                            Text("Skip Exercise")
+                                .font(.subheadline)
+                                .foregroundStyle(Color.groveMutedRust)
+                        }
+                    }
+
+                }
+                .padding(.bottom, 16)
+            }
+            .scrollBounceBehavior(.basedOnSize)
+            .scrollDismissesKeyboard(.interactively)
+            .onTapGesture {
+                UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+            }
+            .onChange(of: focusedSetID) { _, newID in
+                if let newID {
+                    withAnimation(.easeInOut(duration: 0.25)) {
+                        proxy.scrollTo(newID, anchor: .center)
                     }
                 }
-
             }
-            .padding(.bottom, 16)
-        }
-        .scrollBounceBehavior(.basedOnSize)
-        .scrollDismissesKeyboard(.immediately)
-        .onTapGesture {
-            UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
         }
     }
 
@@ -552,6 +578,7 @@ struct SetRowView: View {
     var onWeightChanged: ((Double?) -> Void)? = nil
     var onRepsChanged: ((Int?) -> Void)? = nil
     var onSetStatusChanged: (() -> Void)? = nil
+    var onFocused: (() -> Void)? = nil
 
     @State private var weightText: String = ""
     @State private var repsText: String = ""
@@ -597,7 +624,8 @@ struct SetRowView: View {
                         .focused($weightFocused)
                         .onSubmit { syncWeightFromText() }
                         .onChange(of: weightFocused) { _, focused in
-                            if !focused { syncWeightFromText() }
+                            if focused { onFocused?() }
+                            else { syncWeightFromText() }
                         }
 
                     if weightFocused {
@@ -652,7 +680,8 @@ struct SetRowView: View {
                         .focused($repsFocused)
                         .onSubmit { syncRepsFromText() }
                         .onChange(of: repsFocused) { _, focused in
-                            if !focused { syncRepsFromText() }
+                            if focused { onFocused?() }
+                            else { syncRepsFromText() }
                         }
 
                     if repsFocused {
