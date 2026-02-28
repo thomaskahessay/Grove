@@ -169,6 +169,7 @@ struct ActiveWorkoutView: View {
 
     private var lastExerciseCompleted: Bool {
         guard let lastExercise = exercises.last else { return false }
+        if lastExercise.isSkipped { return true }
         return lastExercise.sets.allSatisfy { $0.isCompleted } && !lastExercise.sets.isEmpty
     }
 
