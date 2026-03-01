@@ -72,19 +72,29 @@ class WorkoutSessionManager {
             }
         }
 
-        // Update streak (capture pre/post stage for streak moment)
+        // Capture pre-workout stage before updating streak
         let preWorkoutStage = user.map { PlantStage.from(streak: $0.currentStreak) }
-        if let user = user {
-            StreakManager.recordWorkout(for: user)
-        }
-        let postWorkoutStage = user.map { PlantStage.from(streak: $0.currentStreak) }
 
-        // Persist immediately so @Query results include this workout before
-        // HomeView.onAppear triggers recalculateStreak (which would otherwise
-        // overwrite the streak with stale query data).
+        // Persist immediately so recalculateStreak sees the new workout in its fetch
         if let context = context {
             try? context.save()
         }
+
+        // Use recalculateStreak for accuracy — recordWorkout relies on consecutiveRestDays
+        // which may be 0 when a rest day was set via the plan system rather than explicitly
+        // recorded, causing it to incorrectly reset the streak to 1.
+        if let user = user, let context = context {
+            let allWorkouts = (try? context.fetch(FetchDescriptor<Workout>())) ?? []
+            let completedWorkouts = allWorkouts.filter { $0.completedAt != nil }
+            let allPlans = (try? context.fetch(FetchDescriptor<WorkoutPlan>())) ?? []
+            StreakManager.recalculateStreak(for: user, workouts: completedWorkouts, plans: allPlans)
+            if user.currentStreak > 0 {
+                user.isStreakWilted = false
+            }
+            user.lastWorkoutDate = Calendar.current.startOfDay(for: Date())
+        }
+
+        let postWorkoutStage = user.map { PlantStage.from(streak: $0.currentStreak) }
 
         // Build streak moment data
         if let pre = preWorkoutStage, let post = postWorkoutStage, let user = user {
