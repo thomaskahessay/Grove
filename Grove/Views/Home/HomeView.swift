@@ -184,8 +184,9 @@ struct HomeView: View {
                                 .foregroundStyle(.tertiary)
                         }
                         .padding(12)
-                        .background(Color.groveCardBackground)
-                        .clipShape(RoundedRectangle(cornerRadius: 10))
+                        .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 10))
+                        .shadow(color: .black.opacity(0.07), radius: 10, y: 3)
+                        .contentShape(RoundedRectangle(cornerRadius: 10))
                     }
                     .buttonStyle(.plain)
 
@@ -334,9 +335,8 @@ struct TodayWorkoutCard: View {
             .buttonStyle(.primary)
         }
         .padding(20)
-        .background(Color.groveCardBackground)
-        .clipShape(RoundedRectangle(cornerRadius: 16))
-        .shadow(color: .black.opacity(0.05), radius: 10, y: 4)
+        .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 16))
+        .shadow(color: .black.opacity(0.07), radius: 10, y: 3)
     }
 }
 
@@ -364,8 +364,8 @@ struct EmptyTodayCard: View {
         }
         .padding(16)
         .frame(maxWidth: .infinity)
-        .background(Color.groveCardBackground)
-        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 12))
+        .shadow(color: .black.opacity(0.07), radius: 10, y: 3)
     }
 }
 
@@ -407,8 +407,8 @@ struct NextWorkoutCard: View {
         }
         .padding(16)
         .frame(maxWidth: .infinity)
-        .background(Color.groveCardBackground)
-        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .glassEffect(.regular.tint(Color.groveTerracotta.opacity(0.08)), in: RoundedRectangle(cornerRadius: 12))
+        .shadow(color: .black.opacity(0.07), radius: 10, y: 3)
     }
 }
 
@@ -436,8 +436,8 @@ struct RestDayCard: View {
         }
         .padding(16)
         .frame(maxWidth: .infinity)
-        .background(Color.groveCardBackground)
-        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .glassEffect(.regular.tint(Color.groveTerracotta.opacity(0.08)), in: RoundedRectangle(cornerRadius: 12))
+        .shadow(color: .black.opacity(0.07), radius: 10, y: 3)
     }
 }
 
@@ -472,8 +472,8 @@ struct CompletedTodayCard: View {
             upNextSection
         }
         .padding(16)
-        .background(Color.groveCardBackground)
-        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 12))
+        .shadow(color: .black.opacity(0.07), radius: 10, y: 3)
     }
 
     @ViewBuilder
@@ -591,8 +591,8 @@ struct RecentWorkoutsSection: View {
                     }
                 }
             }
-            .background(Color.groveCardBackground)
-            .clipShape(RoundedRectangle(cornerRadius: 12))
+            .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 12))
+            .shadow(color: .black.opacity(0.07), radius: 10, y: 3)
         }
     }
 }
