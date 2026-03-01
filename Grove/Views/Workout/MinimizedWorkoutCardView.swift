@@ -4,34 +4,44 @@ struct MinimizedWorkoutCardView: View {
     @Environment(WorkoutSessionManager.self) private var sessionManager
 
     var body: some View {
-        HStack(spacing: 12) {
-            // Workout indicator
-            Circle()
-                .fill(Color.groveSage)
-                .frame(width: 8, height: 8)
+        VStack(spacing: 0) {
+            // Progress bar
+            GeometryReader { geo in
+                ZStack(alignment: .leading) {
+                    Color.clear
+                    Capsule()
+                        .fill(Color.groveSage)
+                        .frame(width: geo.size.width * sessionManager.workoutProgressFraction)
+                        .animation(.spring(response: 0.4, dampingFraction: 0.8), value: sessionManager.workoutProgressFraction)
+                }
+            }
+            .frame(height: 3)
+            .background(Color.groveSage.opacity(0.15))
+            .clipShape(Capsule())
 
-            // Workout info
-            VStack(alignment: .leading, spacing: 2) {
+            HStack(spacing: 12) {
+                // Workout indicator
+                Circle()
+                    .fill(Color.groveSage)
+                    .frame(width: 8, height: 8)
+
+                // Workout name
                 Text(sessionManager.activeWorkout?.name ?? "Workout")
                     .font(.subheadline)
                     .fontWeight(.semibold)
                     .foregroundStyle(Color.groveText)
 
-                Text(sessionManager.workoutProgress)
+                Spacer()
+
+                // Expand indicator
+                Image(systemName: "chevron.up")
                     .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .fontWeight(.semibold)
+                    .foregroundStyle(Color.groveSage)
             }
-
-            Spacer()
-
-            // Expand indicator
-            Image(systemName: "chevron.up")
-                .font(.caption)
-                .fontWeight(.semibold)
-                .foregroundStyle(Color.groveSage)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 12)
         .background(.ultraThinMaterial)
         .clipShape(RoundedRectangle(cornerRadius: 16))
         .overlay(
@@ -40,15 +50,16 @@ struct MinimizedWorkoutCardView: View {
         )
         .shadow(color: .black.opacity(0.1), radius: 8, y: 4)
         .onTapGesture {
-            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+            withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
                 sessionManager.expandWorkout()
             }
         }
         .gesture(
-            DragGesture(minimumDistance: 20)
+            DragGesture(minimumDistance: 10)
                 .onEnded { value in
-                    if value.translation.height < -30 {
-                        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                    let velocity = value.predictedEndTranslation.height
+                    if value.translation.height < -20 || velocity < -200 {
+                        withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
                             sessionManager.expandWorkout()
                         }
                     }

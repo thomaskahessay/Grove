@@ -16,6 +16,7 @@ struct ActiveWorkoutView: View {
     @State private var restTimerDuration: Int = 90 // Default 90 seconds
     @State private var exerciseNameVisible = true
     @State private var keyboardVisible = false
+    @State private var dragOffset: CGFloat = 0
 
     private var exercises: [ExerciseLog] {
         workout.exercises.sorted { $0.orderIndex < $1.orderIndex }
@@ -95,12 +96,25 @@ struct ActiveWorkoutView: View {
             .sheet(isPresented: $showingAddExercise) {
                 AddExerciseToWorkoutView(workout: workout)
             }
+            .offset(y: dragOffset)
             .gesture(
-                DragGesture(minimumDistance: 50)
+                DragGesture(minimumDistance: 20)
+                    .onChanged { value in
+                        let dy = value.translation.height
+                        let dx = value.translation.width
+                        guard dy > abs(dx) else { return }
+                        dragOffset = dy * 0.6
+                    }
                     .onEnded { value in
-                        if value.translation.height > 100 {
-                            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                        let velocity = value.predictedEndTranslation.height
+                        if value.translation.height > 80 || velocity > 300 {
+                            withAnimation(.spring(response: 0.35, dampingFraction: 0.9)) {
                                 sessionManager.minimizeWorkout()
+                            }
+                            dragOffset = 0
+                        } else {
+                            withAnimation(.spring(response: 0.3, dampingFraction: 0.75)) {
+                                dragOffset = 0
                             }
                         }
                     }
@@ -169,7 +183,7 @@ struct ActiveWorkoutView: View {
 
     private var lastExerciseCompleted: Bool {
         guard let lastExercise = exercises.last else { return false }
-        if lastExercise.isSkipped { return true }
+        if lastExercise.status == .skipped { return true }
         return lastExercise.sets.allSatisfy { $0.isCompleted } && !lastExercise.sets.isEmpty
     }
 

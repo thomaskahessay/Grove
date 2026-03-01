@@ -33,6 +33,12 @@ class WorkoutSessionManager {
         return "\(completed)/\(total) exercises"
     }
 
+    var workoutProgressFraction: Double {
+        guard let workout = activeWorkout, workout.exercises.count > 0 else { return 0 }
+        let completed = workout.exercises.filter { $0.status == .completed || $0.status == .skipped }.count
+        return Double(completed) / Double(workout.exercises.count)
+    }
+
     func startWorkout(_ workout: Workout) {
         activeWorkout = workout
         isMinimized = false
