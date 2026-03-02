@@ -170,8 +170,9 @@ class Workout {
   - Minimize workout to floating card (swipe down or button)
   - Exercise auto-completes when all sets marked done
 - [x] Minimized workout card (MinimizedWorkoutCardView.swift)
-  - Floating card above tab bar showing workout name + progress
-  - Tap or swipe up to return to full workout
+  - Floating card above tab bar showing workout name + progress bar (fills as exercises complete/skip)
+  - Tap or swipe up to return to full workout (lower minimum distance + velocity-based trigger)
+  - Live drag tracking on swipe-down gesture with resistance and velocity threshold
   - WorkoutSessionManager for app-wide active workout state
 - [x] Profile view with light/dark mode toggle
 
@@ -182,7 +183,7 @@ class Workout {
   - Week navigator (< This Week >) with chevron buttons
   - Summary bar (X workouts, Y rest days, Z unplanned)
   - Tap day to open DayPlanSheet (completed days locked from editing)
-  - Completed days show checkmark icon (including today)
+  - Completed days show category icon (filled green) instead of checkmark
 - [x] Day plan sheet (DayPlanSheet.swift)
   - Assign workout template or rest day to any date
   - Rest day toggle with moon icon
@@ -207,6 +208,7 @@ class Workout {
   - Chevrons and swipe navigate months when in month mode
   - Week↔month offset sync keeps displayed time range consistent when toggling
   - Same tap behavior and status indicators in both views
+  - Completed days show category icon (filled green) matching planned day icon
 - [x] Streak tracking logic (StreakManager.swift)
   - recordWorkout: increments streak; user has until end of next calendar day to act
   - recordRestDay: preserves streak without incrementing (max 3 consecutive)
@@ -224,6 +226,7 @@ class Workout {
   - Start workout from today's plan card
   - App logo in navigation bar (replaces text)
   - Recent workouts tappable → WorkoutDetailView
+  - All cards use glassEffect (liquid glass) with shadow for light mode visibility
 
 **Phase 3b: Workout History & Auto-fill**
 - [x] WorkoutDetailView (Views/Workout/WorkoutDetailView.swift)
@@ -242,10 +245,13 @@ class Workout {
 - [x] Day plan sheet improvements
   - When template selected, shows exercise list instead of categories
   - "Change" button to switch back to template picker
+  - Templates shown only after category is selected (not before)
+  - Edit template support (rename, add/remove exercises from existing templates)
 - [x] Active workout improvements
   - End button uses Menu dropdown (Save/Discard options appear below button)
   - Discard workout option deletes all workout data without saving
   - WorkoutSessionManager.discardWorkout() handles cleanup
+  - Done button correctly appears when last exercise is skipped
 
 **Phase 3c: Progress Charts**
 - [x] Progress charts (ProgressView.swift)
@@ -256,7 +262,10 @@ class Workout {
   - Swift Charts with line + area + point marks
   - Interactive tooltips on tap/drag showing value and date
   - Stats card: Current, Change, Best, Max (highest weight ever)
-  - Pill-style filter buttons with subtle background
+  - Full-width filter buttons with glass styling (replaces pill-style)
+  - Recent workouts section for selected exercise
+  - Floating segmented picker (Exercises / Achievements): no background by default; ultraThinMaterial fades in smoothly when content scrolls behind it; resets on tab switch
+  - glassEffect applied to exercise header, stats card, recent workouts section, and tooltip
   - Empty states for no data
 
 **Phase 3d: Personal Records**
@@ -294,6 +303,7 @@ class Workout {
   - Progress bars for locked achievements
   - Completed achievements: green filled icon + checkmark badge
   - Earned date display
+  - glassEffect card styling throughout
 - [x] Achievements in Progress tab (segmented picker: Exercises / Achievements)
 - [x] Latest achievement card on Home screen (links to gallery)
 - [x] Workout linked to user on completion (WorkoutSessionManager.endWorkout)
@@ -307,7 +317,9 @@ class Workout {
   - Records previousStreak on streak reset, sets wiltedAtStage/isStreakWilted on breaks
 - [x] PlantCanvasRenderer (Components/StreakPlant/PlantCanvasRenderer.swift)
   - SwiftUI Canvas API with Bezier curves for all 5 stages + wilted variants
-  - Sage green leaves, terracotta trunk, warm sand soil
+  - Height-based quadratic sway: base stays planted, flex increases upward
+  - Gradient fills, teardrop leaves, curved trunks with bark texture
+  - Roots, fruits with highlights, 5-petal flowers, layered soil, multi-shade canopy
   - swayOffset parameter for ambient leaf animation
 - [x] StreakPlantView (Components/StreakPlant/StreakPlantView.swift)
   - TimelineView(.animation) for efficient ambient sway (sin wave)
@@ -373,6 +385,9 @@ class Workout {
 - [x] Welcome message width — added .frame(maxWidth: .infinity, alignment: .leading) to match card widths
 - [x] Home nav bar clutter — removed Grove logo from .principal and redundant profile button from toolbar
 - [x] Profile background grey in light mode — added .scrollContentBackground(.hidden) + .background(Color.groveBackground)
+- [x] Done button missing when last exercise skipped — fixed condition in ActiveWorkoutView
+- [x] Streak not updating after workout following a rest day — replaced recordWorkout with recalculateStreak in endWorkout(); recordWorkout relied on consecutiveRestDays which was 0 when rest days came from the plan system
+- [x] Stat cards unequal heights in workout detail/summary — fixed with frame alignment in WorkoutDetailView and WorkoutSummaryView
 
 ### SwiftData Gotchas
 - **Never use `.rawValue` in `#Predicate`** — SwiftData stores enums natively; `.rawValue` causes runtime crash
