@@ -61,9 +61,14 @@ struct OnboardingContainerView: View {
         }
         .animation(.easeInOut(duration: 0.35), value: currentStep)
         .onAppear {
-            // Resume mid-onboarding: user signed in but hasn't completed setup
-            if let user = users.first, user.onboardingCompletedAt == nil {
-                currentStep = .profileSetup
+            if let user = users.first {
+                if (user.appleUserID.hasPrefix("debug-") || user.appleUserID.hasPrefix("signed-out-")) {
+                    // User needs to link real Apple ID — skip to sign-in only
+                    currentStep = .signIn
+                } else if user.onboardingCompletedAt == nil {
+                    // Resume mid-onboarding: user signed in but hasn't completed setup
+                    currentStep = .profileSetup
+                }
             }
         }
         .onChange(of: users.count) { _, newCount in

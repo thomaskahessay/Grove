@@ -67,9 +67,11 @@ struct CalendarStripView: View {
 
     private func handleDayTap(_ date: Date) {
         let dayPlan = plan(for: date)
-        let isPast = date < calendar.startOfDay(for: Date())
+        let today = calendar.startOfDay(for: Date())
+        let isPast = date < today
 
         if isPast {
+            // Past days: only allow viewing completed workouts, no planning
             if let completedWorkout = dayPlan?.completedWorkout {
                 selectedWorkoutForDetail = completedWorkout
             }

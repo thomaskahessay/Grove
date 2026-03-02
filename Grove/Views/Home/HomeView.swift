@@ -228,70 +228,12 @@ struct HomeView: View {
 
     private func startTodaysWorkout(plan: WorkoutPlan) {
         guard let template = plan.template else { return }
-
-        let exercises = template.exerciseIDs.compactMap { id in
-            allExercises.first { $0.id == id }
-        }
-        guard !exercises.isEmpty else { return }
-
-        let defaultSets = template.defaultSets
-        let defaultReps = template.defaultReps
-
-        let workout = Workout(name: template.name, templateUsed: template)
-        modelContext.insert(workout)
-
-        for (index, exercise) in exercises.enumerated() {
-            let lastSets = getLastSetsForExercise(exercise)
-            let numberOfSets = lastSets.isEmpty ? defaultSets : lastSets.count
-
-            let exerciseLog = ExerciseLog(
-                exercise: exercise,
-                orderIndex: index,
-                targetSets: numberOfSets,
-                targetReps: defaultReps
-            )
-            exerciseLog.workout = workout
-            modelContext.insert(exerciseLog)
-
-            for setNumber in 1...numberOfSets {
-                let lastSetData = lastSets.indices.contains(setNumber - 1) ? lastSets[setNumber - 1] : nil
-                let setLog = SetLog(
-                    setNumber: setNumber,
-                    weight: lastSetData?.weight,
-                    reps: lastSetData?.reps
-                )
-                setLog.exerciseLog = exerciseLog
-                exerciseLog.sets.append(setLog)
-                modelContext.insert(setLog)
-            }
-        }
-
-        template.usageCount += 1
-        template.lastUsedDate = Date()
-
-        sessionManager.startWorkout(workout)
-    }
-
-    /// Gets the most recent completed sets for an exercise (fetches on-demand to avoid memory bloat)
-    private func getLastSetsForExercise(_ exercise: Exercise) -> [(weight: Double?, reps: Int?)] {
-        // Query only completed exercise logs for this specific exercise
-        let exerciseID = exercise.id
-        let descriptor = FetchDescriptor<ExerciseLog>(
-            predicate: #Predicate<ExerciseLog> { log in
-                log.exercise?.id == exerciseID
-            },
-            sortBy: [SortDescriptor(\.workout?.completedAt, order: .reverse)]
+        WorkoutSessionManager.createAndStartWorkout(
+            from: template,
+            allExercises: allExercises,
+            context: modelContext,
+            sessionManager: sessionManager
         )
-
-        guard let logs = try? modelContext.fetch(descriptor) else { return [] }
-
-        // Find the first log from a completed workout
-        guard let lastLog = logs.first(where: { $0.workout?.completedAt != nil }) else { return [] }
-
-        return lastLog.sets
-            .filter { $0.isCompleted }
-            .sorted { $0.setNumber < $1.setNumber }
-            .map { (weight: $0.weight, reps: $0.reps) }
     }
 }
 

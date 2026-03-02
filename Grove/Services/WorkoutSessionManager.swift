@@ -166,6 +166,78 @@ class WorkoutSessionManager {
         }
     }
 
+    // MARK: - Shared Workout Creation
+
+    /// Creates and starts a workout from a template, with auto-fill from last session.
+    /// Used by FAB menu, HomeView today card, and QuickStartSection template buttons.
+    static func createAndStartWorkout(
+        from template: WorkoutTemplate,
+        allExercises: [Exercise],
+        context: ModelContext,
+        sessionManager: WorkoutSessionManager
+    ) {
+        let exercises = template.exerciseIDs.compactMap { id in
+            allExercises.first { $0.id == id }
+        }
+        guard !exercises.isEmpty else { return }
+
+        let defaultSets = template.defaultSets
+        let defaultReps = template.defaultReps
+
+        let workout = Workout(name: template.name, templateUsed: template)
+        context.insert(workout)
+
+        for (index, exercise) in exercises.enumerated() {
+            let lastSets = getLastSetsForExercise(exercise, context: context)
+            let numberOfSets = lastSets.isEmpty ? defaultSets : lastSets.count
+
+            let exerciseLog = ExerciseLog(
+                exercise: exercise,
+                orderIndex: index,
+                targetSets: numberOfSets,
+                targetReps: defaultReps
+            )
+            exerciseLog.workout = workout
+            context.insert(exerciseLog)
+
+            for setNumber in 1...numberOfSets {
+                let lastSetData = lastSets.indices.contains(setNumber - 1) ? lastSets[setNumber - 1] : nil
+                let setLog = SetLog(
+                    setNumber: setNumber,
+                    weight: lastSetData?.weight,
+                    reps: lastSetData?.reps
+                )
+                setLog.exerciseLog = exerciseLog
+                exerciseLog.sets.append(setLog)
+                context.insert(setLog)
+            }
+        }
+
+        template.usageCount += 1
+        template.lastUsedDate = Date()
+
+        sessionManager.startWorkout(workout)
+    }
+
+    /// Gets the most recent completed sets for an exercise from prior workouts.
+    private static func getLastSetsForExercise(_ exercise: Exercise, context: ModelContext) -> [(weight: Double?, reps: Int?)] {
+        let exerciseID = exercise.id
+        let descriptor = FetchDescriptor<ExerciseLog>(
+            predicate: #Predicate<ExerciseLog> { log in
+                log.exercise?.id == exerciseID
+            },
+            sortBy: [SortDescriptor(\.workout?.completedAt, order: .reverse)]
+        )
+
+        guard let logs = try? context.fetch(descriptor) else { return [] }
+        guard let lastLog = logs.first(where: { $0.workout?.completedAt != nil }) else { return [] }
+
+        return lastLog.sets
+            .filter { $0.isCompleted }
+            .sorted { $0.setNumber < $1.setNumber }
+            .map { (weight: $0.weight, reps: $0.reps) }
+    }
+
     func discardWorkout(context: ModelContext) {
         guard let workout = activeWorkout else { return }
 

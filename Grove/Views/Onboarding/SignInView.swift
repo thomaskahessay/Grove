@@ -71,6 +71,8 @@ struct SignInView: View {
         }
     }
 
+    @Query private var existingUsers: [User]
+
     private func handleSignIn(result: Result<ASAuthorization, Error>) {
         switch result {
         case .success(let authorization):
@@ -86,11 +88,22 @@ struct SignInView: View {
                 .compactMap { $0 }
                 .joined(separator: " ")
 
-            let user = User(appleUserID: userID)
-            if !displayName.isEmpty {
-                user.displayName = displayName
+            if let existingUser = existingUsers.first {
+                // Link existing user to Apple ID (preserves all data)
+                existingUser.appleUserID = userID
+                if existingUser.onboardingCompletedAt == nil {
+                    existingUser.onboardingCompletedAt = Date()
+                }
+                if !displayName.isEmpty && existingUser.displayName == nil {
+                    existingUser.displayName = displayName
+                }
+            } else {
+                let user = User(appleUserID: userID)
+                if !displayName.isEmpty {
+                    user.displayName = displayName
+                }
+                modelContext.insert(user)
             }
-            modelContext.insert(user)
 
             onSignInComplete()
 

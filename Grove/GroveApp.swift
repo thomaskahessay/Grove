@@ -18,7 +18,7 @@ struct GroveApp: App {
                 Achievement.self,
                 PersonalRecord.self
             ])
-            let modelConfiguration = ModelConfiguration(schema: schema)
+            let modelConfiguration = ModelConfiguration(schema: schema, cloudKitDatabase: .none)
             modelContainer = try ModelContainer(for: schema, configurations: [modelConfiguration])
 
             // Seed built-in exercises on first launch

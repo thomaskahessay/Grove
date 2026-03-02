@@ -172,7 +172,7 @@ extension Color {
 
 **Apply `.glassEffect()` to:**
 - Tab bar and navigation elements
-- Floating action buttons (start workout, add exercise)
+- Floating action button / context menu (start workout, add to plan, new workout)
 - Bottom sheets and modal backgrounds
 - Control buttons during active workout
 

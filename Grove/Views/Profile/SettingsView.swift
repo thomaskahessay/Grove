@@ -12,6 +12,7 @@ struct SettingsView: View {
     @State private var showingPhotoPicker = false
     @State private var showingCamera = false
     @State private var showingDeleteConfirm = false
+    @State private var showingSignOutConfirm = false
 
     private var user: User? { users.first }
 
@@ -56,6 +57,17 @@ struct SettingsView: View {
                 user?.profileImageData = processImage(image)
                 cameraImage = nil
             }
+        }
+        .alert("Sign Out?", isPresented: $showingSignOutConfirm) {
+            Button("Sign Out", role: .destructive) {
+                if let user = user {
+                    user.appleUserID = "signed-out-\(UUID().uuidString)"
+                    user.onboardingCompletedAt = nil
+                }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("You'll be signed out and returned to the sign-in screen. Your data will be kept and linked when you sign back in.")
         }
         .alert("Delete Account?", isPresented: $showingDeleteConfirm) {
             Button("Delete", role: .destructive) {
@@ -301,6 +313,12 @@ struct SettingsView: View {
                     .foregroundStyle(.secondary)
             }
             .foregroundStyle(.secondary)
+
+            Button {
+                showingSignOutConfirm = true
+            } label: {
+                Label("Sign Out", systemImage: "rectangle.portrait.and.arrow.right")
+            }
 
             Button(role: .destructive) {
                 showingDeleteConfirm = true

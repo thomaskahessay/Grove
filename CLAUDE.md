@@ -50,7 +50,7 @@ Grove/
 │   ├── PRDetectionService.swift   # PR detection after workout completion
 │   ├── AchievementService.swift   # Achievement detection + progress tracking
 │   ├── MotivationalMessages.swift # Plant-themed motivational messages
-│   └── WorkoutSessionManager.swift # @MainActor @Observable - active workout + streak moment state
+│   └── WorkoutSessionManager.swift # @MainActor @Observable - active workout + streak moment state + shared createAndStartWorkout helper
 ├── Views/
 │   ├── Onboarding/
 │   │   ├── SignInView.swift
@@ -152,7 +152,7 @@ class Workout {
   - "Your Templates" section showing saved user templates (tap to load exercises)
   - Suggested exercises based on category (tap to add, stable until refresh)
   - ExercisePickerView modal for browsing full library
-  - FAB (floating action button) with liquid glass styling
+  - FAB context menu (Menu with contextual options: Start [planned template], Add to Plan, New Workout)
   - Quick start buttons with category pre-selection
   - Categories: Push, Pull, Legs, Upper, Lower, Full Body, Chest & Triceps, Back & Biceps, Shoulders, Custom
   - Custom category uses slider icon (consistent across app)
@@ -381,6 +381,7 @@ class Workout {
 - [x] Workouts not linked to user — workout.user was never set at creation time; now set in endWorkout()
 - [x] WorkoutSessionManager concurrency — added @MainActor for Swift 6 strict concurrency
 - [x] FAB visible on all tabs — now hidden on Progress/Social/Profile; only shown on Home tab via TabView(selection:)
+- [x] FAB refactored to context Menu — shows "Start [Template]" (when today has actionable plan), "Add to Plan", "New Workout"; workout-from-template logic consolidated into WorkoutSessionManager.createAndStartWorkout()
 - [x] Streak badge not showing on first login — added .navigationTitle("") to force nav bar render
 - [x] Welcome message width — added .frame(maxWidth: .infinity, alignment: .leading) to match card widths
 - [x] Home nav bar clutter — removed Grove logo from .principal and redundant profile button from toolbar

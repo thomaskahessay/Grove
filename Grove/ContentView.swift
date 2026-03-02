@@ -6,7 +6,9 @@ struct ContentView: View {
     @Environment(WorkoutSessionManager.self) private var sessionManager
     @Query private var users: [User]
     @Query(sort: \WorkoutPlan.date, order: .reverse) private var workoutPlans: [WorkoutPlan]
+    @Query(sort: \Exercise.name) private var allExercises: [Exercise]
     @State private var showingWorkoutCreation = false
+    @State private var showingDayPlanSheet = false
     @State private var selectedTab: Int = 0
     @AppStorage("appearanceMode") private var appearanceMode: String = "System"
 
@@ -18,9 +20,21 @@ struct ContentView: View {
         }
     }
 
+    /// Today's plan that has an unstarted workout template (not rest, not completed).
+    private var todaysActionablePlan: WorkoutPlan? {
+        let calendar = Calendar.current
+        let today = calendar.startOfDay(for: Date())
+        return workoutPlans.first { plan in
+            calendar.isDate(plan.date, inSameDayAs: today)
+            && !plan.isRestDay
+            && plan.completedWorkout == nil
+            && plan.template != nil
+        }
+    }
+
     private var isOnboardingComplete: Bool {
         guard let user = users.first else { return false }
-        return user.onboardingCompletedAt != nil
+        return user.onboardingCompletedAt != nil && !user.appleUserID.hasPrefix("debug-") && !user.appleUserID.hasPrefix("signed-out-")
     }
 
     var body: some View {
@@ -71,8 +85,31 @@ struct ContentView: View {
             if !sessionManager.hasActiveWorkout && selectedTab == 0 {
                 HStack {
                     Spacer()
-                    Button {
-                        showingWorkoutCreation = true
+                    Menu {
+                        if let plan = todaysActionablePlan, let template = plan.template {
+                            Button {
+                                WorkoutSessionManager.createAndStartWorkout(
+                                    from: template,
+                                    allExercises: allExercises,
+                                    context: modelContext,
+                                    sessionManager: sessionManager
+                                )
+                            } label: {
+                                Label("Start \(template.name)", systemImage: "play.fill")
+                            }
+                        }
+
+                        Button {
+                            showingDayPlanSheet = true
+                        } label: {
+                            Label("Add to Plan", systemImage: "calendar.badge.plus")
+                        }
+
+                        Button {
+                            showingWorkoutCreation = true
+                        } label: {
+                            Label("New Workout", systemImage: "plus.circle")
+                        }
                     } label: {
                         Image(systemName: "plus")
                             .font(.title3)
@@ -102,6 +139,12 @@ struct ContentView: View {
         }
         .sheet(isPresented: $showingWorkoutCreation) {
             WorkoutCreationView()
+        }
+        .sheet(isPresented: $showingDayPlanSheet) {
+            DayPlanSheet(
+                date: Calendar.current.startOfDay(for: Date()),
+                existingPlan: todaysActionablePlan
+            )
         }
         .fullScreenCover(
             isPresented: Binding(
