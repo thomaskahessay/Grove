@@ -82,7 +82,7 @@ private struct AchievementGalleryCard: View {
                     Image(systemName: "checkmark.circle.fill")
                         .font(.system(size: 16))
                         .foregroundStyle(Color.groveSage)
-                        .background(Circle().fill(Color.groveCardBackground).frame(width: 14, height: 14))
+                        .background(Circle().fill(Color.groveBackground).frame(width: 14, height: 14))
                         .offset(x: 2, y: 2)
                 }
             }
@@ -122,8 +122,8 @@ private struct AchievementGalleryCard: View {
             }
         }
         .padding()
-        .background(Color.groveCardBackground)
-        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 12))
+        .shadow(color: .black.opacity(0.07), radius: 10, y: 3)
         .opacity(item.isUnlocked ? 1.0 : 0.8)
     }
 }

@@ -56,7 +56,15 @@ struct ProgressView: View {
 
     var body: some View {
         NavigationStack {
-            VStack(spacing: 0) {
+            Group {
+                switch selectedTab {
+                case .exercises:
+                    exercisesContent
+                case .achievements:
+                    AchievementsGalleryView()
+                }
+            }
+            .safeAreaInset(edge: .top, spacing: 0) {
                 Picker("Tab", selection: $selectedTab) {
                     ForEach(ProgressTab.allCases, id: \.self) { tab in
                         Text(tab.rawValue).tag(tab)
@@ -64,15 +72,7 @@ struct ProgressView: View {
                 }
                 .pickerStyle(.segmented)
                 .padding(.horizontal)
-                .padding(.top, 8)
-                .padding(.bottom, 4)
-
-                switch selectedTab {
-                case .exercises:
-                    exercisesContent
-                case .achievements:
-                    AchievementsGalleryView()
-                }
+                .padding(.vertical, 8)
             }
             .background(Color.groveBackground)
             .navigationBarTitleDisplayMode(.inline)
@@ -98,6 +98,11 @@ struct ProgressView: View {
                         }
 
                         filterRow
+
+                        let recentWorkouts = recentWorkouts(for: exercise)
+                        if !recentWorkouts.isEmpty {
+                            recentWorkoutsSection(workouts: recentWorkouts, exercise: exercise)
+                        }
                     }
                 }
 
@@ -155,8 +160,8 @@ struct ProgressView: View {
                     .foregroundStyle(Color.groveSage)
             }
             .padding(16)
-            .background(Color.groveCardBackground)
-            .clipShape(RoundedRectangle(cornerRadius: 12))
+            .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 12))
+            .shadow(color: .black.opacity(0.02), radius: 10, y: 3)
         }
         .buttonStyle(.plain)
     }
@@ -203,9 +208,8 @@ struct ProgressView: View {
             .frame(maxWidth: .infinity)
             .padding(.horizontal, 16)
             .padding(.vertical, 12)
-            .background(.ultraThinMaterial)
-            .clipShape(RoundedRectangle(cornerRadius: 16))
-            .shadow(color: .black.opacity(0.05), radius: 8, y: 2)
+            .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 16))
+            .shadow(color: .black.opacity(0.07), radius: 10, y: 3)
 
             // Chart with tooltip support
             ExerciseProgressChart(
@@ -238,16 +242,17 @@ struct ProgressView: View {
                 HStack(spacing: 6) {
                     Text(selectedMetric.shortName)
                         .font(.subheadline)
-                        .fontWeight(.medium)
+                        .fontWeight(.semibold)
+                    Spacer()
                     Image(systemName: "chevron.down")
                         .font(.caption)
                 }
                 .foregroundStyle(Color.groveSage)
-                .padding(.horizontal, 14)
-                .padding(.vertical, 8)
-                .background(Color.groveSage.opacity(0.12))
-                .clipShape(Capsule())
+                .padding(.horizontal, 16)
+                .padding(.vertical, 12)
+                .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 12))
             }
+            .frame(maxWidth: .infinity)
 
             // Time range selector
             Menu {
@@ -267,18 +272,17 @@ struct ProgressView: View {
                 HStack(spacing: 6) {
                     Text(selectedTimeRange.label)
                         .font(.subheadline)
-                        .fontWeight(.medium)
+                        .fontWeight(.semibold)
+                    Spacer()
                     Image(systemName: "chevron.down")
                         .font(.caption)
                 }
                 .foregroundStyle(Color.groveSage)
-                .padding(.horizontal, 14)
-                .padding(.vertical, 8)
-                .background(Color.groveSage.opacity(0.12))
-                .clipShape(Capsule())
+                .padding(.horizontal, 16)
+                .padding(.vertical, 12)
+                .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 12))
             }
-
-            Spacer()
+            .frame(maxWidth: .infinity)
         }
     }
 
@@ -351,6 +355,81 @@ struct ProgressView: View {
         }
 
         return dataPoints.sorted { $0.date < $1.date }
+    }
+
+    private func recentWorkouts(for exercise: Exercise) -> [(workout: Workout, log: ExerciseLog)] {
+        completedWorkouts.compactMap { workout in
+            guard let log = workout.exercises.first(where: {
+                $0.exercise?.id == exercise.id && $0.status == .completed
+            }) else { return nil }
+            return (workout, log)
+        }
+        .prefix(5)
+        .map { $0 }
+    }
+
+    private func recentWorkoutsSection(workouts: [(workout: Workout, log: ExerciseLog)], exercise: Exercise) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("Recent Workouts")
+                .font(.headline)
+                .foregroundStyle(Color.groveText)
+
+            VStack(spacing: 0) {
+                ForEach(Array(workouts.enumerated()), id: \.element.workout.id) { index, item in
+                    NavigationLink(destination: WorkoutDetailView(workout: item.workout)) {
+                        HStack(spacing: 12) {
+                            Image(systemName: "checkmark.circle.fill")
+                                .font(.title3)
+                                .foregroundStyle(Color.groveSage)
+
+                            VStack(alignment: .leading, spacing: 3) {
+                                Text(item.workout.name)
+                                    .font(.subheadline)
+                                    .fontWeight(.medium)
+                                    .foregroundStyle(Color.groveText)
+
+                                let completedSets = item.log.sets.filter { $0.isCompleted }
+                                let maxWeight = completedSets.compactMap { $0.weight }.max()
+                                let setCount = completedSets.count
+
+                                HStack(spacing: 6) {
+                                    if let date = item.workout.completedAt {
+                                        Text(date, style: .date)
+                                    }
+                                    if setCount > 0 {
+                                        Text("•")
+                                        Text("\(setCount) sets")
+                                        if let weight = maxWeight {
+                                            Text("•")
+                                            Text("\(formatWeight(weight)) lbs")
+                                        }
+                                    }
+                                }
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                            }
+
+                            Spacer()
+
+                            Image(systemName: "chevron.right")
+                                .font(.caption)
+                                .foregroundStyle(.tertiary)
+                        }
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 12)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+
+                    if index < workouts.count - 1 {
+                        Divider()
+                            .padding(.leading, 48)
+                    }
+                }
+            }
+            .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 12))
+            .shadow(color: .black.opacity(0.07), radius: 10, y: 3)
+        }
     }
 
     private func getHighestWeight(for exercise: Exercise) -> Double? {
@@ -708,9 +787,8 @@ struct TooltipView: View {
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 6)
-        .background(Color.groveCardBackground)
-        .clipShape(RoundedRectangle(cornerRadius: 8))
-        .shadow(color: .black.opacity(0.1), radius: 4, y: 2)
+        .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 8))
+        .shadow(color: .black.opacity(0.07), radius: 10, y: 3)
     }
 }
 
