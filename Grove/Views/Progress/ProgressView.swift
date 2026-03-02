@@ -22,6 +22,7 @@ struct ProgressView: View {
     @State private var searchText = ""
     @State private var showingExercisePicker = false
     @State private var hasAutoSelectedExercise = false
+    @State private var pickerScrolled = false
 
     private var exercisesWithHistory: [(exercise: Exercise, count: Int)] {
         var exerciseUsage: [UUID: (exercise: Exercise, count: Int)] = [:]
@@ -61,7 +62,9 @@ struct ProgressView: View {
                 case .exercises:
                     exercisesContent
                 case .achievements:
-                    AchievementsGalleryView()
+                    AchievementsGalleryView { isScrolled in
+                        pickerScrolled = isScrolled
+                    }
                 }
             }
             .safeAreaInset(edge: .top, spacing: 0) {
@@ -73,9 +76,12 @@ struct ProgressView: View {
                 .pickerStyle(.segmented)
                 .padding(.horizontal)
                 .padding(.vertical, 8)
+                .background(pickerScrolled ? AnyShapeStyle(.ultraThinMaterial) : AnyShapeStyle(Color.clear))
+                .animation(.easeInOut(duration: 0.2), value: pickerScrolled)
             }
             .background(Color.groveBackground)
             .navigationBarTitleDisplayMode(.inline)
+            .onChange(of: selectedTab) { pickerScrolled = false }
         }
     }
 
@@ -110,6 +116,11 @@ struct ProgressView: View {
             }
             .padding(.horizontal)
             .padding(.top, 24)
+        }
+        .onScrollGeometryChange(for: Bool.self) { geo in
+            geo.contentOffset.y > 0
+        } action: { _, isScrolled in
+            pickerScrolled = isScrolled
         }
         .sheet(isPresented: $showingExercisePicker) {
             ExercisePickerSheet(

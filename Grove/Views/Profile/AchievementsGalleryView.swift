@@ -8,6 +8,7 @@ struct AchievementsGalleryView: View {
     private var currentUser: User? { users.first }
 
     @State private var progressData: [AchievementService.AchievementProgress] = []
+    var onScroll: ((Bool) -> Void)? = nil
 
     var body: some View {
         ScrollView {
@@ -19,6 +20,11 @@ struct AchievementsGalleryView: View {
                 }
             }
             .padding()
+        }
+        .onScrollGeometryChange(for: Bool.self) { geo in
+            geo.contentOffset.y > 0
+        } action: { _, isScrolled in
+            onScroll?(isScrolled)
         }
         .background(Color.groveBackground)
         .onAppear {
