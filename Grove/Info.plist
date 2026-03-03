@@ -4,5 +4,12 @@
 <dict>
 	<key>NSPhotoLibraryAddUsageDescription</key>
 	<string>Grove needs access to save your workout summary images to your photo library.</string>
+	<key>UISupportedInterfaceOrientations</key>
+	<array>
+		<string>UIInterfaceOrientationPortrait</string>
+		<string>UIInterfaceOrientationLandscapeLeft</string>
+		<string>UIInterfaceOrientationLandscapeRight</string>
+		<string>UIInterfaceOrientationPortraitUpsideDown</string>
+	</array>
 </dict>
 </plist>

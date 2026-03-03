@@ -438,9 +438,7 @@ struct ExerciseSummaryRow: View {
                 }
 
                 if exerciseLog.status != .skipped {
-                    setsSummaryText
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                    setsSummaryLine
                 }
             }
 
@@ -474,25 +472,37 @@ struct ExerciseSummaryRow: View {
         }
     }
 
-    private var setsSummaryText: Text {
+    @ViewBuilder
+    private var setsSummaryLine: some View {
         let sets = completedSets
-        guard !sets.isEmpty else {
-            return Text("No sets completed")
-        }
-
-        var result = Text("")
-        for (index, set) in sets.enumerated() {
-            if index > 0 {
-                result = result + Text(", ")
+        if sets.isEmpty {
+            Text("No sets completed")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        } else {
+            HStack(spacing: 0) {
+                ForEach(Array(sets.enumerated()), id: \.element.id) { index, set in
+                    if index > 0 {
+                        Text(", ")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    if isBestSet(set) {
+                        Image(systemName: "star.fill")
+                            .font(.caption2)
+                            .foregroundStyle(Color.groveTerracotta)
+                        Text(" \(formatSetDescription(set))")
+                            .font(.caption)
+                            .bold()
+                            .foregroundStyle(.secondary)
+                    } else {
+                        Text(formatSetDescription(set))
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
             }
-            let desc = formatSetDescription(set)
-            if isBestSet(set) {
-                result = result + Text(Image(systemName: "star.fill")).foregroundColor(Color.groveTerracotta).font(.caption2) + Text(" \(desc)").bold()
-            } else {
-                result = result + Text(desc)
-            }
         }
-        return result
     }
 
     private func formatSetDescription(_ set: SetLog) -> String {

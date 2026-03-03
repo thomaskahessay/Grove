@@ -4,6 +4,7 @@ import SwiftData
 struct WorkoutDetailView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.displayScale) private var displayScale
     let workout: Workout
 
     @State private var shareData: ShareableData?
@@ -123,8 +124,9 @@ struct WorkoutDetailView: View {
             unitLabel: unitLabel,
             colorScheme: colorScheme
         )
+        let scale = displayScale
         let renderer = ImageRenderer(content: card)
-        renderer.scale = UIScreen.main.scale
+        renderer.scale = scale
         DispatchQueue.main.async {
             if let uiImage = renderer.uiImage {
                 shareData = ShareableData(
@@ -133,6 +135,7 @@ struct WorkoutDetailView: View {
                     prSetIDs: prSetIDs,
                     unitLabel: unitLabel,
                     colorScheme: colorScheme,
+                    displayScale: scale,
                     initialImage: uiImage
                 )
             }
@@ -446,6 +449,7 @@ private struct ShareableData: Identifiable {
     let prSetIDs: Set<UUID>
     let unitLabel: String
     let colorScheme: ColorScheme
+    let displayScale: CGFloat
     let initialImage: UIImage
 }
 
@@ -542,7 +546,7 @@ private struct WorkoutShareSheet: View {
             detailed: detailed
         )
         let renderer = ImageRenderer(content: card)
-        renderer.scale = UIScreen.main.scale
+        renderer.scale = data.displayScale
         DispatchQueue.main.async {
             if let uiImage = renderer.uiImage {
                 currentImage = uiImage

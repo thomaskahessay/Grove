@@ -57,7 +57,7 @@ struct StreakDetailView: View {
                 }
 
                 // Progress bar
-                if !user.isStreakWilted, let days = daysUntilNext, let next = stage.nextStage {
+                if !user.isStreakWilted, daysUntilNext != nil, let next = stage.nextStage {
                     VStack(alignment: .leading, spacing: 8) {
                         GeometryReader { geo in
                             ZStack(alignment: .leading) {

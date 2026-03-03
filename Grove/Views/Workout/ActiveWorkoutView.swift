@@ -358,15 +358,13 @@ struct ActiveWorkoutView: View {
     }
 
     private func startTimerCountdown() {
-        Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { timer in
-            if restTimerSeconds > 0 && restTimerActive {
+        Task { @MainActor in
+            while restTimerActive && restTimerSeconds > 0 {
+                try? await Task.sleep(for: .seconds(1))
+                guard restTimerActive else { break }
                 restTimerSeconds -= 1
-            } else {
-                timer.invalidate()
-                if restTimerSeconds == 0 {
-                    restTimerActive = false
-                }
             }
+            restTimerActive = false
         }
     }
 

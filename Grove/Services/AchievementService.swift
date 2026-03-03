@@ -100,8 +100,6 @@ struct AchievementService {
         // Use fetchCount to avoid loading full object graphs into memory
         let workoutPredicate = #Predicate<Workout> { $0.completedAt != nil }
         let completedWorkoutCount = (try? context.fetchCount(FetchDescriptor<Workout>(predicate: workoutPredicate))) ?? 0
-        let prCount = (try? context.fetchCount(FetchDescriptor<PersonalRecord>())) ?? 0
-
         return AchievementType.allCases.map { type in
             let isUnlocked = unlockedMap[type] != nil
 
