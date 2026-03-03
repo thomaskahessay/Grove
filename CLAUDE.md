@@ -70,7 +70,8 @@ Grove/
 │   │   ├── ExerciseFullScreenView.swift
 │   │   ├── SetRowView.swift
 │   │   ├── WorkoutSummaryView.swift         # Post-workout stats + PR celebration
-│   │   ├── WorkoutDetailView.swift         # Past workout detail view + PR display
+│   │   ├── WorkoutDetailView.swift         # Past workout detail view + PR display + share
+│   │   ├── WorkoutShareCardView.swift     # Rendered share image (compact/detailed modes)
 │   │   └── StreakMomentView.swift          # Post-workout streak celebration screen
 │   ├── Progress/
 │   │   ├── ProgressView.swift
@@ -269,21 +270,22 @@ class Workout {
   - Empty states for no data
 
 **Phase 3d: Personal Records**
-- [x] PersonalRecord model (PRType: maxWeight, estimatedOneRM)
-  - Brzycki formula for ≤10 reps, Epley for >10 reps
-  - Tracks weight, reps, calculated value, setLogID link
+- [x] PersonalRecord model (simplified: highest weight only)
+  - PR = highest weight ever lifted for an exercise, regardless of reps
+  - PRType enum retains `.estimatedOneRM` case for legacy data compatibility but no longer creates them
+  - Tracks weight, reps, value (always equals weight), setLogID link
 - [x] PRDetectionService (Services/PRDetectionService.swift)
-  - Detects all-time PRs on workout completion (not per-set)
-  - Compares against stored PRs per exercise
-  - Saves new PersonalRecord entries to SwiftData
-  - First workout saves baselines only (not flagged as PRs)
-  - Only flags as "new PR" when beating an existing record
+  - Detects highest-weight PRs on workout completion (not per-set)
+  - First workout establishes baseline (not flagged as PR)
+  - Subsequent workouts that beat baseline are flagged as new PRs
+  - Only `.maxWeight` type records are created going forward
 - [x] PR display in workout summary (WorkoutSummaryView)
   - Trophy-styled section with terracotta accent
-  - Shows both Max Weight and Est. 1RM PRs
-  - PRRow reusable component
+  - Shows "New PR" with weight value
 - [x] PR display in past workout detail (WorkoutDetailView)
   - Queries PersonalRecords by matching setLogID to workout's sets
+  - Sorted by achievedAt to prevent reordering
+  - Filters to `.maxWeight` type only (ignores legacy `.estimatedOneRM` records)
   - Section appears between header stats and exercise list
 - [x] User ↔ PersonalRecord relationship (cascade delete)
 
@@ -342,6 +344,22 @@ class Workout {
 - [x] ContentView integration: streak moment sheet after summary sheet
 - [x] ProfileView integration: leaf icon streak label → NavigationLink to StreakDetailView
 
+**Phase 3g: Workout Sharing**
+- [x] WorkoutShareCardView (Views/Workout/WorkoutShareCardView.swift)
+  - Two modes: Compact (340pt wide) and Detailed (390pt wide)
+  - Compact: header bar, title, stats row, all exercises with smart set summaries, footer
+  - Detailed: full date, title + duration, divider, stats row, exercises with individual set rows, footer
+  - Smart compact summaries: same sets → "3×10 @ 135 lbs", same weight → "135 lbs · 10,8,6", varying → "3 sets · 135-155 lbs"
+  - PR count in stats row (terracotta accent, conditional)
+  - Star icon beside PR sets in detailed view (matched via setLogID)
+  - Color scheme passed via .environment(\.colorScheme) for ImageRenderer compatibility
+  - No @Query or @Environment(\.modelContext) — all data passed as parameters
+- [x] Share button in WorkoutDetailView toolbar (square.and.arrow.up)
+  - ImageRenderer at screen scale, deferred to next run loop tick to avoid blank first render
+  - Custom WorkoutShareSheet with image preview, compact/detailed toggle, Share + Save to Photos buttons
+  - LPLinkMetadata via UIActivityItemSource for native share sheet image preview
+  - NSPhotoLibraryAddUsageDescription in Info.plist for Save to Photos
+
 ### 📋 Not Started
 
 **Phase 4: HealthKit & Social**
@@ -393,6 +411,7 @@ class Workout {
 ### SwiftData Gotchas
 - **Never use `.rawValue` in `#Predicate`** — SwiftData stores enums natively; `.rawValue` causes runtime crash
 - **Never compare captured enum variables in `#Predicate`** — SwiftData cannot serialize them; fetch broader results and filter in memory
+- **PR system uses highest weight only** — no 1RM calculations; `PRType.estimatedOneRM` exists for legacy data but is never created; all new PRs use `.maxWeight`
 - **Use `try?` carefully** — it silently swallows predicate validation errors; prefer fetching broader and filtering in Swift when enum types are involved
 
 ---
@@ -476,6 +495,8 @@ Key: We READ from Apple Fitness workouts, we don't create our own HKWorkout sess
 ```xml
 <key>NSHealthShareUsageDescription</key>
 <string>Grove reads your workout data to track heart rate and calories during your strength training sessions.</string>
+<key>NSPhotoLibraryAddUsageDescription</key>
+<string>Grove needs access to save your workout summary images to your photo library.</string>
 ```
 
 ---

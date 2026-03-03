@@ -3,7 +3,10 @@ import SwiftData
 
 struct WorkoutDetailView: View {
     @Environment(\.modelContext) private var modelContext
+    @Environment(\.colorScheme) private var colorScheme
     let workout: Workout
+
+    @State private var shareData: ShareableData?
 
     private var workoutExercises: [ExerciseLog] {
         workout.exercises
@@ -60,11 +63,14 @@ struct WorkoutDetailView: View {
 
     private var workoutPRs: [PersonalRecord] {
         let setIDs = Set(workout.exercises.flatMap { $0.sets.map { $0.id } })
-        let descriptor = FetchDescriptor<PersonalRecord>()
+        let descriptor = FetchDescriptor<PersonalRecord>(
+            sortBy: [SortDescriptor(\.achievedAt, order: .forward)]
+        )
         guard let allPRs = try? modelContext.fetch(descriptor) else { return [] }
         return allPRs.filter { pr in
-            guard let setLogID = pr.setLogID else { return false }
-            return setIDs.contains(setLogID)
+            pr.type == .maxWeight &&
+            pr.setLogID != nil &&
+            setIDs.contains(pr.setLogID!)
         }
     }
 
@@ -90,6 +96,47 @@ struct WorkoutDetailView: View {
         .background(Color.groveBackground)
         .navigationTitle(workout.name)
         .navigationBarTitleDisplayMode(.large)
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button {
+                    prepareShareImage()
+                } label: {
+                    Image(systemName: "square.and.arrow.up")
+                }
+            }
+        }
+        .sheet(item: $shareData) { data in
+            WorkoutShareSheet(data: data)
+        }
+    }
+
+    // MARK: - Share Image Rendering
+
+    private func prepareShareImage() {
+        let unitLabel = workout.user?.preferredUnits == .metric ? "kg" : "lbs"
+        let prs = workoutPRs
+        let prSetIDs = Set(prs.compactMap(\.setLogID))
+        let card = WorkoutShareCardView(
+            workout: workout,
+            prCount: prs.count,
+            prSetIDs: prSetIDs,
+            unitLabel: unitLabel,
+            colorScheme: colorScheme
+        )
+        let renderer = ImageRenderer(content: card)
+        renderer.scale = UIScreen.main.scale
+        DispatchQueue.main.async {
+            if let uiImage = renderer.uiImage {
+                shareData = ShareableData(
+                    workout: workout,
+                    prCount: prs.count,
+                    prSetIDs: prSetIDs,
+                    unitLabel: unitLabel,
+                    colorScheme: colorScheme,
+                    initialImage: uiImage
+                )
+            }
+        }
     }
 
     // MARK: - Header Section
@@ -228,17 +275,12 @@ private struct PRCard: View {
     }
 
     private var typeLabel: String {
-        pr.type == .maxWeight ? "Max Weight" : "Est. 1RM"
+        "Personal Record"
     }
 
     private var displayValue: String {
-        if pr.type == .estimatedOneRM {
-            let v = pr.value
-            return v == floor(v) ? "\(Int(v)) lbs" : String(format: "%.1f lbs", v)
-        } else {
-            let w = pr.weight == floor(pr.weight) ? "\(Int(pr.weight))" : String(format: "%.1f", pr.weight)
-            return "\(w) × \(pr.reps)"
-        }
+        let w = pr.weight == floor(pr.weight) ? "\(Int(pr.weight))" : String(format: "%.1f", pr.weight)
+        return "\(w) lbs"
     }
 
     var body: some View {
@@ -392,6 +434,163 @@ private struct SetDetailRow: View {
 
             Spacer()
         }
+    }
+}
+
+// MARK: - Shareable Data
+
+private struct ShareableData: Identifiable {
+    let id = UUID()
+    let workout: Workout
+    let prCount: Int
+    let prSetIDs: Set<UUID>
+    let unitLabel: String
+    let colorScheme: ColorScheme
+    let initialImage: UIImage
+}
+
+// MARK: - Workout Share Sheet
+
+private struct WorkoutShareSheet: View {
+    let data: ShareableData
+    @Environment(\.dismiss) private var dismiss
+    @State private var detailed = false
+    @State private var currentImage: UIImage
+    @State private var showSystemShare = false
+    @State private var savedToPhotos = false
+
+    init(data: ShareableData) {
+        self.data = data
+        _currentImage = State(initialValue: data.initialImage)
+    }
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(spacing: 16) {
+                    // View mode toggle
+                    Picker("View", selection: $detailed) {
+                        Text("Compact").tag(false)
+                        Text("Detailed").tag(true)
+                    }
+                    .pickerStyle(.segmented)
+                    .padding(.horizontal)
+
+                    Image(uiImage: currentImage)
+                        .resizable()
+                        .aspectRatio(contentMode: .fit)
+                        .clipShape(RoundedRectangle(cornerRadius: 12))
+                        .shadow(color: .black.opacity(0.15), radius: 8, y: 4)
+                        .padding(.horizontal)
+                        .animation(.default, value: detailed)
+
+                    VStack(spacing: 12) {
+                        Button {
+                            showSystemShare = true
+                        } label: {
+                            Label("Share", systemImage: "square.and.arrow.up")
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 12)
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .tint(Color.groveSage)
+
+                        Button {
+                            UIImageWriteToSavedPhotosAlbum(currentImage, nil, nil, nil)
+                            withAnimation { savedToPhotos = true }
+                        } label: {
+                            Label(savedToPhotos ? "Saved" : "Save to Photos",
+                                  systemImage: savedToPhotos ? "checkmark" : "photo.on.rectangle.angled")
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 12)
+                        }
+                        .buttonStyle(.bordered)
+                        .tint(savedToPhotos ? Color.groveSage : Color.groveTerracotta)
+                        .disabled(savedToPhotos)
+                    }
+                    .padding(.horizontal)
+                }
+                .padding(.vertical)
+            }
+            .background(Color.groveBackground)
+            .navigationTitle("Share Workout")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button("Done") { dismiss() }
+                }
+            }
+            .sheet(isPresented: $showSystemShare) {
+                ActivitySheet(image: currentImage, title: data.workout.name)
+                    .presentationDetents([.medium, .large])
+            }
+            .onChange(of: detailed) {
+                savedToPhotos = false
+                renderImage()
+            }
+        }
+        .presentationDetents([.medium, .large])
+    }
+
+    private func renderImage() {
+        let card = WorkoutShareCardView(
+            workout: data.workout,
+            prCount: data.prCount,
+            prSetIDs: data.prSetIDs,
+            unitLabel: data.unitLabel,
+            colorScheme: data.colorScheme,
+            detailed: detailed
+        )
+        let renderer = ImageRenderer(content: card)
+        renderer.scale = UIScreen.main.scale
+        DispatchQueue.main.async {
+            if let uiImage = renderer.uiImage {
+                currentImage = uiImage
+            }
+        }
+    }
+}
+
+// MARK: - Activity Sheet
+
+private struct ActivitySheet: UIViewControllerRepresentable {
+    let image: UIImage
+    let title: String
+
+    func makeUIViewController(context: Context) -> UIActivityViewController {
+        let itemSource = ImageItemSource(image: image, title: title)
+        return UIActivityViewController(activityItems: [itemSource], applicationActivities: nil)
+    }
+
+    func updateUIViewController(_ uiViewController: UIActivityViewController, context: Context) {}
+}
+
+// MARK: - Image Item Source (provides LPLinkMetadata for share sheet preview)
+
+import LinkPresentation
+
+private class ImageItemSource: NSObject, UIActivityItemSource {
+    let image: UIImage
+    let title: String
+
+    init(image: UIImage, title: String) {
+        self.image = image
+        self.title = title
+    }
+
+    func activityViewControllerPlaceholderItem(_ activityViewController: UIActivityViewController) -> Any {
+        image
+    }
+
+    func activityViewController(_ activityViewController: UIActivityViewController, itemForActivityType activityType: UIActivity.ActivityType?) -> Any? {
+        image
+    }
+
+    func activityViewControllerLinkMetadata(_ activityViewController: UIActivityViewController) -> LPLinkMetadata? {
+        let metadata = LPLinkMetadata()
+        metadata.title = title
+        metadata.imageProvider = NSItemProvider(object: image)
+        return metadata
     }
 }
 
