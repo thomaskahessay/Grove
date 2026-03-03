@@ -35,6 +35,14 @@ struct ProfileView: View {
 
     private var user: User? { users.first }
 
+    /// Number of exercises with a max-weight PR (deduplicated per exercise)
+    private var prExerciseCount: Int {
+        guard let records = user?.personalRecords else { return 0 }
+        let maxWeightRecords = records.filter { $0.type == .maxWeight }
+        let uniqueExercises = Set(maxWeightRecords.compactMap { $0.exercise?.id })
+        return uniqueExercises.count
+    }
+
     var body: some View {
         NavigationStack {
             ScrollView {
@@ -178,7 +186,7 @@ struct ProfileView: View {
 
             statItem(
                 icon: "trophy.fill",
-                value: "\(user?.personalRecords.count ?? 0)",
+                value: "\(prExerciseCount)",
                 label: "PRs"
             )
 
@@ -299,24 +307,29 @@ struct ProfileView: View {
             }
             .buttonStyle(.plain)
 
-            VStack(spacing: 10) {
-                Image(systemName: "chart.line.uptrend.xyaxis")
-                    .font(.title2)
-                    .foregroundStyle(Color.groveSage)
+            NavigationLink {
+                PersonalRecordsView()
+            } label: {
+                VStack(spacing: 10) {
+                    Image(systemName: "chart.line.uptrend.xyaxis")
+                        .font(.title2)
+                        .foregroundStyle(Color.groveSage)
 
-                Text("Personal Records")
-                    .font(.subheadline)
-                    .fontWeight(.medium)
-                    .foregroundStyle(Color.groveText)
+                    Text("Personal Records")
+                        .font(.subheadline)
+                        .fontWeight(.medium)
+                        .foregroundStyle(Color.groveText)
 
-                Text("\(user?.personalRecords.count ?? 0) PRs")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                    Text("\(prExerciseCount) PRs")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 20)
+                .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 12))
+                .shadow(color: .black.opacity(0.07), radius: 10, y: 3)
             }
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 20)
-            .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 12))
-            .shadow(color: .black.opacity(0.07), radius: 10, y: 3)
+            .buttonStyle(.plain)
         }
     }
 

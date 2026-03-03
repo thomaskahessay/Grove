@@ -17,7 +17,7 @@ struct ProgressView: View {
 
     @State private var selectedTab: ProgressTab = .exercises
     @State private var selectedExercise: Exercise?
-    @State private var selectedMetric: ProgressMetric = .estimatedOneRM
+    @State private var selectedMetric: ProgressMetric = .maxWeight
     @State private var selectedTimeRange: TimeRange = .threeMonths
     @State private var searchText = ""
     @State private var showingExercisePicker = false
@@ -351,8 +351,8 @@ struct ProgressView: View {
 
                 let value: Double
                 switch selectedMetric {
-                case .estimatedOneRM:
-                    value = completedSets.compactMap { calculateOneRM(weight: $0.weight!, reps: $0.reps!) }.max() ?? 0
+                case .maxWeight:
+                    value = completedSets.compactMap { $0.weight }.max() ?? 0
                 case .bestSet:
                     value = completedSets.compactMap { ($0.weight ?? 0) * Double($0.reps ?? 0) }.max() ?? 0
                 case .totalVolume:
@@ -464,18 +464,6 @@ struct ProgressView: View {
         return maxWeight
     }
 
-    private func calculateOneRM(weight: Double, reps: Int) -> Double {
-        guard reps > 0, weight > 0 else { return 0 }
-
-        if reps == 1 {
-            return weight
-        } else if reps <= 10 {
-            return weight * (36.0 / (37.0 - Double(reps)))
-        } else {
-            return weight * (1.0 + Double(reps) / 30.0)
-        }
-    }
-
     private func formatValue(_ value: Double) -> String {
         if value >= 1000 {
             return String(format: "%.1fk", value / 1000)
@@ -509,7 +497,7 @@ struct ProgressView: View {
 // MARK: - Supporting Types
 
 enum ProgressMetric: String, CaseIterable {
-    case estimatedOneRM = "1RM"
+    case maxWeight = "Max"
     case bestSet = "Best"
     case totalVolume = "Volume"
 
@@ -517,7 +505,7 @@ enum ProgressMetric: String, CaseIterable {
 
     var fullName: String {
         switch self {
-        case .estimatedOneRM: return "Estimated 1RM"
+        case .maxWeight: return "Max Weight"
         case .bestSet: return "Best Set (Weight × Reps)"
         case .totalVolume: return "Total Volume"
         }

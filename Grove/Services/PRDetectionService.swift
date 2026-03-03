@@ -1,22 +1,21 @@
 import Foundation
 import SwiftData
 
-/// Detects and records personal records after workout completion
+/// Detects and records personal records after workout completion.
+/// A PR is simply the highest weight ever lifted for an exercise, regardless of reps.
 struct PRDetectionService {
 
     /// Result of PR detection for a single exercise
     struct PRResult {
         let exercise: Exercise
-        let newMaxWeight: PersonalRecord?
-        let newEstimated1RM: PersonalRecord?
+        let newPR: PersonalRecord
 
-        var hasPR: Bool {
-            newMaxWeight != nil || newEstimated1RM != nil
-        }
+        var hasPR: Bool { true }
     }
 
-    /// Checks a completed workout for new PRs and saves them
-    /// Returns array of exercises that achieved new PRs
+    /// Checks a completed workout for new PRs and saves them.
+    /// First workout for an exercise establishes a baseline (not flagged as PR).
+    /// Subsequent workouts that beat the baseline are flagged as new PRs.
     static func detectAndSavePRs(
         for workout: Workout,
         user: User,
@@ -31,39 +30,27 @@ struct PRDetectionService {
             let completedSets = exerciseLog.sets.filter { $0.isCompleted && $0.weight != nil && $0.reps != nil }
             guard !completedSets.isEmpty else { continue }
 
-            // Find best weight and best 1RM from this workout's sets
+            // Find the heaviest weight from this workout's sets
             var bestWeightSet: SetLog?
-            var best1RMSet: SetLog?
             var bestWeight: Double = 0
-            var best1RM: Double = 0
 
             for set in completedSets {
-                guard let weight = set.weight, let reps = set.reps else { continue }
-
+                guard let weight = set.weight else { continue }
                 if weight > bestWeight {
                     bestWeight = weight
                     bestWeightSet = set
                 }
-
-                let estimated1RM = PersonalRecord.calculateOneRM(weight: weight, reps: reps)
-                if estimated1RM > best1RM {
-                    best1RM = estimated1RM
-                    best1RMSet = set
-                }
             }
 
-            // Get current PRs for this exercise
-            let currentMaxWeight = getCurrentPR(for: exercise, type: .maxWeight, user: user, context: context)
-            let current1RM = getCurrentPR(for: exercise, type: .estimatedOneRM, user: user, context: context)
+            guard let set = bestWeightSet else { continue }
 
-            var newMaxWeightPR: PersonalRecord?
-            var new1RMPR: PersonalRecord?
+            // Get current PR for this exercise (highest weight ever)
+            let currentPR = getCurrentPR(for: exercise, user: user, context: context)
 
-            // Check max weight: save baseline or record a true PR
-            if bestWeight > (currentMaxWeight?.value ?? 0), let set = bestWeightSet {
+            // Only save if this beats or establishes the record
+            if bestWeight > (currentPR?.value ?? 0) {
                 let pr = PersonalRecord(
                     exercise: exercise,
-                    type: .maxWeight,
                     weight: set.weight!,
                     reps: set.reps!,
                     achievedAt: workout.completedAt ?? Date(),
@@ -71,36 +58,11 @@ struct PRDetectionService {
                 )
                 pr.user = user
                 context.insert(pr)
-                // Only flag as a "new PR" if beating an existing record (not a first-time baseline)
-                if currentMaxWeight != nil {
-                    newMaxWeightPR = pr
-                }
-            }
 
-            // Check estimated 1RM: save baseline or record a true PR
-            if best1RM > (current1RM?.value ?? 0), let set = best1RMSet {
-                let pr = PersonalRecord(
-                    exercise: exercise,
-                    type: .estimatedOneRM,
-                    weight: set.weight!,
-                    reps: set.reps!,
-                    achievedAt: workout.completedAt ?? Date(),
-                    setLogID: set.id
-                )
-                pr.user = user
-                context.insert(pr)
                 // Only flag as a "new PR" if beating an existing record (not a first-time baseline)
-                if current1RM != nil {
-                    new1RMPR = pr
+                if currentPR != nil {
+                    results.append(PRResult(exercise: exercise, newPR: pr))
                 }
-            }
-
-            if newMaxWeightPR != nil || new1RMPR != nil {
-                results.append(PRResult(
-                    exercise: exercise,
-                    newMaxWeight: newMaxWeightPR,
-                    newEstimated1RM: new1RMPR
-                ))
             }
         }
 
@@ -108,17 +70,15 @@ struct PRDetectionService {
         return results
     }
 
-    /// Gets the current PR for an exercise and type
+    /// Gets the current PR (highest weight) for an exercise
     private static func getCurrentPR(
         for exercise: Exercise,
-        type: PRType,
         user: User,
         context: ModelContext
     ) -> PersonalRecord? {
         let exerciseID = exercise.id
 
-        // Fetch all PRs for this exercise, then filter by type in memory.
-        // SwiftData #Predicate can't reliably serialize captured enum values.
+        // Fetch all PRs for this exercise, filter to maxWeight type in memory
         let descriptor = FetchDescriptor<PersonalRecord>(
             predicate: #Predicate<PersonalRecord> { pr in
                 pr.exercise?.id == exerciseID
@@ -126,7 +86,7 @@ struct PRDetectionService {
             sortBy: [SortDescriptor(\.value, order: .reverse)]
         )
 
-        return (try? context.fetch(descriptor))?.first { $0.type == type }
+        return (try? context.fetch(descriptor))?.first { $0.type == .maxWeight }
     }
 
     /// Gets all PRs for a user, optionally filtered by exercise
@@ -151,6 +111,6 @@ struct PRDetectionService {
             )
         }
 
-        return (try? context.fetch(descriptor)) ?? []
+        return ((try? context.fetch(descriptor)) ?? []).filter { $0.type == .maxWeight }
     }
 }

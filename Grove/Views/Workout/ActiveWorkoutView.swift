@@ -1083,6 +1083,7 @@ struct ExerciseDropDelegate: DropDelegate {
     }
 }
 
+
 // MARK: - Add Exercise to Workout View
 
 struct AddExerciseToWorkoutView: View {

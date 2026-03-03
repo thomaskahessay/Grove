@@ -3,7 +3,7 @@ import SwiftData
 
 enum PRType: String, Codable {
     case maxWeight = "Max Weight"
-    case estimatedOneRM = "Estimated 1RM"
+    case estimatedOneRM = "Estimated 1RM" // Legacy — no longer created
 }
 
 @Model
@@ -12,13 +12,13 @@ class PersonalRecord {
     var user: User?
     var exercise: Exercise?
 
-    // Type of PR
+    // Type of PR (always .maxWeight for new records)
     var type: PRType
 
     // The lift that achieved the PR
     var weight: Double
     var reps: Int
-    var value: Double // The actual PR value (weight for maxWeight, calculated 1RM for estimatedOneRM)
+    var value: Double // Always equals weight for new records
 
     // When it was achieved
     var achievedAt: Date
@@ -28,40 +28,17 @@ class PersonalRecord {
 
     init(
         exercise: Exercise,
-        type: PRType,
         weight: Double,
         reps: Int,
         achievedAt: Date = Date(),
         setLogID: UUID? = nil
     ) {
         self.exercise = exercise
-        self.type = type
+        self.type = .maxWeight
         self.weight = weight
         self.reps = reps
+        self.value = weight
         self.achievedAt = achievedAt
         self.setLogID = setLogID
-
-        switch type {
-        case .maxWeight:
-            self.value = weight
-        case .estimatedOneRM:
-            self.value = PersonalRecord.calculateOneRM(weight: weight, reps: reps)
-        }
-    }
-
-    /// Calculates estimated 1RM using Brzycki formula (most accurate for <10 reps)
-    /// Falls back to Epley for higher reps
-    static func calculateOneRM(weight: Double, reps: Int) -> Double {
-        guard reps > 0, weight > 0 else { return 0 }
-
-        if reps == 1 {
-            return weight
-        } else if reps <= 10 {
-            // Brzycki formula: weight × (36 / (37 - reps))
-            return weight * (36.0 / (37.0 - Double(reps)))
-        } else {
-            // Epley formula for higher reps: weight × (1 + reps/30)
-            return weight * (1.0 + Double(reps) / 30.0)
-        }
     }
 }

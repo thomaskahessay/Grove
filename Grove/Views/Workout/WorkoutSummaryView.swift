@@ -218,28 +218,16 @@ struct WorkoutSummaryView: View {
     }
 
     private var prCards: [PRCardData] {
-        sessionManager.newPRs.flatMap { result -> [PRCardData] in
-            var cards: [PRCardData] = []
-            if let pr = result.newMaxWeight {
-                let w = pr.weight == floor(pr.weight) ? "\(Int(pr.weight))" : String(format: "%.1f", pr.weight)
-                cards.append(PRCardData(
-                    id: "\(result.exercise.id)-maxWeight",
-                    exerciseName: result.exercise.name,
-                    typeLabel: "Max Weight",
-                    displayValue: "\(w) × \(pr.reps)"
-                ))
-            }
-            if let pr = result.newEstimated1RM {
-                let v = pr.value
-                let formatted = v == floor(v) ? "\(Int(v)) lbs" : String(format: "%.1f lbs", v)
-                cards.append(PRCardData(
-                    id: "\(result.exercise.id)-est1RM",
-                    exerciseName: result.exercise.name,
-                    typeLabel: "Est. 1RM",
-                    displayValue: formatted
-                ))
-            }
-            return cards
+        sessionManager.newPRs.map { result -> PRCardData in
+            let pr = result.newPR
+            let w = pr.weight == floor(pr.weight) ? "\(Int(pr.weight))" : String(format: "%.1f", pr.weight)
+            let units = workout.user?.preferredUnits == .metric ? "kg" : "lbs"
+            return PRCardData(
+                id: "\(result.exercise.id)-pr",
+                exerciseName: result.exercise.name,
+                typeLabel: "New PR",
+                displayValue: "\(w) \(units)"
+            )
         }
     }
 
