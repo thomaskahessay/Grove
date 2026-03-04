@@ -7,6 +7,7 @@ struct OnboardingContainerView: View {
         case signIn
         case profileSetup
         case weeklyPlan
+        case healthKit
         case ready
     }
 
@@ -46,11 +47,19 @@ struct OnboardingContainerView: View {
                 if let user = users.first {
                     WeeklyPlanSetupView(user: user) {
                         withAnimation(.easeInOut(duration: 0.35)) {
-                            currentStep = .ready
+                            currentStep = .healthKit
                         }
                     }
                     .transition(.move(edge: .trailing))
                 }
+
+            case .healthKit:
+                HealthKitOnboardingView {
+                    withAnimation(.easeInOut(duration: 0.35)) {
+                        currentStep = .ready
+                    }
+                }
+                .transition(.move(edge: .trailing))
 
             case .ready:
                 if let user = users.first {

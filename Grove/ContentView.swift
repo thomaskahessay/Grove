@@ -44,6 +44,7 @@ struct ContentView: View {
                 .task {
                     sessionManager.user = users.first
                     sessionManager.resumeIncompleteWorkout(context: modelContext)
+                    HealthKitManager.shared.checkAuthorizationStatus()
                     sessionManager.onWorkoutCompleted = { workout in
                         let calendar = Calendar.current
                         let today = calendar.startOfDay(for: Date())
@@ -125,6 +126,8 @@ struct ContentView: View {
                             )
                             .shadow(color: .black.opacity(0.1), radius: 8, y: 4)
                     }
+                    .menuStyle(.button)
+                    .buttonStyle(.plain)
                     .padding(.trailing, 20)
                     .padding(.bottom, 90) // Above tab bar
                 }
@@ -165,6 +168,25 @@ struct ContentView: View {
         ) {
             if let workout = sessionManager.completedWorkout {
                 WorkoutSummaryView(workout: workout)
+            }
+        }
+        .sheet(
+            isPresented: Binding(
+                get: { sessionManager.showingHealthKitConnect },
+                set: { sessionManager.showingHealthKitConnect = $0 }
+            )
+        ) {
+            if let workout = sessionManager.pendingHealthKitWorkout {
+                HealthKitConnectView(
+                    workout: workout,
+                    onConnect: { _ in
+                        sessionManager.finishHealthKitConnect()
+                    },
+                    onSkip: {
+                        sessionManager.finishHealthKitConnect()
+                    }
+                )
+                .presentationDetents([.medium])
             }
         }
         .sheet(

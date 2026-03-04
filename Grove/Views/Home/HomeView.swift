@@ -192,7 +192,7 @@ struct HomeView: View {
 
                     // Recent Workouts Section
                     if !recentWorkouts.isEmpty {
-                        RecentWorkoutsSection(workouts: recentWorkouts)
+                        RecentWorkoutsSection(workouts: recentWorkouts, allWorkouts: completedWorkouts)
                     }
 
                     Spacer(minLength: 100)
@@ -513,12 +513,23 @@ struct CategoryIcon: View {
 
 struct RecentWorkoutsSection: View {
     let workouts: [Workout]
+    let allWorkouts: [Workout]
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Recent Workouts")
-                .font(.headline)
-                .foregroundStyle(Color.groveText)
+            NavigationLink(destination: AllWorkoutsView(workouts: allWorkouts)) {
+                HStack {
+                    Text("Recent Workouts")
+                        .font(.headline)
+                        .foregroundStyle(Color.groveText)
+                    Spacer()
+                    Image(systemName: "chevron.right")
+                        .font(.caption)
+                        .fontWeight(.semibold)
+                        .foregroundStyle(Color.groveTextSecondary)
+                }
+            }
+            .buttonStyle(.plain)
 
             VStack(spacing: 0) {
                 ForEach(Array(workouts.enumerated()), id: \.element.id) { index, workout in
@@ -595,6 +606,109 @@ struct RecentWorkoutRow: View {
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
+    }
+}
+
+// MARK: - All Workouts View
+
+struct AllWorkoutsView: View {
+    let workouts: [Workout]
+
+    var body: some View {
+        List {
+            ForEach(groupedWorkouts, id: \.month) { group in
+                Section(group.month) {
+                    ForEach(group.workouts, id: \.id) { workout in
+                        NavigationLink(destination: WorkoutDetailView(workout: workout)) {
+                            AllWorkoutsRow(workout: workout)
+                        }
+                    }
+                }
+            }
+        }
+        .scrollContentBackground(.hidden)
+        .background(Color.groveBackground)
+        .navigationTitle("All Workouts")
+        .navigationBarTitleDisplayMode(.large)
+    }
+
+    private struct MonthGroup {
+        let month: String
+        let workouts: [Workout]
+    }
+
+    private var groupedWorkouts: [MonthGroup] {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "MMMM yyyy"
+
+        var groups: [(key: String, workouts: [Workout])] = []
+        var currentKey = ""
+        var currentWorkouts: [Workout] = []
+
+        for workout in workouts {
+            guard let date = workout.completedAt else { continue }
+            let key = formatter.string(from: date)
+            if key != currentKey {
+                if !currentWorkouts.isEmpty {
+                    groups.append((key: currentKey, workouts: currentWorkouts))
+                }
+                currentKey = key
+                currentWorkouts = [workout]
+            } else {
+                currentWorkouts.append(workout)
+            }
+        }
+        if !currentWorkouts.isEmpty {
+            groups.append((key: currentKey, workouts: currentWorkouts))
+        }
+
+        return groups.map { MonthGroup(month: $0.key, workouts: $0.workouts) }
+    }
+}
+
+private struct AllWorkoutsRow: View {
+    let workout: Workout
+
+    private var formattedDate: String {
+        guard let completedAt = workout.completedAt else { return "" }
+        let calendar = Calendar.current
+        if calendar.isDateInToday(completedAt) {
+            return "Today"
+        } else if calendar.isDateInYesterday(completedAt) {
+            return "Yesterday"
+        } else {
+            let formatter = DateFormatter()
+            formatter.dateFormat = "EEE, MMM d"
+            return formatter.string(from: completedAt)
+        }
+    }
+
+    private var formattedDuration: String {
+        let minutes = Int(workout.duration / 60)
+        return "\(minutes) min"
+    }
+
+    var body: some View {
+        HStack(spacing: 12) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(workout.name)
+                    .font(.subheadline)
+                    .fontWeight(.medium)
+                    .foregroundStyle(Color.groveText)
+
+                HStack(spacing: 6) {
+                    Text(formattedDate)
+                    Text("·")
+                    Text(formattedDuration)
+                    Text("·")
+                    Text("\(workout.completedExerciseCount) exercises")
+                }
+                .font(.caption)
+                .foregroundStyle(Color.groveTextSecondary)
+            }
+
+            Spacer()
+        }
     }
 }
 

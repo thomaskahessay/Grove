@@ -95,9 +95,19 @@ struct WorkoutShareCardView: View {
                 Text(workout.name)
                     .font(.title2.bold())
                     .foregroundStyle(Color.groveText)
-                Text(formattedDuration)
-                    .font(.subheadline)
-                    .foregroundStyle(Color.groveTextSecondary)
+                HStack(spacing: 6) {
+                    Text(formattedDuration)
+                        .font(.subheadline)
+                        .foregroundStyle(Color.groveTextSecondary)
+                    if let subtitle = healthKitSubtitle {
+                        Text("·")
+                            .font(.subheadline)
+                            .foregroundStyle(Color.groveTextSecondary)
+                        Text(subtitle)
+                            .font(.subheadline)
+                            .foregroundStyle(Color.groveTextSecondary)
+                    }
+                }
             }
 
             Divider()
@@ -135,9 +145,16 @@ struct WorkoutShareCardView: View {
                     .font(.caption)
                     .foregroundStyle(Color.groveTextSecondary)
             } else {
-                Text("\(formattedDate) · \(formattedDuration)")
-                    .font(.caption)
-                    .foregroundStyle(Color.groveTextSecondary)
+                VStack(alignment: .trailing, spacing: 2) {
+                    Text("\(formattedDate) · \(formattedDuration)")
+                        .font(.caption)
+                        .foregroundStyle(Color.groveTextSecondary)
+                    if let subtitle = healthKitSubtitle {
+                        Text(subtitle)
+                            .font(.caption2)
+                            .foregroundStyle(Color.groveTextSecondary)
+                    }
+                }
             }
         }
     }
@@ -157,6 +174,17 @@ struct WorkoutShareCardView: View {
                 shareStatColumn(value: "\(prCount)", label: prCount == 1 ? "PR" : "PRs", accent: true)
             }
         }
+    }
+
+    private var healthKitSubtitle: String? {
+        var parts: [String] = []
+        if let cal = workout.caloriesBurned {
+            parts.append("\(Int(cal)) kcal")
+        }
+        if let avgHR = workout.heartRateAvg {
+            parts.append("\(Int(avgHR)) avg bpm")
+        }
+        return parts.isEmpty ? nil : parts.joined(separator: " · ")
     }
 
     private var footer: some View {

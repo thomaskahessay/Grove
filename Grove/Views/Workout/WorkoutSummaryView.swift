@@ -69,6 +69,11 @@ struct WorkoutSummaryView: View {
                     // Stats cards
                     statsSection
 
+                    // Apple Watch data (if connected)
+                    if workout.healthKitWorkoutID != nil {
+                        appleWatchSection
+                    }
+
                     // Comparison (if available)
                     if previousWorkout != nil {
                         comparisonSection
@@ -167,6 +172,41 @@ struct WorkoutSummaryView: View {
             )
         }
         .fixedSize(horizontal: false, vertical: true)
+    }
+
+    private var appleWatchSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Label("Apple Watch", systemImage: "applewatch")
+                .font(.headline)
+                .foregroundStyle(Color.groveText)
+
+            HStack(spacing: 16) {
+                if let avgHR = workout.heartRateAvg {
+                    StatCard(
+                        icon: "heart.fill",
+                        value: "\(Int(avgHR))",
+                        label: "Avg BPM"
+                    )
+                }
+
+                if let minHR = workout.heartRateMin, let maxHR = workout.heartRateMax {
+                    StatCard(
+                        icon: "waveform.path.ecg",
+                        value: "\(Int(minHR))-\(Int(maxHR))",
+                        label: "HR Range"
+                    )
+                }
+
+                if let cal = workout.caloriesBurned {
+                    StatCard(
+                        icon: "flame.fill",
+                        value: "\(Int(cal))",
+                        label: "kcal"
+                    )
+                }
+            }
+            .fixedSize(horizontal: false, vertical: true)
+        }
     }
 
     private var comparisonSection: some View {

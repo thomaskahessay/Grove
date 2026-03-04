@@ -14,6 +14,10 @@ class WorkoutSessionManager {
     var newPRs: [PRDetectionService.PRResult] = []
     var newAchievements: [AchievementService.AchievementResult] = []
 
+    // HealthKit connect state
+    var showingHealthKitConnect: Bool = false
+    var pendingHealthKitWorkout: Workout?
+
     // Streak moment state
     var showingStreakMoment: Bool = false
     var streakMomentData: StreakMomentData?
@@ -46,16 +50,35 @@ class WorkoutSessionManager {
     }
 
     /// Checks for an incomplete workout (no completedAt) and resumes it as minimized.
+    /// Only resumes workouts started within the last 24 hours; older ones are cleaned up.
     func resumeIncompleteWorkout(context: ModelContext) {
         guard activeWorkout == nil else { return }
         let descriptor = FetchDescriptor<Workout>(
             predicate: #Predicate<Workout> { $0.completedAt == nil },
             sortBy: [SortDescriptor(\Workout.startedAt, order: .reverse)]
         )
-        guard let incomplete = try? context.fetch(descriptor).first else { return }
-        // Only resume if the workout has exercises (not an empty shell)
-        guard !incomplete.exercises.isEmpty else { return }
-        activeWorkout = incomplete
+        guard let incompleteWorkouts = try? context.fetch(descriptor) else { return }
+
+        let cutoff = Date().addingTimeInterval(-24 * 60 * 60)
+
+        // Clean up old abandoned workouts
+        for workout in incompleteWorkouts {
+            if workout.startedAt < cutoff {
+                for exerciseLog in workout.exercises {
+                    for setLog in exerciseLog.sets {
+                        context.delete(setLog)
+                    }
+                    context.delete(exerciseLog)
+                }
+                context.delete(workout)
+            }
+        }
+        try? context.save()
+
+        // Resume the most recent one if it's fresh and has exercises
+        guard let recent = incompleteWorkouts.first(where: { $0.startedAt >= cutoff }),
+              !recent.exercises.isEmpty else { return }
+        activeWorkout = recent
         isMinimized = true
         isFullScreenPresented = false
     }
@@ -151,9 +174,36 @@ class WorkoutSessionManager {
         isMinimized = false
         isFullScreenPresented = false
 
-        // Delay summary presentation until fullScreenCover dismissal completes.
+        // Delay presentation until fullScreenCover dismissal completes.
         // SwiftUI crashes if a sheet is presented while a fullScreenCover is being dismissed.
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+            if HealthKitManager.shared.isAuthorized,
+               let workout = self.completedWorkout,
+               let endDate = workout.completedAt {
+                // Check for matches before showing the sheet to avoid blank flash
+                Task {
+                    let matches = await HealthKitManager.shared.findOverlappingWorkouts(
+                        workoutStart: workout.startedAt,
+                        workoutEnd: endDate
+                    )
+                    if matches.isEmpty {
+                        self.showingSummary = true
+                    } else {
+                        self.pendingHealthKitWorkout = workout
+                        self.showingHealthKitConnect = true
+                    }
+                }
+            } else {
+                self.showingSummary = true
+            }
+        }
+    }
+
+    func finishHealthKitConnect() {
+        showingHealthKitConnect = false
+        pendingHealthKitWorkout = nil
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
             self.showingSummary = true
         }
     }

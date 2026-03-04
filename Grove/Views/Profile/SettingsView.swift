@@ -13,6 +13,7 @@ struct SettingsView: View {
     @State private var showingCamera = false
     @State private var showingDeleteConfirm = false
     @State private var showingSignOutConfirm = false
+    @State private var isConnectingHealthKit = false
 
     private var user: User? { users.first }
 
@@ -258,6 +259,33 @@ struct SettingsView: View {
 
     private var linksSection: some View {
         Section {
+            Button {
+                if HealthKitManager.shared.isAuthorized {
+                    if let url = URL(string: "x-apple-health://") {
+                        UIApplication.shared.open(url)
+                    }
+                } else {
+                    isConnectingHealthKit = true
+                    Task {
+                        await HealthKitManager.shared.requestAuthorization()
+                        isConnectingHealthKit = false
+                    }
+                }
+            } label: {
+                HStack {
+                    Label("Apple Health", systemImage: "heart.text.square.fill")
+                        .foregroundStyle(Color.groveText)
+                    Spacer()
+                    if isConnectingHealthKit {
+                        ProgressView()
+                    } else {
+                        Text(healthKitStatusLabel)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            }
+
             NavigationLink {
                 NotificationSettingsView()
             } label: {
@@ -269,6 +297,16 @@ struct SettingsView: View {
             } label: {
                 Label("Achievements", systemImage: "trophy.fill")
             }
+        }
+    }
+
+    private var healthKitStatusLabel: String {
+        if !HealthKitManager.shared.isAvailable {
+            return "Not Available"
+        } else if HealthKitManager.shared.isAuthorized {
+            return "Connected"
+        } else {
+            return "Not Connected"
         }
     }
 

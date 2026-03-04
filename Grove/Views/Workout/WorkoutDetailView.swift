@@ -8,6 +8,7 @@ struct WorkoutDetailView: View {
     let workout: Workout
 
     @State private var shareData: ShareableData?
+    @State private var showingHealthKitConnect = false
 
     private var workoutExercises: [ExerciseLog] {
         workout.exercises
@@ -64,15 +65,19 @@ struct WorkoutDetailView: View {
 
     private var workoutPRs: [PersonalRecord] {
         let setIDs = Set(workout.exercises.flatMap { $0.sets.map { $0.id } })
-        let descriptor = FetchDescriptor<PersonalRecord>(
-            sortBy: [SortDescriptor(\.achievedAt, order: .forward)]
-        )
+        let descriptor = FetchDescriptor<PersonalRecord>()
         guard let allPRs = try? modelContext.fetch(descriptor) else { return [] }
-        return allPRs.filter { pr in
-            pr.type == .maxWeight &&
-            pr.setLogID != nil &&
-            setIDs.contains(pr.setLogID!)
-        }
+        return allPRs
+            .filter { pr in
+                pr.type == .maxWeight &&
+                pr.setLogID != nil &&
+                setIDs.contains(pr.setLogID!)
+            }
+            .sorted { a, b in
+                let nameA = a.exercise?.name ?? ""
+                let nameB = b.exercise?.name ?? ""
+                return nameA < nameB
+            }
     }
 
     var body: some View {
@@ -99,15 +104,37 @@ struct WorkoutDetailView: View {
         .navigationBarTitleDisplayMode(.large)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
-                Button {
-                    prepareShareImage()
-                } label: {
-                    Image(systemName: "square.and.arrow.up")
+                HStack(spacing: 12) {
+                    if workout.healthKitWorkoutID == nil && HealthKitManager.shared.isAuthorized {
+                        Button {
+                            showingHealthKitConnect = true
+                        } label: {
+                            Image(systemName: "applewatch")
+                        }
+                    }
+
+                    Button {
+                        prepareShareImage()
+                    } label: {
+                        Image(systemName: "square.and.arrow.up")
+                    }
                 }
             }
         }
         .sheet(item: $shareData) { data in
             WorkoutShareSheet(data: data)
+        }
+        .sheet(isPresented: $showingHealthKitConnect) {
+            HealthKitConnectView(
+                workout: workout,
+                onConnect: { _ in
+                    showingHealthKitConnect = false
+                },
+                onSkip: {
+                    showingHealthKitConnect = false
+                }
+            )
+            .presentationDetents([.medium])
         }
     }
 
@@ -176,6 +203,43 @@ struct WorkoutDetailView: View {
                 )
             }
             .fixedSize(horizontal: false, vertical: true)
+
+            // Apple Watch data
+            if workout.healthKitWorkoutID != nil {
+                HStack(spacing: 16) {
+                    if let avgHR = workout.heartRateAvg {
+                        HStack(spacing: 4) {
+                            Image(systemName: "heart.fill")
+                                .foregroundStyle(.red)
+                            Text("\(Int(avgHR)) bpm")
+                                .fontWeight(.medium)
+                                .foregroundStyle(.primary)
+                        }
+                        .font(.subheadline)
+                    }
+
+                    if let cal = workout.caloriesBurned {
+                        HStack(spacing: 4) {
+                            Image(systemName: "flame.fill")
+                                .foregroundStyle(.orange)
+                            Text("\(Int(cal)) kcal")
+                                .fontWeight(.medium)
+                                .foregroundStyle(.primary)
+                        }
+                        .font(.subheadline)
+                    }
+
+                    if let minHR = workout.heartRateMin, let maxHR = workout.heartRateMax {
+                        Text("\(Int(minHR))–\(Int(maxHR)) bpm")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                .padding(10)
+                .frame(maxWidth: .infinity)
+                .background(Color(.secondarySystemGroupedBackground))
+                .clipShape(RoundedRectangle(cornerRadius: 8))
+            }
         }
         .padding(16)
         .background(Color.groveCardBackground)
@@ -221,8 +285,9 @@ struct WorkoutDetailView: View {
                 .foregroundStyle(Color.groveText)
 
             VStack(spacing: 0) {
+                let prSetIDSet = Set(workoutPRs.compactMap(\.setLogID))
                 ForEach(Array(sortedExercises.enumerated()), id: \.element.id) { index, exerciseLog in
-                    ExerciseDetailRow(exerciseLog: exerciseLog)
+                    ExerciseDetailRow(exerciseLog: exerciseLog, prSetIDs: prSetIDSet)
 
                     if index < sortedExercises.count - 1 {
                         Divider()
@@ -318,6 +383,7 @@ private struct PRCard: View {
 
 private struct ExerciseDetailRow: View {
     let exerciseLog: ExerciseLog
+    var prSetIDs: Set<UUID> = []
 
     private var exerciseName: String {
         exerciseLog.exercise?.name ?? "Unknown Exercise"
@@ -380,7 +446,7 @@ private struct ExerciseDetailRow: View {
             if !completedSets.isEmpty {
                 VStack(alignment: .leading, spacing: 6) {
                     ForEach(completedSets, id: \.id) { setLog in
-                        SetDetailRow(setLog: setLog)
+                        SetDetailRow(setLog: setLog, isPR: prSetIDs.contains(setLog.id))
                     }
                 }
                 .padding(.leading, 28)
@@ -399,6 +465,7 @@ private struct ExerciseDetailRow: View {
 
 private struct SetDetailRow: View {
     let setLog: SetLog
+    var isPR: Bool = false
 
     private var weightText: String {
         guard let weight = setLog.weight else { return "-" }
@@ -434,6 +501,12 @@ private struct SetDetailRow: View {
                 .font(.caption)
                 .fontWeight(.medium)
                 .foregroundStyle(Color.groveText)
+
+            if isPR {
+                Image(systemName: "star.fill")
+                    .font(.caption2)
+                    .foregroundStyle(Color.groveTerracotta)
+            }
 
             Spacer()
         }
