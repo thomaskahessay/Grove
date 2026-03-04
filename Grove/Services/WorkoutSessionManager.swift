@@ -45,6 +45,21 @@ class WorkoutSessionManager {
         isFullScreenPresented = true
     }
 
+    /// Checks for an incomplete workout (no completedAt) and resumes it as minimized.
+    func resumeIncompleteWorkout(context: ModelContext) {
+        guard activeWorkout == nil else { return }
+        let descriptor = FetchDescriptor<Workout>(
+            predicate: #Predicate<Workout> { $0.completedAt == nil },
+            sortBy: [SortDescriptor(\Workout.startedAt, order: .reverse)]
+        )
+        guard let incomplete = try? context.fetch(descriptor).first else { return }
+        // Only resume if the workout has exercises (not an empty shell)
+        guard !incomplete.exercises.isEmpty else { return }
+        activeWorkout = incomplete
+        isMinimized = true
+        isFullScreenPresented = false
+    }
+
     func minimizeWorkout() {
         isMinimized = true
         isFullScreenPresented = false

@@ -38,7 +38,7 @@ struct ProgressView: View {
             }
         }
 
-        return exerciseUsage.values.sorted { $0.count > $1.count }
+        return exerciseUsage.values.sorted { $0.exercise.name < $1.exercise.name }
     }
 
     private var selectedExerciseCount: Int {
@@ -74,6 +74,7 @@ struct ProgressView: View {
                     }
                 }
                 .pickerStyle(.segmented)
+                .frame(height: 44)
                 .padding(.horizontal)
                 .padding(.vertical, 8)
                 .background(pickerScrolled ? AnyShapeStyle(.ultraThinMaterial) : AnyShapeStyle(Color.clear))
@@ -171,6 +172,7 @@ struct ProgressView: View {
                     .foregroundStyle(Color.groveSage)
             }
             .padding(16)
+            .contentShape(Rectangle())
             .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 12))
             .shadow(color: .black.opacity(0.02), radius: 10, y: 3)
         }

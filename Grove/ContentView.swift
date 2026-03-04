@@ -43,6 +43,7 @@ struct ContentView: View {
                 .preferredColorScheme(colorScheme)
                 .task {
                     sessionManager.user = users.first
+                    sessionManager.resumeIncompleteWorkout(context: modelContext)
                     sessionManager.onWorkoutCompleted = { workout in
                         let calendar = Calendar.current
                         let today = calendar.startOfDay(for: Date())

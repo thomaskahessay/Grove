@@ -205,7 +205,7 @@ struct ActiveWorkoutView: View {
             .buttonStyle(.secondary)
             .disabled(currentExerciseIndex == 0)
 
-            if isLastExercise && lastExerciseCompleted {
+            if isLastExercise {
                 Button {
                     endWorkout()
                 } label: {
@@ -216,12 +216,11 @@ struct ActiveWorkoutView: View {
                     .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.primary)
+                .disabled(!lastExerciseCompleted)
             } else {
                 Button {
                     withAnimation {
-                        if currentExerciseIndex < exercises.count - 1 {
-                            currentExerciseIndex += 1
-                        }
+                        currentExerciseIndex += 1
                     }
                 } label: {
                     HStack {
@@ -231,7 +230,6 @@ struct ActiveWorkoutView: View {
                     .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.primary)
-                .disabled(isLastExercise)
             }
         }
         .padding()

@@ -170,11 +170,15 @@ class Workout {
   - End workout with save or discard options (Menu dropdown)
   - Minimize workout to floating card (swipe down or button)
   - Exercise auto-completes when all sets marked done
+  - Last exercise shows disabled "Done" button (not disabled "Next")
 - [x] Minimized workout card (MinimizedWorkoutCardView.swift)
   - Floating card above tab bar showing workout name + progress bar (fills as exercises complete/skip)
   - Tap or swipe up to return to full workout (lower minimum distance + velocity-based trigger)
   - Live drag tracking on swipe-down gesture with resistance and velocity threshold
   - WorkoutSessionManager for app-wide active workout state
+- [x] Workout session resume on app relaunch
+  - `resumeIncompleteWorkout()` queries for workouts with `completedAt == nil`
+  - Resumes as minimized floating card (all set/rep data persists via SwiftData)
 - [x] Profile view with light/dark mode toggle
 
 **Phase 3a: Weekly Planning & Streaks**
@@ -256,8 +260,8 @@ class Workout {
 
 **Phase 3c: Progress Charts**
 - [x] Progress charts (ProgressView.swift)
-  - Exercise picker modal with search (sorted by workout count)
-  - Large exercise name header with workout count, tap to open picker
+  - Exercise picker modal with search (sorted alphabetically)
+  - Large exercise name header with workout count, full-card tap to open picker
   - Three metrics via dropdown menu: Estimated 1RM (Brzycki/Epley), Best Set, Total Volume
   - Time range picker via dropdown: 1M / 3M / 6M / All
   - Swift Charts with line + area + point marks
