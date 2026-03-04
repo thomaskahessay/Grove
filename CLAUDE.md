@@ -55,7 +55,8 @@ Grove/
 │   ├── Onboarding/
 │   │   ├── SignInView.swift
 │   │   ├── ProfileSetupView.swift
-│   │   └── WeeklyPlanSetupView.swift
+│   │   ├── WeeklyPlanSetupView.swift
+│   │   └── HealthKitOnboardingView.swift  # Optional Apple Health connection during onboarding
 │   ├── Home/
 │   │   ├── HomeView.swift
 │   │   ├── CalendarStripView.swift
@@ -72,7 +73,8 @@ Grove/
 │   │   ├── WorkoutSummaryView.swift         # Post-workout stats + PR celebration
 │   │   ├── WorkoutDetailView.swift         # Past workout detail view + PR display + share
 │   │   ├── WorkoutShareCardView.swift     # Rendered share image (compact/detailed modes)
-│   │   └── StreakMomentView.swift          # Post-workout streak celebration screen
+│   │   ├── StreakMomentView.swift          # Post-workout streak celebration screen
+│   │   └── HealthKitConnectView.swift     # Post-workout Apple Watch data connect sheet
 │   ├── Progress/
 │   │   ├── ProgressView.swift
 │   │   └── ExerciseChartView.swift
@@ -364,14 +366,49 @@ class Workout {
   - LPLinkMetadata via UIActivityItemSource for native share sheet image preview
   - NSPhotoLibraryAddUsageDescription in Info.plist for Save to Photos
 
-### 📋 Not Started
-
 **Phase 4: HealthKit & Social**
-- [ ] HealthKit authorization
-- [ ] Workout detection from Apple Watch
-- [ ] Heart rate / calorie integration
+- [x] HealthKit integration (read-only)
+  - HealthKitManager: @Observable singleton with HKHealthStore
+  - Read-only access: workouts, heart rate, active energy burned
+  - `requestAuthorization()` + `checkAuthorizationStatus()` with UserDefaults persistence
+  - `findOverlappingWorkouts()`: queries HKWorkouts in ±30min overlap window
+  - `fetchWorkoutsForDay()`: queries all workouts on a specific date for manual browsing
+  - `bestOverlapMatch()`: picks workout with most time overlap
+  - `getHeartRateStats()`: min/avg/max BPM via HKStatisticsQuery
+  - `getCalories()`: kcal via HKStatisticsQuery with cumulativeSum
+  - `populateWorkout()`: orchestrates queries and writes to Workout model
+  - `HKHealthStore.isHealthDataAvailable()` guard on all calls
+- [x] HealthKit onboarding screen (HealthKitOnboardingView)
+  - Inserted between `.weeklyPlan` and `.ready` in OnboardingContainerView
+  - Apple Health icon, benefits list, "Connect Apple Health" button
+  - "Not Now" skip — never gates onboarding progress
+  - Checkmark confirmation on success, auto-continues after 1s
+- [x] Post-workout HealthKit connect flow (HealthKitConnectView)
+  - Pre-checks for overlapping workouts before showing sheet (no blank flash)
+  - Auto-matched view: shows best match preview with "Connect" button
+  - Browse view: same-day Apple Watch workouts with Grove-styled card list
+  - "Choose Different" to switch between matches
+  - Empty state when no workouts found on that day
+- [x] HealthKit data display
+  - WorkoutSummaryView: Apple Watch section with avg BPM, HR range, kcal StatCards
+  - WorkoutDetailView: HR/calories row with red heart + orange flame icons, system background
+  - WorkoutDetailView: Apple Watch toolbar button for retroactive connect on past workouts
+  - WorkoutShareCardView: kcal/HR as subtitle (compact: under date, detailed: beside duration)
+  - PR star indicator on sets in workout detail view
+- [x] Apple Health in Settings
+  - Taps to request authorization (if not connected) or open Apple Health app (if connected)
+  - Status label: Connected / Not Connected / Not Available
+- [x] Workout session resume cleanup
+  - Old abandoned workouts (>24h) automatically deleted on app launch
+  - Only workouts started within 24 hours are resumed as minimized card
+- [x] All Workouts history view
+  - Accessible via chevron on "Recent Workouts" header in HomeView
+  - Full workout history grouped by month (e.g. "March 2026")
+  - Each workout tappable → WorkoutDetailView
 - [ ] Social feed UI
 - [ ] Sharing preferences
+
+### 📋 Not Started
 
 **Phase 5: Polish & Launch**
 - [x] Sign in with Apple + Onboarding flow
@@ -388,7 +425,7 @@ class Workout {
   - Account: inline name edit, fitness goal + experience level pickers
   - Preferences: weight units, vacation mode with date pickers
   - Sharing Defaults: 4 toggles for social feed sharing
-  - Links: Notifications (→ NotificationSettingsView), Achievements (→ AchievementsGalleryView)
+  - Links: Apple Health (connect/open), Notifications (→ NotificationSettingsView), Achievements (→ AchievementsGalleryView)
   - Appearance: System/Light/Dark with checkmark indicator
   - Data: Export History (coming soon), Delete Account with confirmation
   - NotificationSettingsView: 5 notification toggles + quiet hours (From/To DatePickers)
@@ -411,6 +448,11 @@ class Workout {
 - [x] Done button missing when last exercise skipped — fixed condition in ActiveWorkoutView
 - [x] Streak not updating after workout following a rest day — replaced recordWorkout with recalculateStreak in endWorkout(); recordWorkout relied on consecutiveRestDays which was 0 when rest days came from the plan system
 - [x] Stat cards unequal heights in workout detail/summary — fixed with frame alignment in WorkoutDetailView and WorkoutSummaryView
+- [x] HealthKit connect sheet blank flash — pre-query overlapping workouts before presenting sheet; show browse view for manual selection when no auto-match
+- [x] HealthKit authorization status not persisting — requestAuthorization() now calls markAuthorized() immediately on success instead of relying on checkAuthorizationStatus()
+- [x] Old abandoned workouts resuming — resumeIncompleteWorkout() now deletes workouts >24h old and only resumes recent ones
+- [x] FAB square highlight artifact — added .menuStyle(.button) + .buttonStyle(.plain) to suppress iOS 26 Liquid Glass Menu chrome
+- [x] PR cards reordering in workout detail — sorted by exercise name (stable) instead of achievedAt (identical timestamps cause non-deterministic order)
 
 ### SwiftData Gotchas
 - **Never use `.rawValue` in `#Predicate`** — SwiftData stores enums natively; `.rawValue` causes runtime crash
