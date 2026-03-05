@@ -8,169 +8,226 @@ struct ProfileSetupView: View {
 
     @State private var displayName: String
     @State private var selectedUnits: UnitSystem
-    @State private var selectedGoal: FitnessGoal
-    @State private var selectedLevel: ExperienceLevel
     @State private var selectedImage: UIImage? = nil
     @State private var photoItem: PhotosPickerItem? = nil
     @State private var showingImageSource = false
     @State private var showingPhotoPicker = false
     @State private var showingCamera = false
 
+    // Animation states
+    @State private var showPlant = false
+    @State private var showGreeting = false
+    @State private var showNameBubble = false
+    @State private var showPhoto = false
+    @State private var showUnits = false
+    @State private var showButton = false
+    @State private var photoRingPulse = false
+    @State private var typedText = ""
+    @FocusState private var nameFieldFocused: Bool
+
+    private let greetingQuestion = "What should I call you?"
+
     init(user: User, onContinue: @escaping () -> Void) {
         self.user = user
         self.onContinue = onContinue
         _displayName = State(initialValue: user.displayName ?? "")
         _selectedUnits = State(initialValue: user.preferredUnits)
-        _selectedGoal = State(initialValue: user.fitnessGoal)
-        _selectedLevel = State(initialValue: user.experienceLevel)
     }
 
     private var initials: String {
-        let name = user.displayName ?? displayName
+        let name = displayName.isEmpty ? (user.displayName ?? "") : displayName
         let parts = name.split(separator: " ")
-        return parts.prefix(2).compactMap { $0.first.map(String.init) }.joined().uppercased().isEmpty
-            ? "?"
-            : parts.prefix(2).compactMap { $0.first.map(String.init) }.joined().uppercased()
+        let result = parts.prefix(2).compactMap { $0.first.map(String.init) }.joined().uppercased()
+        return result.isEmpty ? "?" : result
     }
 
     var body: some View {
         ScrollView {
             VStack(spacing: 32) {
-                // Header
-                VStack(spacing: 8) {
-                    Text("Your Profile")
-                        .font(.largeTitle)
-                        .fontWeight(.bold)
-                        .foregroundStyle(Color.groveCharcoal)
-                    Text("Tell us a bit about yourself")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                }
-                .padding(.top, 24)
+                Spacer().frame(height: 40)
 
-                // Profile photo
-                Button {
-                    showingImageSource = true
-                } label: {
-                    ZStack(alignment: .bottomTrailing) {
-                        Circle()
-                            .fill(Color.groveSage.opacity(0.15))
-                            .frame(width: 88, height: 88)
-                            .overlay {
-                                if let image = selectedImage {
-                                    Image(uiImage: image)
-                                        .resizable()
-                                        .scaledToFill()
-                                        .clipShape(Circle())
-                                } else if let data = user.profileImageData, let img = UIImage(data: data) {
-                                    Image(uiImage: img)
-                                        .resizable()
-                                        .scaledToFill()
-                                        .clipShape(Circle())
-                                } else {
-                                    Text(initials)
-                                        .font(.title2)
-                                        .fontWeight(.semibold)
-                                        .foregroundStyle(Color.groveSage)
-                                }
-                            }
+                // Animated seedling
+                StreakPlantView(
+                    streak: 1,
+                    size: 100,
+                    showLabel: false
+                )
+                .clipShape(RoundedRectangle(cornerRadius: 12))
+                .opacity(showPlant ? 1 : 0)
+                .offset(y: showPlant ? 0 : 20)
 
-                        // Camera badge
-                        Circle()
-                            .fill(Color.groveSage)
-                            .frame(width: 26, height: 26)
-                            .overlay {
-                                Image(systemName: "camera.fill")
-                                    .font(.caption2)
-                                    .foregroundStyle(.white)
+                // Conversational greeting bubble
+                if showGreeting {
+                    VStack(spacing: 20) {
+                        // Speech bubble with typed question
+                        VStack(spacing: 0) {
+                            ZStack(alignment: .leading) {
+                                // Invisible full text to reserve layout space
+                                Text(greetingQuestion)
+                                    .font(.title2)
+                                    .fontWeight(.semibold)
+                                    .opacity(0)
+
+                                // Visible typed text
+                                Text(typedText)
+                                    .font(.title2)
+                                    .fontWeight(.semibold)
+                                    .foregroundStyle(Color.groveText)
                             }
-                            .offset(x: 2, y: 2)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.horizontal, 20)
+                            .padding(.vertical, 16)
+                            .background(Color.groveCardBackground)
+                            .clipShape(RoundedRectangle(cornerRadius: 16))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 16)
+                                    .stroke(Color.groveSage.opacity(0.15), lineWidth: 1)
+                            )
+
+                            // Bubble tail
+                            Triangle()
+                                .fill(Color.groveCardBackground)
+                                .frame(width: 16, height: 10)
+                                .offset(x: -40)
+                        }
+                        .shadow(color: Color.groveSage.opacity(0.08), radius: 12, y: 4)
+
+                        // Name input (appears after typing finishes)
+                        if showNameBubble {
+                            TextField("Your name", text: $displayName)
+                                .font(.title3)
+                                .fontWeight(.medium)
+                                .textFieldStyle(.plain)
+                                .padding(16)
+                                .background(Color.groveCardBackground)
+                                .clipShape(RoundedRectangle(cornerRadius: 14))
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 14)
+                                        .stroke(
+                                            nameFieldFocused ? Color.groveSage.opacity(0.5) : Color.groveSage.opacity(0.15),
+                                            lineWidth: nameFieldFocused ? 2 : 1
+                                        )
+                                        .animation(.easeInOut(duration: 0.2), value: nameFieldFocused)
+                                )
+                                .focused($nameFieldFocused)
+                                .transition(.asymmetric(
+                                    insertion: .move(edge: .bottom).combined(with: .opacity),
+                                    removal: .opacity
+                                ))
+                        }
                     }
                 }
 
-                // Display name
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("Display Name")
-                        .font(.caption)
-                        .fontWeight(.semibold)
-                        .foregroundStyle(.secondary)
-                        .textCase(.uppercase)
-                        .tracking(0.5)
+                // Profile photo
+                if showPhoto {
+                    VStack(spacing: 10) {
+                        Text("Add a photo")
+                            .font(.subheadline)
+                            .fontWeight(.medium)
+                            .foregroundStyle(Color.groveTextSecondary)
 
-                    TextField("Your name", text: $displayName)
-                        .textFieldStyle(.plain)
-                        .padding(12)
-                        .background(Color.groveWarmSand.opacity(0.5))
-                        .clipShape(RoundedRectangle(cornerRadius: 12))
+                        Button {
+                            showingImageSource = true
+                        } label: {
+                            ZStack(alignment: .bottomTrailing) {
+                                ZStack {
+                                    Circle()
+                                        .stroke(Color.groveSage.opacity(0.3), lineWidth: 2)
+                                        .frame(width: 104, height: 104)
+                                        .scaleEffect(photoRingPulse ? 1.08 : 1.0)
+                                        .opacity(photoRingPulse ? 0 : 0.6)
+
+                                    Circle()
+                                        .fill(Color.groveSage.opacity(0.1))
+                                        .frame(width: 96, height: 96)
+                                        .overlay {
+                                            if let image = selectedImage {
+                                                Image(uiImage: image)
+                                                    .resizable()
+                                                    .scaledToFill()
+                                                    .clipShape(Circle())
+                                            } else if let data = user.profileImageData, let img = UIImage(data: data) {
+                                                Image(uiImage: img)
+                                                    .resizable()
+                                                    .scaledToFill()
+                                                    .clipShape(Circle())
+                                            } else {
+                                                VStack(spacing: 4) {
+                                                    Image(systemName: "camera.fill")
+                                                        .font(.title2)
+                                                        .foregroundStyle(Color.groveSage)
+                                                    Text(initials == "?" ? "Tap" : initials)
+                                                        .font(.caption)
+                                                        .fontWeight(.medium)
+                                                        .foregroundStyle(Color.groveSage.opacity(0.7))
+                                                }
+                                            }
+                                        }
+                                }
+
+                                Circle()
+                                    .fill(Color.groveSage)
+                                    .frame(width: 28, height: 28)
+                                    .overlay {
+                                        Image(systemName: "plus")
+                                            .font(.caption)
+                                            .fontWeight(.bold)
+                                            .foregroundStyle(.white)
+                                    }
+                                    .shadow(color: Color.groveSage.opacity(0.3), radius: 4, y: 2)
+                                    .offset(x: 2, y: 2)
+                            }
+                        }
+                    }
+                    .transition(.scale.combined(with: .opacity))
                 }
 
                 // Weight units
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("Weight Units")
-                        .font(.caption)
-                        .fontWeight(.semibold)
-                        .foregroundStyle(.secondary)
-                        .textCase(.uppercase)
-                        .tracking(0.5)
+                if showUnits {
+                    VStack(spacing: 10) {
+                        Text("I prefer to track in")
+                            .font(.subheadline)
+                            .fontWeight(.medium)
+                            .foregroundStyle(Color.groveTextSecondary)
 
-                    Picker("Units", selection: $selectedUnits) {
-                        Text("lbs").tag(UnitSystem.imperial)
-                        Text("kg").tag(UnitSystem.metric)
-                    }
-                    .pickerStyle(.segmented)
-                }
-
-                // Fitness goal
-                VStack(alignment: .leading, spacing: 12) {
-                    Text("Fitness Goal")
-                        .font(.caption)
-                        .fontWeight(.semibold)
-                        .foregroundStyle(.secondary)
-                        .textCase(.uppercase)
-                        .tracking(0.5)
-
-                    LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
-                        ForEach(FitnessGoal.allCases, id: \.self) { goal in
-                            GoalCard(goal: goal, isSelected: selectedGoal == goal) {
-                                selectedGoal = goal
-                            }
+                        HStack(spacing: 12) {
+                            unitButton(.imperial, label: "lbs", icon: "scalemass.fill")
+                            unitButton(.metric, label: "kg", icon: "scalemass.fill")
                         }
                     }
-                }
-
-                // Experience level
-                VStack(alignment: .leading, spacing: 12) {
-                    Text("Experience Level")
-                        .font(.caption)
-                        .fontWeight(.semibold)
-                        .foregroundStyle(.secondary)
-                        .textCase(.uppercase)
-                        .tracking(0.5)
-
-                    HStack(spacing: 10) {
-                        ForEach(ExperienceLevel.allCases, id: \.self) { level in
-                            LevelButton(level: level, isSelected: selectedLevel == level) {
-                                selectedLevel = level
-                            }
-                        }
-                    }
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
                 }
 
                 // Continue button
-                Button(action: handleContinue) {
-                    Text("Continue")
-                        .font(.headline)
-                        .foregroundStyle(.white)
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 50)
-                        .background(Color.groveSage)
-                        .clipShape(RoundedRectangle(cornerRadius: 14))
+                if showButton {
+                    Button(action: handleContinue) {
+                        Text("Continue")
+                            .font(.headline)
+                            .foregroundStyle(.white)
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 54)
+                            .background(
+                                LinearGradient(
+                                    colors: [Color.groveSage, Color.groveSage.opacity(0.85)],
+                                    startPoint: .leading,
+                                    endPoint: .trailing
+                                )
+                            )
+                            .clipShape(RoundedRectangle(cornerRadius: 16))
+                            .shadow(color: Color.groveSage.opacity(0.3), radius: 8, y: 4)
+                    }
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
                 }
-                .padding(.bottom, 32)
+
+                Spacer(minLength: 40)
             }
             .padding(.horizontal, 24)
+            .frame(maxWidth: .infinity, minHeight: UIScreen.main.bounds.height)
         }
-        .background(Color.groveCream)
+        .scrollDismissesKeyboard(.interactively)
+        .scrollContentBackground(.hidden)
+        .background(Color.groveBackground)
+        .onAppear { startAnimationSequence() }
         .confirmationDialog("Add Photo", isPresented: $showingImageSource, titleVisibility: .visible) {
             Button("Choose from Library") { showingPhotoPicker = true }
             Button("Take Photo") { showingCamera = true }
@@ -191,14 +248,111 @@ struct ProfileSetupView: View {
         }
     }
 
+    // MARK: - Unit Button
+
+    private func unitButton(_ unit: UnitSystem, label: String, icon: String) -> some View {
+        Button {
+            withAnimation(.spring(duration: 0.3, bounce: 0.2)) {
+                selectedUnits = unit
+            }
+        } label: {
+            HStack(spacing: 8) {
+                Image(systemName: icon)
+                    .font(.subheadline)
+                Text(label)
+                    .font(.headline)
+            }
+            .foregroundStyle(selectedUnits == unit ? .white : Color.groveText)
+            .frame(maxWidth: .infinity)
+            .frame(height: 50)
+            .background(
+                selectedUnits == unit
+                    ? AnyShapeStyle(LinearGradient(
+                        colors: [Color.groveSage, Color.groveSage.opacity(0.85)],
+                        startPoint: .leading, endPoint: .trailing))
+                    : AnyShapeStyle(Color.groveCardBackground)
+            )
+            .clipShape(RoundedRectangle(cornerRadius: 12))
+            .overlay(
+                RoundedRectangle(cornerRadius: 12)
+                    .stroke(
+                        selectedUnits == unit ? Color.clear : Color.groveSage.opacity(0.15),
+                        lineWidth: 1
+                    )
+            )
+            .shadow(
+                color: selectedUnits == unit ? Color.groveSage.opacity(0.2) : .clear,
+                radius: 6, y: 3
+            )
+        }
+    }
+
+    // MARK: - Animation Sequence
+
+    private func startAnimationSequence() {
+        // 1. Plant bounces in
+        withAnimation(.spring(duration: 0.6, bounce: 0.4)) {
+            showPlant = true
+        }
+
+        // 2. Greeting bubble appears
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+            withAnimation(.spring(duration: 0.4, bounce: 0.2)) {
+                showGreeting = true
+            }
+            // Start typing effect
+            typeText()
+        }
+    }
+
+    private func typeText() {
+        typedText = ""
+        for (index, char) in greetingQuestion.enumerated() {
+            DispatchQueue.main.asyncAfter(deadline: .now() + Double(index) * 0.04) {
+                typedText.append(char)
+
+                // After typing finishes, show the rest
+                if index == greetingQuestion.count - 1 {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                        withAnimation(.spring(duration: 0.4, bounce: 0.15)) {
+                            showNameBubble = true
+                        }
+                        nameFieldFocused = true
+                    }
+
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
+                        withAnimation(.spring(duration: 0.5, bounce: 0.2)) {
+                            showPhoto = true
+                        }
+                        withAnimation(.easeInOut(duration: 1.5).repeatForever(autoreverses: true)) {
+                            photoRingPulse = true
+                        }
+                    }
+
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.9) {
+                        withAnimation(.spring(duration: 0.4, bounce: 0.15)) {
+                            showUnits = true
+                        }
+                    }
+
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
+                        withAnimation(.spring(duration: 0.4, bounce: 0.15)) {
+                            showButton = true
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // MARK: - Actions
+
     private func handleContinue() {
         let trimmed = displayName.trimmingCharacters(in: .whitespaces)
         if !trimmed.isEmpty {
             user.displayName = trimmed
         }
         user.preferredUnits = selectedUnits
-        user.fitnessGoal = selectedGoal
-        user.experienceLevel = selectedLevel
 
         if let image = selectedImage {
             user.profileImageData = processImage(image)
@@ -227,66 +381,16 @@ struct ProfileSetupView: View {
     }
 }
 
-// MARK: - Goal Card
+// MARK: - Speech Bubble Tail
 
-private struct GoalCard: View {
-    let goal: FitnessGoal
-    let isSelected: Bool
-    let action: () -> Void
-
-    private var icon: String {
-        switch goal {
-        case .buildMuscle: return "dumbbell.fill"
-        case .loseWeight: return "flame.fill"
-        case .stayActive: return "heart.fill"
-        case .trainForEvent: return "trophy.fill"
-        }
-    }
-
-    var body: some View {
-        Button(action: action) {
-            VStack(spacing: 8) {
-                Image(systemName: icon)
-                    .font(.title2)
-                    .foregroundStyle(isSelected ? .white : Color.groveSage)
-                Text(goal.rawValue)
-                    .font(.caption)
-                    .fontWeight(.semibold)
-                    .foregroundStyle(isSelected ? .white : Color.groveCharcoal)
-                    .multilineTextAlignment(.center)
-            }
-            .frame(maxWidth: .infinity)
-            .frame(height: 80)
-            .background(isSelected ? Color.groveSage : Color.groveWarmSand.opacity(0.5))
-            .clipShape(RoundedRectangle(cornerRadius: 14))
-            .overlay(
-                RoundedRectangle(cornerRadius: 14)
-                    .stroke(isSelected ? Color.groveSage : Color.clear, lineWidth: 2)
-            )
-        }
-        .animation(.easeInOut(duration: 0.15), value: isSelected)
-    }
-}
-
-// MARK: - Level Button
-
-private struct LevelButton: View {
-    let level: ExperienceLevel
-    let isSelected: Bool
-    let action: () -> Void
-
-    var body: some View {
-        Button(action: action) {
-            Text(level.rawValue)
-                .font(.subheadline)
-                .fontWeight(.semibold)
-                .foregroundStyle(isSelected ? .white : Color.groveCharcoal)
-                .frame(maxWidth: .infinity)
-                .frame(height: 44)
-                .background(isSelected ? Color.groveSage : Color.groveWarmSand.opacity(0.5))
-                .clipShape(RoundedRectangle(cornerRadius: 12))
-        }
-        .animation(.easeInOut(duration: 0.15), value: isSelected)
+private struct Triangle: Shape {
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+        path.move(to: CGPoint(x: rect.midX - rect.width / 2, y: rect.minY))
+        path.addLine(to: CGPoint(x: rect.midX, y: rect.maxY))
+        path.addLine(to: CGPoint(x: rect.midX + rect.width / 2, y: rect.minY))
+        path.closeSubpath()
+        return path
     }
 }
 

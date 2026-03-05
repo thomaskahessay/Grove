@@ -9,6 +9,14 @@ class User {
     var experienceLevel: ExperienceLevel
     var preferredUnits: UnitSystem
 
+    // Smart Builder preferences
+    var preferredDaysPerWeek: Int = 3
+    var preferredWorkoutMinutes: Int = 60
+    var preferredRepRange: RepRangePreference = RepRangePreference.hypertrophy
+    var preferredSplit: SplitType = SplitType.pushPullLegs
+    var preferredTrainingSlots: [Int] = [0, 2, 4]  // Mon=0..Sun=6 weekday slots
+    var weeklyTemplateIDs: [UUID] = []  // Ordered template IDs matching training day indices
+
     // Vacation mode
     var vacationModeEnabled: Bool = false
     var vacationStartDate: Date?

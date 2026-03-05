@@ -57,6 +57,144 @@ enum PlanStatus: String, Codable {
     case rest
 }
 
+// MARK: - Smart Builder Enums
+
+enum RepRangePreference: String, Codable, CaseIterable {
+    case strength = "Strength"
+    case hypertrophy = "Hypertrophy"
+    case endurance = "Endurance"
+
+    var subtitle: String {
+        switch self {
+        case .strength: return "3-5 reps"
+        case .hypertrophy: return "8-12 reps"
+        case .endurance: return "15+ reps"
+        }
+    }
+
+    var description: String {
+        switch self {
+        case .strength: return "Heavier weight, longer rest"
+        case .hypertrophy: return "Balanced for growth"
+        case .endurance: return "Lighter weight, high volume"
+        }
+    }
+
+    var icon: String {
+        switch self {
+        case .strength: return "dumbbell.fill"
+        case .hypertrophy: return "flame.fill"
+        case .endurance: return "heart.fill"
+        }
+    }
+
+    var compoundSets: Int {
+        switch self {
+        case .strength: return 5
+        case .hypertrophy: return 4
+        case .endurance: return 3
+        }
+    }
+
+    var compoundReps: Int {
+        switch self {
+        case .strength: return 5
+        case .hypertrophy: return 10
+        case .endurance: return 15
+        }
+    }
+
+    var isolationSets: Int {
+        switch self {
+        case .strength: return 3
+        case .hypertrophy: return 3
+        case .endurance: return 3
+        }
+    }
+
+    var isolationReps: Int {
+        switch self {
+        case .strength: return 8
+        case .hypertrophy: return 12
+        case .endurance: return 15
+        }
+    }
+}
+
+enum SplitType: String, Codable, CaseIterable, Identifiable {
+    var id: String { rawValue }
+
+    case fullBody = "Full Body"
+    case upperLower = "Upper / Lower"
+    case pushPullLegs = "Push / Pull / Legs"
+    case broSplit = "Bro Split"
+    case arnoldSplit = "Arnold Split"
+
+    var validDayCounts: [Int] {
+        switch self {
+        case .fullBody: return [2, 3]
+        case .upperLower: return [2, 3, 4]
+        case .pushPullLegs: return [3, 6]
+        case .broSplit: return [5]
+        case .arnoldSplit: return [5, 6]
+        }
+    }
+
+    func dayLabels(for dayCount: Int) -> [String] {
+        switch self {
+        case .fullBody:
+            return Array(repeating: "Full Body", count: dayCount)
+        case .upperLower:
+            switch dayCount {
+            case 2: return ["Upper", "Lower"]
+            case 3: return ["Upper", "Lower", "Full Body"]
+            case 4: return ["Upper", "Lower", "Upper", "Lower"]
+            default: return []
+            }
+        case .pushPullLegs:
+            switch dayCount {
+            case 3: return ["Push", "Pull", "Legs"]
+            case 6: return ["Push", "Pull", "Legs", "Push", "Pull", "Legs"]
+            default: return []
+            }
+        case .broSplit:
+            return ["Chest", "Back", "Shoulders", "Legs", "Arms"]
+        case .arnoldSplit:
+            switch dayCount {
+            case 5: return ["Chest & Back", "Shoulders & Arms", "Legs", "Chest & Back", "Shoulders & Arms"]
+            case 6: return ["Chest & Back", "Shoulders & Arms", "Legs", "Chest & Back", "Shoulders & Arms", "Legs"]
+            default: return []
+            }
+        }
+    }
+
+    func weekPreview(for dayCount: Int) -> String {
+        let labels = dayLabels(for: dayCount)
+        return labels.joined(separator: " · ")
+    }
+
+    /// Returns the muscle groups to train on a given day label
+    static func muscleGroups(for dayLabel: String) -> [MuscleGroup] {
+        switch dayLabel {
+        case "Push": return [.chest, .shoulders, .triceps]
+        case "Pull": return [.back, .biceps]
+        case "Legs": return [.legs, .core]
+        case "Upper": return [.chest, .back, .shoulders, .biceps, .triceps]
+        case "Lower": return [.legs, .core]
+        case "Full Body": return [.chest, .back, .shoulders, .legs, .biceps, .triceps]
+        case "Chest": return [.chest, .triceps]
+        case "Back": return [.back, .biceps]
+        case "Shoulders": return [.shoulders]
+        case "Arms": return [.biceps, .triceps]
+        case "Chest & Back": return [.chest, .back]
+        case "Shoulders & Arms": return [.shoulders, .biceps, .triceps]
+        default: return [.chest, .back, .shoulders, .legs]
+        }
+    }
+}
+
+// MARK: - Achievements
+
 enum AchievementType: String, Codable, CaseIterable {
     case firstRep = "First Rep"
     case weekWarrior = "Week Warrior"

@@ -13,15 +13,23 @@ class Exercise {
     // For smart suggestions - track if user consistently removes this
     var removalCount: Int = 0
 
+    // For smart builder ordering: compounds go first in workouts
+    var isCompound: Bool = false
+    var sortPriority: Int = 50  // lower = earlier in workout (compounds 10-20, isolations 50-80)
+
     init(
         name: String,
         muscleGroup: MuscleGroup,
         muscleSubgroup: String? = nil,
-        isBuiltIn: Bool = true
+        isBuiltIn: Bool = true,
+        isCompound: Bool = false,
+        sortPriority: Int = 50
     ) {
         self.name = name
         self.muscleGroup = muscleGroup
         self.muscleSubgroup = muscleSubgroup
         self.isBuiltIn = isBuiltIn
+        self.isCompound = isCompound
+        self.sortPriority = sortPriority
     }
 }

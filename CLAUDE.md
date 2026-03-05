@@ -47,6 +47,7 @@ Grove/
 │   ├── HealthKitManager.swift     # HealthKit authorization and queries
 │   ├── NotificationService.swift  # Local notification scheduling
 │   ├── StreakManager.swift        # Streak calculation logic (static methods) + wilting
+│   ├── SmartBuilderEngine.swift   # Smart Builder: exercise selection, template/plan generation, auto-extend
 │   ├── PRDetectionService.swift   # PR detection after workout completion
 │   ├── AchievementService.swift   # Achievement detection + progress tracking
 │   ├── MotivationalMessages.swift # Plant-themed motivational messages
@@ -55,8 +56,15 @@ Grove/
 │   ├── Onboarding/
 │   │   ├── SignInView.swift
 │   │   ├── ProfileSetupView.swift
-│   │   ├── WeeklyPlanSetupView.swift
-│   │   └── HealthKitOnboardingView.swift  # Optional Apple Health connection during onboarding
+│   │   ├── WeeklyPlanSetupView.swift      # Legacy (replaced by SmartBuilder)
+│   │   ├── HealthKitOnboardingView.swift  # Optional Apple Health connection during onboarding
+│   │   └── SmartBuilder/
+│   │       ├── SmartBuilderView.swift     # 4-step workout builder container
+│   │       ├── SmartBuilderState.swift    # @Observable state for builder flow
+│   │       ├── DaysPerWeekStep.swift      # Step 1: training days selection
+│   │       ├── WorkoutLengthStep.swift    # Step 2: workout duration
+│   │       ├── SplitAndStyleStep.swift    # Step 3: split type + rep range
+│   │       └── ExerciseSelectionStep.swift # Step 4: per-day exercise customization
 │   ├── Home/
 │   │   ├── HomeView.swift
 │   │   ├── CalendarStripView.swift
@@ -412,13 +420,22 @@ class Workout {
 
 **Phase 5: Polish & Launch**
 - [x] Sign in with Apple + Onboarding flow
-  - WelcomeCarouselView (3-slide carousel → Get Started)
+  - WelcomeCarouselView (3-slide carousel → Get Started, icon bounce on page change)
   - SignInView (Sign in with Apple + Debug skip button)
-  - ProfileSetupView (photo, name, units, fitness goal 2×2 grid, experience level)
-  - WeeklyPlanSetupView (preset split picker → schedule preview → template + plan creation)
+  - ProfileSetupView (animated: typing "What should I call you?" bubble, photo, unit buttons)
+  - SmartBuilderView (4-step: Days → Length → Split+RepRange → Exercises with plan summary)
+  - HealthKitOnboardingView (optional Apple Health connection)
   - OnboardingReadyView ("You're all set! Let's grow." → sets onboardingCompletedAt)
+  - OnboardingContainerView: back navigation on all steps (SmartBuilder step 0 → ProfileSetup)
+  - All onboarding screens use Color.groveBackground with ignoresSafeArea (no white bars)
   - Resume logic: relaunch after sign-in but before completion resumes at ProfileSetup
   - Plans only created from today onward; rest days created with isRestDay=true
+- [x] Auto-extend weekly plans
+  - `SmartBuilderEngine.extendPlansIfNeeded()` called on HomeView appear
+  - Saves user preferences: `preferredSplit`, `preferredTrainingSlots`, `weeklyTemplateIDs`
+  - Generates plans for current week + next week when no plans exist
+  - Only fills days from today onward that don't already have a plan (respects manual edits)
+  - Template-to-slot mapping preserved via ordered UUID array on User model
 - [ ] Notification system
 - [x] Profile/Settings screen
   - Profile header with photo, name, streak, workout count
@@ -453,6 +470,12 @@ class Workout {
 - [x] Old abandoned workouts resuming — resumeIncompleteWorkout() now deletes workouts >24h old and only resumes recent ones
 - [x] FAB square highlight artifact — added .menuStyle(.button) + .buttonStyle(.plain) to suppress iOS 26 Liquid Glass Menu chrome
 - [x] PR cards reordering in workout detail — sorted by exercise name (stable) instead of achievedAt (identical timestamps cause non-deterministic order)
+- [x] Onboarding white bars at top/bottom — all onboarding views now use `.background(Color.groveBackground).ignoresSafeArea()` or container-level background
+- [x] Onboarding transition bleed-through — `.clipped()` on content Group in OnboardingContainerView prevents outgoing views from rendering during slide transitions
+- [x] ProfileSetupView speech bubble expanding bar — used ZStack with invisible full-text placeholder to reserve layout size before typing animation
+- [x] WelcomeCarousel icon bounce not firing on Next — `.symbolEffect(.bounce, value: Bool)` doesn't retrigger; fixed with bounceCounter that increments on page change
+- [x] SmartBuilder no back to ProfileSetup — added `onBack` callback; step 0 back button returns to ProfileSetup via OnboardingContainerView
+- [x] Weekly plans not extending past first week — `SmartBuilderEngine.extendPlansIfNeeded()` auto-generates plans for current + next week on HomeView appear
 
 ### SwiftData Gotchas
 - **Never use `.rawValue` in `#Predicate`** — SwiftData stores enums natively; `.rawValue` causes runtime crash

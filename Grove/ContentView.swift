@@ -34,7 +34,7 @@ struct ContentView: View {
 
     private var isOnboardingComplete: Bool {
         guard let user = users.first else { return false }
-        return user.onboardingCompletedAt != nil && !user.appleUserID.hasPrefix("debug-") && !user.appleUserID.hasPrefix("signed-out-")
+        return user.onboardingCompletedAt != nil
     }
 
     var body: some View {

@@ -10,31 +10,59 @@ struct SignInView: View {
 
     @State private var authService = AuthService()
     @State private var showError = false
+    @State private var appeared = false
 
     var body: some View {
-        VStack(spacing: 32) {
+        VStack(spacing: 0) {
             Spacer()
 
-            // Grove branding
-            VStack(spacing: 12) {
-                Image(systemName: "leaf.fill")
-                    .font(.system(size: 64))
-                    .foregroundStyle(Color.groveSage)
+            // Hero section
+            VStack(spacing: 24) {
+                // Animated plant seed as branding
+                ZStack {
+                    // Soft glow behind the plant
+                    Circle()
+                        .fill(
+                            RadialGradient(
+                                colors: [Color.groveSage.opacity(0.12), Color.clear],
+                                center: .center,
+                                startRadius: 30,
+                                endRadius: 80
+                            )
+                        )
+                        .frame(width: 160, height: 160)
+                        .scaleEffect(appeared ? 1 : 0.6)
+                        .opacity(appeared ? 1 : 0)
 
-                Text("Grove")
-                    .font(.largeTitle)
-                    .fontWeight(.bold)
-                    .foregroundStyle(Color.groveCharcoal)
+                    StreakPlantView(streak: 0, size: 120, showLabel: false)
+                        .scaleEffect(appeared ? 1 : 0.5)
+                        .opacity(appeared ? 1 : 0)
+                }
+                .animation(.spring(duration: 0.7, bounce: 0.3), value: appeared)
 
-                Text("Sign in to sync your workouts across devices")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                    .multilineTextAlignment(.center)
-                    .padding(.horizontal, 40)
+                VStack(spacing: 10) {
+                    Text("Grove")
+                        .font(.system(size: 38, weight: .bold, design: .default))
+                        .foregroundStyle(Color.groveText)
+                        .opacity(appeared ? 1 : 0)
+                        .offset(y: appeared ? 0 : 12)
+                        .animation(.easeOut(duration: 0.5).delay(0.15), value: appeared)
+
+                    Text("Track your growth, one rep at a time")
+                        .font(.subheadline)
+                        .foregroundStyle(Color.groveTextSecondary)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, 40)
+                        .opacity(appeared ? 1 : 0)
+                        .offset(y: appeared ? 0 : 12)
+                        .animation(.easeOut(duration: 0.5).delay(0.25), value: appeared)
+                }
             }
 
             Spacer()
+            Spacer()
 
+            // Sign-in section
             VStack(spacing: 16) {
                 SignInWithAppleButton(.signIn) { request in
                     request.requestedScopes = [.fullName, .email]
@@ -42,8 +70,8 @@ struct SignInView: View {
                     handleSignIn(result: result)
                 }
                 .signInWithAppleButtonStyle(colorScheme == .dark ? .white : .black)
-                .frame(height: 50)
-                .clipShape(RoundedRectangle(cornerRadius: 14))
+                .frame(height: 54)
+                .clipShape(RoundedRectangle(cornerRadius: 16))
 
                 #if DEBUG
                 Button {
@@ -55,15 +83,23 @@ struct SignInView: View {
                         .foregroundStyle(Color.groveSage)
                         .frame(maxWidth: .infinity)
                         .frame(height: 50)
-                        .background(Color.groveSage.opacity(0.12))
+                        .background(Color.groveSage.opacity(0.1))
                         .clipShape(RoundedRectangle(cornerRadius: 14))
                 }
                 #endif
             }
             .padding(.horizontal, 24)
             .padding(.bottom, 48)
+            .opacity(appeared ? 1 : 0)
+            .offset(y: appeared ? 0 : 20)
+            .animation(.easeOut(duration: 0.5).delay(0.35), value: appeared)
         }
-        .background(Color.groveCream)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Color.groveBackground)
+        .ignoresSafeArea()
+        .onAppear {
+            appeared = true
+        }
         .alert("Sign In Failed", isPresented: $showError) {
             Button("OK", role: .cancel) {}
         } message: {
@@ -89,7 +125,6 @@ struct SignInView: View {
                 .joined(separator: " ")
 
             if let existingUser = existingUsers.first {
-                // Link existing user to Apple ID (preserves all data)
                 existingUser.appleUserID = userID
                 if existingUser.onboardingCompletedAt == nil {
                     existingUser.onboardingCompletedAt = Date()

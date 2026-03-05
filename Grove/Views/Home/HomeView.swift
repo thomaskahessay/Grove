@@ -219,6 +219,13 @@ struct HomeView: View {
                         workouts: completedWorkouts,
                         plans: workoutPlans
                     )
+
+                    // Auto-extend weekly plans if needed
+                    SmartBuilderEngine.extendPlansIfNeeded(
+                        user: user,
+                        existingPlans: workoutPlans,
+                        context: modelContext
+                    )
                 }
             }
         }

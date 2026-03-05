@@ -17,10 +17,28 @@ enum PresetSplit: CaseIterable {
 
     var subtitle: String {
         switch self {
-        case .threeDay: return "Mon / Wed / Fri · Rest in between"
+        case .threeDay: return "Mon / Wed / Fri"
         case .fourDay: return "Mon / Tue / Thu / Fri"
-        case .fiveDay: return "Mon – Fri · Each muscle group once"
-        case .sixDay: return "Mon – Sat · Max volume"
+        case .fiveDay: return "Mon - Fri"
+        case .sixDay: return "Mon - Sat"
+        }
+    }
+
+    var detailLine: String {
+        switch self {
+        case .threeDay: return "Rest days in between"
+        case .fourDay: return "Upper/Lower alternating"
+        case .fiveDay: return "Each muscle group once"
+        case .sixDay: return "Maximum volume split"
+        }
+    }
+
+    var icon: String {
+        switch self {
+        case .threeDay: return "figure.walk"
+        case .fourDay: return "figure.strengthtraining.traditional"
+        case .fiveDay: return "figure.highintensity.intervaltraining"
+        case .sixDay: return "flame.fill"
         }
     }
 
@@ -30,6 +48,15 @@ enum PresetSplit: CaseIterable {
         case .fourDay: return Color(hex: "5B8FBF")
         case .fiveDay: return .groveTerracotta
         case .sixDay: return .groveMutedRust
+        }
+    }
+
+    var dayCount: Int {
+        switch self {
+        case .threeDay: return 3
+        case .fourDay: return 4
+        case .fiveDay: return 5
+        case .sixDay: return 6
         }
     }
 }
@@ -48,10 +75,17 @@ struct WeeklyPlanSetupView: View {
     @State private var phase: Phase = .selection
     @State private var selectedPreset: PresetSplit? = nil
     @State private var isApplying = false
+    @State private var appeared = false
+    @State private var previewAppeared = false
 
     var body: some View {
         ZStack {
-            Color.groveCream.ignoresSafeArea()
+            LinearGradient(
+                colors: [Color.groveBackground, Color.groveWarmSand.opacity(0.15)],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+            .ignoresSafeArea()
 
             switch phase {
             case .selection:
@@ -72,27 +106,38 @@ struct WeeklyPlanSetupView: View {
 
     private var selectionView: some View {
         ScrollView {
-            VStack(spacing: 32) {
+            VStack(spacing: 28) {
                 VStack(spacing: 8) {
-                    Text("Plan your week")
+                    Text("Plan Your Week")
                         .font(.largeTitle)
                         .fontWeight(.bold)
-                        .foregroundStyle(Color.groveCharcoal)
+                        .foregroundStyle(Color.groveText)
                     Text("Choose a training schedule to get started")
                         .font(.subheadline)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(Color.groveTextSecondary)
                         .multilineTextAlignment(.center)
                 }
-                .padding(.top, 24)
+                .padding(.top, 56) // Extra top padding for progress bar
+                .opacity(appeared ? 1 : 0)
+                .offset(y: appeared ? 0 : 12)
+                .animation(.easeOut(duration: 0.4), value: appeared)
 
                 VStack(spacing: 12) {
-                    ForEach(PresetSplit.allCases, id: \.title) { preset in
+                    ForEach(Array(PresetSplit.allCases.enumerated()), id: \.element.title) { index, preset in
                         PresetCard(preset: preset) {
                             selectedPreset = preset
+                            previewAppeared = false
                             withAnimation(.easeInOut(duration: 0.35)) {
                                 phase = .preview
                             }
+                            // Trigger staggered animation after transition
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                                previewAppeared = true
+                            }
                         }
+                        .opacity(appeared ? 1 : 0)
+                        .offset(y: appeared ? 0 : 16)
+                        .animation(.easeOut(duration: 0.4).delay(0.1 + Double(index) * 0.06), value: appeared)
                     }
                 }
 
@@ -100,10 +145,15 @@ struct WeeklyPlanSetupView: View {
                     onContinue()
                 }
                 .font(.subheadline)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(Color.groveTextSecondary)
                 .padding(.bottom, 32)
+                .opacity(appeared ? 1 : 0)
+                .animation(.easeOut(duration: 0.4).delay(0.4), value: appeared)
             }
             .padding(.horizontal, 24)
+        }
+        .onAppear {
+            appeared = true
         }
     }
 
@@ -114,17 +164,20 @@ struct WeeklyPlanSetupView: View {
             ScrollView {
                 VStack(spacing: 24) {
                     VStack(spacing: 8) {
-                        Text("Here's your week")
+                        Text("Here's Your Week")
                             .font(.largeTitle)
                             .fontWeight(.bold)
-                            .foregroundStyle(Color.groveCharcoal)
+                            .foregroundStyle(Color.groveText)
                         if let preset = selectedPreset {
                             Text(preset.title)
                                 .font(.subheadline)
-                                .foregroundStyle(.secondary)
+                                .foregroundStyle(Color.groveTextSecondary)
                         }
                     }
-                    .padding(.top, 24)
+                    .padding(.top, 56)
+                    .opacity(previewAppeared ? 1 : 0)
+                    .offset(y: previewAppeared ? 0 : 12)
+                    .animation(.easeOut(duration: 0.4), value: previewAppeared)
 
                     if let preset = selectedPreset {
                         scheduleList(for: preset)
@@ -141,15 +194,26 @@ struct WeeklyPlanSetupView: View {
                             ProgressView()
                                 .tint(.white)
                         } else {
-                            Text("Confirm")
-                                .font(.headline)
-                                .foregroundStyle(.white)
+                            HStack(spacing: 8) {
+                                Text("Confirm")
+                                    .font(.headline)
+                                Image(systemName: "checkmark")
+                                    .font(.subheadline.weight(.semibold))
+                            }
+                            .foregroundStyle(.white)
                         }
                     }
                     .frame(maxWidth: .infinity)
-                    .frame(height: 50)
-                    .background(Color.groveSage)
-                    .clipShape(RoundedRectangle(cornerRadius: 14))
+                    .frame(height: 54)
+                    .background(
+                        LinearGradient(
+                            colors: [Color.groveSage, Color.groveSage.opacity(0.85)],
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        )
+                    )
+                    .clipShape(RoundedRectangle(cornerRadius: 16))
+                    .shadow(color: Color.groveSage.opacity(0.3), radius: 8, y: 4)
                 }
                 .disabled(isApplying)
 
@@ -158,14 +222,13 @@ struct WeeklyPlanSetupView: View {
                         phase = .selection
                     }
                 } label: {
-                    Text("Back")
+                    Text("Choose Different")
                         .font(.subheadline)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(Color.groveTextSecondary)
                 }
             }
             .padding(.horizontal, 24)
             .padding(.vertical, 16)
-            .background(Color.groveCream)
         }
     }
 
@@ -177,35 +240,44 @@ struct WeeklyPlanSetupView: View {
                     Text(entry.dayName)
                         .font(.subheadline)
                         .fontWeight(.semibold)
-                        .foregroundStyle(Color.groveCharcoal)
+                        .foregroundStyle(Color.groveText)
                         .frame(width: 40, alignment: .leading)
 
                     Spacer()
 
                     if let name = entry.templateName {
-                        HStack(spacing: 6) {
+                        HStack(spacing: 8) {
                             Circle()
                                 .fill(preset.accentColor)
                                 .frame(width: 8, height: 8)
                             Text(name)
                                 .font(.subheadline)
-                                .foregroundStyle(Color.groveCharcoal)
+                                .fontWeight(.medium)
+                                .foregroundStyle(Color.groveText)
                         }
                     } else {
-                        Text("Rest")
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
+                        HStack(spacing: 8) {
+                            Image(systemName: "moon.fill")
+                                .font(.caption2)
+                                .foregroundStyle(Color.groveTextSecondary.opacity(0.6))
+                            Text("Rest")
+                                .font(.subheadline)
+                                .foregroundStyle(Color.groveTextSecondary)
+                        }
                     }
                 }
                 .padding(.vertical, 14)
                 .padding(.horizontal, 16)
-                .background(index % 2 == 0 ? Color.groveWarmSand.opacity(0.3) : Color.clear)
+                .background(index % 2 == 0 ? Color.groveCardBackground.opacity(0.6) : Color.clear)
+                .opacity(previewAppeared ? 1 : 0)
+                .offset(x: previewAppeared ? 0 : 20)
+                .animation(.easeOut(duration: 0.3).delay(0.1 + Double(index) * 0.05), value: previewAppeared)
             }
         }
         .clipShape(RoundedRectangle(cornerRadius: 14))
         .overlay(
             RoundedRectangle(cornerRadius: 14)
-                .stroke(Color.groveWarmSand, lineWidth: 1)
+                .stroke(Color.groveSage.opacity(0.15), lineWidth: 1)
         )
     }
 
@@ -313,8 +385,6 @@ struct WeeklyPlanSetupView: View {
             guard let date = calendar.date(byAdding: .day, value: dayOffset, to: monday)
             else { continue }
 
-            // Only create plans for today and future days — past days would immediately
-            // show as "incomplete/missed" even though the user hadn't started yet.
             guard date >= today else { continue }
 
             if let templateName = entry.templateName, let template = templates[templateName] {
@@ -336,34 +406,45 @@ private struct PresetCard: View {
 
     var body: some View {
         Button(action: action) {
-            HStack(spacing: 16) {
-                Circle()
-                    .fill(preset.accentColor.opacity(0.15))
-                    .frame(width: 48, height: 48)
-                    .overlay(
-                        Circle()
-                            .fill(preset.accentColor)
-                            .frame(width: 16, height: 16)
-                    )
+            HStack(spacing: 14) {
+                // Icon circle
+                ZStack {
+                    Circle()
+                        .fill(preset.accentColor.opacity(0.12))
+                        .frame(width: 52, height: 52)
+
+                    Image(systemName: preset.icon)
+                        .font(.title3)
+                        .foregroundStyle(preset.accentColor)
+                }
 
                 VStack(alignment: .leading, spacing: 4) {
                     Text(preset.title)
                         .font(.headline)
-                        .foregroundStyle(Color.groveCharcoal)
+                        .foregroundStyle(Color.groveText)
+
                     Text(preset.subtitle)
                         .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(Color.groveTextSecondary)
+
+                    Text(preset.detailLine)
+                        .font(.caption)
+                        .foregroundStyle(Color.groveTextSecondary.opacity(0.7))
                 }
 
                 Spacer()
 
                 Image(systemName: "chevron.right")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(Color.groveTextSecondary.opacity(0.5))
             }
             .padding(16)
-            .background(Color.groveWarmSand.opacity(0.5))
+            .background(Color.groveCardBackground)
             .clipShape(RoundedRectangle(cornerRadius: 14))
+            .overlay(
+                RoundedRectangle(cornerRadius: 14)
+                    .stroke(Color.groveSage.opacity(0.1), lineWidth: 1)
+            )
         }
     }
 }
