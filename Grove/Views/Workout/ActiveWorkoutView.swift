@@ -480,6 +480,7 @@ struct ExerciseFullScreenCard: View {
     var onNameVisibilityChanged: ((Bool) -> Void)? = nil
 
     @State private var focusedSetID: UUID?
+    @State private var exercisePR: PersonalRecord?
 
     private var sortedSets: [SetLog] {
         exerciseLog.sets.sorted { $0.setNumber < $1.setNumber }
@@ -507,6 +508,17 @@ struct ExerciseFullScreenCard: View {
                         Text(exerciseLog.exercise?.muscleGroup.rawValue ?? "")
                             .font(.subheadline)
                             .foregroundStyle(.secondary)
+
+                        if let pr = exercisePR {
+                            HStack(spacing: 4) {
+                                Image(systemName: "trophy.fill")
+                                    .font(.caption)
+                                Text("PR: \(pr.weight.truncatingRemainder(dividingBy: 1) == 0 ? String(Int(pr.weight)) : String(format: "%.1f", pr.weight)) lbs x \(pr.reps)")
+                                    .font(.caption)
+                                    .fontWeight(.medium)
+                            }
+                            .foregroundStyle(Color.groveTerracotta)
+                        }
 
                         // Set progress bar
                         HStack(spacing: 8) {
@@ -543,10 +555,10 @@ struct ExerciseFullScreenCard: View {
                                 onRemove: sortedSets.count > 1 ? {
                                     removeSet(setLog)
                                 } : nil,
-                                onWeightChanged: index == 0 ? { newWeight in
+                                onWeightChanged: (index == 0 && !exerciseLog.hasLastSessionData) ? { newWeight in
                                     autofillWeight(newWeight)
                                 } : nil,
-                                onRepsChanged: index == 0 ? { newReps in
+                                onRepsChanged: (index == 0 && !exerciseLog.hasLastSessionData) ? { newReps in
                                     autofillReps(newReps)
                                 } : nil,
                                 onSetStatusChanged: {
@@ -554,7 +566,9 @@ struct ExerciseFullScreenCard: View {
                                 },
                                 onFocused: {
                                     focusedSetID = setLog.id
-                                }
+                                },
+                                lastSessionWeight: setLog.lastSessionWeight,
+                                lastSessionReps: setLog.lastSessionReps
                             )
                             .id(setLog.id)
                         }
@@ -624,6 +638,17 @@ struct ExerciseFullScreenCard: View {
                 }
             }
         }
+        .task(id: exerciseLog.exercise?.id) {
+            guard let exerciseID = exerciseLog.exercise?.id else { return }
+            let descriptor = FetchDescriptor<PersonalRecord>(
+                predicate: #Predicate<PersonalRecord> { $0.exercise?.id == exerciseID }
+            )
+            let records = ((try? modelContext.fetch(descriptor)) ?? []).filter { $0.type == .maxWeight }
+            exercisePR = records.max { a, b in
+                if a.value != b.value { return a.value < b.value }
+                return a.reps < b.reps
+            }
+        }
     }
 
     private func addSet() {
@@ -691,6 +716,8 @@ struct SetRowView: View {
     var onRepsChanged: ((Int?) -> Void)? = nil
     var onSetStatusChanged: (() -> Void)? = nil
     var onFocused: (() -> Void)? = nil
+    var lastSessionWeight: Double? = nil
+    var lastSessionReps: Int? = nil
 
     @State private var weightText: String = ""
     @State private var repsText: String = ""
@@ -701,7 +728,25 @@ struct SetRowView: View {
         weightFocused || repsFocused
     }
 
+    private var valuesChangedFromLastSession: Bool {
+        guard lastSessionWeight != nil || lastSessionReps != nil else { return false }
+        return setLog.weight != lastSessionWeight || setLog.reps != lastSessionReps
+    }
+
+    private var lastSessionHint: String {
+        var parts: [String] = []
+        if let w = lastSessionWeight {
+            let weightStr = w.truncatingRemainder(dividingBy: 1) == 0 ? String(Int(w)) : String(format: "%.1f", w)
+            parts.append("\(weightStr) lbs")
+        }
+        if let r = lastSessionReps {
+            parts.append("\(r) reps")
+        }
+        return "Last: " + parts.joined(separator: " x ")
+    }
+
     var body: some View {
+        VStack(spacing: 2) {
         HStack(spacing: 12) {
             // Set number
             Text("\(setNumber)")
@@ -840,6 +885,17 @@ struct SetRowView: View {
                 }
                 .buttonStyle(.plain)
             }
+        }
+
+        if valuesChangedFromLastSession {
+            HStack {
+                Spacer().frame(width: 36)
+                Text(lastSessionHint)
+                    .font(.caption2)
+                    .foregroundStyle(.secondary.opacity(0.7))
+                Spacer()
+            }
+        }
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 10)
@@ -1209,6 +1265,8 @@ struct AddExerciseToWorkoutView: View {
         for i in 1...numberOfSets {
             let lastSetData = lastSets.indices.contains(i - 1) ? lastSets[i - 1] : nil
             let setLog = SetLog(setNumber: i, weight: lastSetData?.weight, reps: lastSetData?.reps)
+            setLog.lastSessionWeight = lastSetData?.weight
+            setLog.lastSessionReps = lastSetData?.reps
             setLog.exerciseLog = exerciseLog
             exerciseLog.sets.append(setLog)
         }
@@ -1306,6 +1364,8 @@ struct ReplaceExerciseView: View {
         for i in 1...numberOfSets {
             let lastSetData = lastSets.indices.contains(i - 1) ? lastSets[i - 1] : nil
             let setLog = SetLog(setNumber: i, weight: lastSetData?.weight, reps: lastSetData?.reps)
+            setLog.lastSessionWeight = lastSetData?.weight
+            setLog.lastSessionReps = lastSetData?.reps
             setLog.exerciseLog = exerciseLog
             exerciseLog.sets.append(setLog)
             modelContext.insert(setLog)

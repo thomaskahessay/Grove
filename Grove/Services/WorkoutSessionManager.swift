@@ -272,6 +272,8 @@ class WorkoutSessionManager {
                     weight: lastSetData?.weight,
                     reps: lastSetData?.reps
                 )
+                setLog.lastSessionWeight = lastSetData?.weight
+                setLog.lastSessionReps = lastSetData?.reps
                 setLog.exerciseLog = exerciseLog
                 exerciseLog.sets.append(setLog)
                 context.insert(setLog)

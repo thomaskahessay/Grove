@@ -10,6 +10,8 @@ class SetLog {
     var reps: Int?
     var isCompleted: Bool = false
     var completedAt: Date?
+    var lastSessionWeight: Double?
+    var lastSessionReps: Int?
 
     init(setNumber: Int, weight: Double? = nil, reps: Int? = nil) {
         self.setNumber = setNumber

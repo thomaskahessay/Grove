@@ -19,7 +19,7 @@ struct PersonalRecordsView: View {
         for record in maxWeightRecords {
             guard let exerciseID = record.exercise?.id else { continue }
             if let existing = bestByExercise[exerciseID] {
-                if record.value > existing.value {
+                if record.value > existing.value || (record.value == existing.value && record.reps > existing.reps) {
                     bestByExercise[exerciseID] = record
                 }
             } else {
@@ -109,10 +109,16 @@ private struct PRGalleryRow: View {
 
             Spacer()
 
-            Text("\(record.weight.formatted()) \(unitLabel)")
-                .font(.title3)
-                .fontWeight(.bold)
-                .foregroundStyle(Color.groveTerracotta)
+            VStack(alignment: .trailing, spacing: 2) {
+                Text("\(record.weight.formatted()) \(unitLabel)")
+                    .font(.title3)
+                    .fontWeight(.bold)
+                    .foregroundStyle(Color.groveTerracotta)
+
+                Text("\(record.reps) reps")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
         }
         .padding()
         .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 12))

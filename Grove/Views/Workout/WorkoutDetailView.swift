@@ -348,7 +348,7 @@ private struct PRCard: View {
 
     private var displayValue: String {
         let w = pr.weight == floor(pr.weight) ? "\(Int(pr.weight))" : String(format: "%.1f", pr.weight)
-        return "\(w) lbs"
+        return "\(w) lbs x \(pr.reps)"
     }
 
     var body: some View {

@@ -31,6 +31,9 @@ struct GroveApp: App {
                 template.defaultSets = 3
             }
             try? context.save()
+
+            // Fix existing PR reps (one-time migration for records with wrong rep counts)
+            PRDetectionService.fixExistingPRReps(context: context)
         } catch {
             fatalError("Could not initialize ModelContainer: \(error)")
         }

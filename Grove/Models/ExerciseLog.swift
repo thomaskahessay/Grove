@@ -19,6 +19,10 @@ class ExerciseLog {
     var lastWeight: Double?
     var lastReps: Int?
 
+    var hasLastSessionData: Bool {
+        sets.contains { $0.lastSessionWeight != nil || $0.lastSessionReps != nil }
+    }
+
     init(
         exercise: Exercise,
         orderIndex: Int,

@@ -36,7 +36,7 @@ struct PRDetectionService {
 
             for set in completedSets {
                 guard let weight = set.weight else { continue }
-                if weight > bestWeight {
+                if weight > bestWeight || (weight == bestWeight && (set.reps ?? 0) > (bestWeightSet?.reps ?? 0)) {
                     bestWeight = weight
                     bestWeightSet = set
                 }
@@ -48,7 +48,10 @@ struct PRDetectionService {
             let currentPR = getCurrentPR(for: exercise, user: user, context: context)
 
             // Only save if this beats or establishes the record
-            if bestWeight > (currentPR?.value ?? 0) {
+            // Also update if same weight but more reps
+            let currentValue = currentPR?.value ?? 0
+            let currentReps = currentPR?.reps ?? 0
+            if bestWeight > currentValue || (bestWeight == currentValue && (set.reps ?? 0) > currentReps) {
                 let pr = PersonalRecord(
                     exercise: exercise,
                     weight: set.weight!,
@@ -87,6 +90,42 @@ struct PRDetectionService {
         )
 
         return (try? context.fetch(descriptor))?.first { $0.type == .maxWeight }
+    }
+
+    /// One-time migration: fixes reps on existing PRs that may have stored the wrong set's reps.
+    /// For each PR, finds all completed sets in the linked workout for the same exercise at the PR weight,
+    /// and updates reps to the maximum.
+    static func fixExistingPRReps(context: ModelContext) {
+        let descriptor = FetchDescriptor<PersonalRecord>()
+        guard let allPRs = try? context.fetch(descriptor) else { return }
+
+        for pr in allPRs where pr.type == .maxWeight {
+            guard let setLogID = pr.setLogID,
+                  let exercise = pr.exercise else { continue }
+
+            // Find the SetLog this PR references
+            let setDescriptor = FetchDescriptor<SetLog>()
+            guard let allSets = try? context.fetch(setDescriptor),
+                  let linkedSet = allSets.first(where: { $0.id == setLogID }),
+                  let exerciseLog = linkedSet.exerciseLog,
+                  exerciseLog.exercise?.id == exercise.id else { continue }
+
+            // Find the best reps at this weight across all completed sets in the same exercise log
+            let bestReps = exerciseLog.sets
+                .filter { $0.isCompleted && $0.weight == pr.weight && $0.reps != nil }
+                .map { $0.reps! }
+                .max() ?? pr.reps
+
+            if bestReps > pr.reps {
+                pr.reps = bestReps
+                // Update setLogID to point to the set with the best reps
+                if let bestSet = exerciseLog.sets.first(where: { $0.isCompleted && $0.weight == pr.weight && $0.reps == bestReps }) {
+                    pr.setLogID = bestSet.id
+                }
+            }
+        }
+
+        try? context.save()
     }
 
     /// Gets all PRs for a user, optionally filtered by exercise

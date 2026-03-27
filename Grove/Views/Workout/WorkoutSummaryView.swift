@@ -266,7 +266,7 @@ struct WorkoutSummaryView: View {
                 id: "\(result.exercise.id)-pr",
                 exerciseName: result.exercise.name,
                 typeLabel: "New PR",
-                displayValue: "\(w) \(units)"
+                displayValue: "\(w) \(units) x \(pr.reps)"
             )
         }
     }
