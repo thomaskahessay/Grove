@@ -11,6 +11,7 @@ struct ActiveWorkoutView: View {
     @State private var currentExerciseIndex = 0
     @State private var showingCardView = false
     @State private var showingAddExercise = false
+    @State private var replacingExerciseLog: ExerciseLog?
     @State private var restTimerSeconds: Int = 0
     @State private var restTimerActive = false
     @State private var restTimerDuration: Int = 90 // Default 90 seconds
@@ -22,13 +23,18 @@ struct ActiveWorkoutView: View {
         workout.exercises.sorted { $0.orderIndex < $1.orderIndex }
     }
 
+    /// Non-skipped exercises shown in full-screen swipe view
+    private var activeExercises: [ExerciseLog] {
+        exercises.filter { $0.status != .skipped }
+    }
+
     private var currentExercise: ExerciseLog? {
-        guard currentExerciseIndex < exercises.count else { return nil }
-        return exercises[currentExerciseIndex]
+        guard currentExerciseIndex < activeExercises.count else { return nil }
+        return activeExercises[currentExerciseIndex]
     }
 
     private var progress: String {
-        "\(currentExerciseIndex + 1)/\(exercises.count)"
+        "\(currentExerciseIndex + 1)/\(activeExercises.count)"
     }
 
     var body: some View {
@@ -96,6 +102,9 @@ struct ActiveWorkoutView: View {
             .sheet(isPresented: $showingAddExercise) {
                 AddExerciseToWorkoutView(workout: workout)
             }
+            .sheet(item: $replacingExerciseLog) { exerciseLog in
+                ReplaceExerciseView(workout: workout, exerciseLog: exerciseLog)
+            }
             .offset(y: dragOffset)
             .gesture(
                 DragGesture(minimumDistance: 20)
@@ -130,42 +139,69 @@ struct ActiveWorkoutView: View {
 
     private var fullScreenView: some View {
         VStack(spacing: 0) {
-            // Progress indicator
-            HStack {
-                Text(progress)
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
+            if activeExercises.isEmpty {
+                // All exercises skipped
                 Spacer()
-                Button {
-                    showingAddExercise = true
-                } label: {
-                    Label("Add", systemImage: "plus")
+                VStack(spacing: 16) {
+                    Image(systemName: "forward.circle")
+                        .font(.system(size: 48))
+                        .foregroundStyle(Color.groveWarmSand)
+                    Text("All exercises skipped")
+                        .font(.headline)
+                        .foregroundStyle(.secondary)
+                    HStack(spacing: 16) {
+                        Button("View All") {
+                            showingCardView = true
+                        }
+                        .buttonStyle(.secondary)
+                        Button("End Workout") {
+                            endWorkout()
+                        }
+                        .buttonStyle(.primary)
+                    }
+                }
+                Spacer()
+            } else {
+                // Progress indicator
+                HStack {
+                    Text(progress)
                         .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                    Button {
+                        showingAddExercise = true
+                    } label: {
+                        Label("Add", systemImage: "plus")
+                            .font(.subheadline)
+                    }
+                    .tint(Color.groveSage)
                 }
-                .tint(Color.groveSage)
-            }
-            .padding(.horizontal)
-            .padding(.top, 8)
+                .padding(.horizontal)
+                .padding(.top, 8)
 
-            // Exercise content with swipe (disabled when keyboard is showing)
-            TabView(selection: $currentExerciseIndex) {
-                ForEach(Array(exercises.enumerated()), id: \.element.id) { index, exerciseLog in
-                    ExerciseFullScreenCard(
-                        exerciseLog: exerciseLog,
-                        onStartTimer: { startRestTimer() },
-                        onNameVisibilityChanged: index == currentExerciseIndex ? { visible in
-                            exerciseNameVisible = visible
-                        } : nil
-                    )
-                    .tag(index)
+                // Exercise content with swipe (disabled when keyboard is showing)
+                TabView(selection: $currentExerciseIndex) {
+                    ForEach(Array(activeExercises.enumerated()), id: \.element.id) { index, exerciseLog in
+                        ExerciseFullScreenCard(
+                            exerciseLog: exerciseLog,
+                            onStartTimer: { startRestTimer() },
+                            onSkip: { skipExercise(exerciseLog) },
+                            onReplace: { requestReplace(exerciseLog) },
+                            onRemove: { removeExercise(exerciseLog) },
+                            onNameVisibilityChanged: index == currentExerciseIndex ? { visible in
+                                exerciseNameVisible = visible
+                            } : nil
+                        )
+                        .tag(index)
+                    }
                 }
-            }
-            .tabViewStyle(.page(indexDisplayMode: .never))
+                .tabViewStyle(.page(indexDisplayMode: .never))
 
-            // Navigation buttons (hidden when keyboard is showing)
-            if !keyboardVisible {
-                navigationButtons
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                // Navigation buttons (hidden when keyboard is showing)
+                if !keyboardVisible {
+                    navigationButtons
+                        .transition(.move(edge: .bottom).combined(with: .opacity))
+                }
             }
         }
         .animation(.spring(response: 0.3, dampingFraction: 0.85), value: keyboardVisible)
@@ -178,12 +214,11 @@ struct ActiveWorkoutView: View {
     }
 
     private var isLastExercise: Bool {
-        currentExerciseIndex >= exercises.count - 1
+        currentExerciseIndex >= activeExercises.count - 1
     }
 
     private var lastExerciseCompleted: Bool {
-        guard let lastExercise = exercises.last else { return false }
-        if lastExercise.status == .skipped { return true }
+        guard let lastExercise = activeExercises.last else { return false }
         return lastExercise.sets.allSatisfy { $0.isCompleted } && !lastExercise.sets.isEmpty
     }
 
@@ -246,10 +281,17 @@ struct ActiveWorkoutView: View {
                 ForEach(Array(exercises.enumerated()), id: \.element.id) { index, exerciseLog in
                     ExerciseCardRowDraggable(
                         exerciseLog: exerciseLog,
-                        isActive: index == currentExerciseIndex,
+                        isActive: currentExercise?.id == exerciseLog.id,
                         isDragging: draggingExerciseID == exerciseLog.id,
                         onTap: {
-                            currentExerciseIndex = index
+                            // If skipped, unskip first so it reappears in full-screen
+                            if exerciseLog.status == .skipped {
+                                exerciseLog.status = .planned
+                            }
+                            // Find the index in activeExercises after potential unskip
+                            if let activeIndex = activeExercises.firstIndex(where: { $0.id == exerciseLog.id }) {
+                                currentExerciseIndex = activeIndex
+                            }
                             showingCardView = false
                         }
                     )
@@ -381,6 +423,41 @@ struct ActiveWorkoutView: View {
     private func discardWorkout() {
         sessionManager.discardWorkout(context: modelContext)
     }
+
+    private func skipExercise(_ exerciseLog: ExerciseLog) {
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+            exerciseLog.status = .skipped
+            // Clamp index to stay within the now-smaller activeExercises list
+            if currentExerciseIndex >= activeExercises.count {
+                currentExerciseIndex = max(0, activeExercises.count - 1)
+            }
+        }
+    }
+
+    private func removeExercise(_ exerciseLog: ExerciseLog) {
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+            // Delete sets first
+            for set in exerciseLog.sets {
+                modelContext.delete(set)
+            }
+            workout.exercises.removeAll { $0.id == exerciseLog.id }
+            modelContext.delete(exerciseLog)
+
+            // Reindex remaining exercises
+            for (i, ex) in exercises.enumerated() {
+                ex.orderIndex = i
+            }
+
+            // Clamp index
+            if currentExerciseIndex >= activeExercises.count {
+                currentExerciseIndex = max(0, activeExercises.count - 1)
+            }
+        }
+    }
+
+    private func requestReplace(_ exerciseLog: ExerciseLog) {
+        replacingExerciseLog = exerciseLog
+    }
 }
 
 // MARK: - Exercise Full Screen Card
@@ -389,6 +466,9 @@ struct ExerciseFullScreenCard: View {
     @Environment(\.modelContext) private var modelContext
     @Bindable var exerciseLog: ExerciseLog
     let onStartTimer: () -> Void
+    var onSkip: (() -> Void)? = nil
+    var onReplace: (() -> Void)? = nil
+    var onRemove: (() -> Void)? = nil
     var onNameVisibilityChanged: ((Bool) -> Void)? = nil
 
     @State private var focusedSetID: UUID?
@@ -401,10 +481,6 @@ struct ExerciseFullScreenCard: View {
         sortedSets.first
     }
 
-    private var isSkipped: Bool {
-        exerciseLog.status == .skipped
-    }
-
     var body: some View {
         ScrollViewReader { proxy in
             ScrollView {
@@ -414,8 +490,7 @@ struct ExerciseFullScreenCard: View {
                         Text(exerciseLog.exercise?.name ?? "Exercise")
                             .font(.title)
                             .fontWeight(.bold)
-                            .foregroundStyle(isSkipped ? .secondary : Color.groveText)
-                            .strikethrough(isSkipped)
+                            .foregroundStyle(Color.groveText)
                             .multilineTextAlignment(.center)
                             .onScrollVisibilityChange { visible in
                                 onNameVisibilityChanged?(visible)
@@ -425,135 +500,106 @@ struct ExerciseFullScreenCard: View {
                             .font(.subheadline)
                             .foregroundStyle(.secondary)
 
-                        if isSkipped {
-                            // Skipped badge
-                            HStack(spacing: 6) {
-                                Image(systemName: "forward.fill")
-                                    .font(.caption)
-                                Text("Skipped")
-                                    .font(.caption)
-                                    .fontWeight(.medium)
-                            }
-                            .foregroundStyle(Color.groveMutedRust)
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 6)
-                            .background(Color.groveMutedRust.opacity(0.12))
-                            .clipShape(Capsule())
-                            .padding(.top, 4)
-                        } else {
-                            // Set progress bar
-                            HStack(spacing: 8) {
-                                let completed = sortedSets.filter(\.isCompleted).count
-                                let total = sortedSets.count
+                        // Set progress bar
+                        HStack(spacing: 8) {
+                            let completed = sortedSets.filter(\.isCompleted).count
+                            let total = sortedSets.count
 
-                                GeometryReader { geo in
-                                    Capsule()
-                                        .fill(Color.groveWarmSand.opacity(0.3))
-                                        .overlay(alignment: .leading) {
-                                            Capsule()
-                                                .fill(Color.groveSage)
-                                                .frame(width: total > 0 ? geo.size.width * CGFloat(completed) / CGFloat(total) : 0)
-                                                .animation(.easeInOut(duration: 0.3), value: completed)
-                                        }
-                                }
-                                .frame(width: 120, height: 6)
-
-                                Text("\(sortedSets.filter(\.isCompleted).count)/\(sortedSets.count)")
-                                    .font(.caption2)
-                                    .foregroundStyle(.secondary)
+                            GeometryReader { geo in
+                                Capsule()
+                                    .fill(Color.groveWarmSand.opacity(0.3))
+                                    .overlay(alignment: .leading) {
+                                        Capsule()
+                                            .fill(Color.groveSage)
+                                            .frame(width: total > 0 ? geo.size.width * CGFloat(completed) / CGFloat(total) : 0)
+                                            .animation(.easeInOut(duration: 0.3), value: completed)
+                                    }
                             }
-                            .padding(.top, 4)
+                            .frame(width: 120, height: 6)
+
+                            Text("\(sortedSets.filter(\.isCompleted).count)/\(sortedSets.count)")
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
                         }
+                        .padding(.top, 4)
                     }
                     .padding(.top, 20)
 
-                    if isSkipped {
-                        // Skipped state: prominent message instead of sets
-                        VStack(spacing: 16) {
-                            Image(systemName: "forward.circle")
-                                .font(.system(size: 48))
-                                .foregroundStyle(Color.groveWarmSand)
-
-                            Text("This exercise has been skipped")
-                                .font(.subheadline)
-                                .foregroundStyle(.secondary)
-
-                            Button {
-                                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                                    exerciseLog.status = .planned
+                    // Sets
+                    VStack(spacing: 12) {
+                        ForEach(Array(sortedSets.enumerated()), id: \.element.id) { index, setLog in
+                            SetRowView(
+                                setLog: setLog,
+                                setNumber: index + 1,
+                                onComplete: onStartTimer,
+                                onRemove: sortedSets.count > 1 ? {
+                                    removeSet(setLog)
+                                } : nil,
+                                onWeightChanged: index == 0 ? { newWeight in
+                                    autofillWeight(newWeight)
+                                } : nil,
+                                onRepsChanged: index == 0 ? { newReps in
+                                    autofillReps(newReps)
+                                } : nil,
+                                onSetStatusChanged: {
+                                    updateExerciseStatus()
+                                },
+                                onFocused: {
+                                    focusedSetID = setLog.id
                                 }
-                            } label: {
-                                HStack(spacing: 6) {
-                                    Image(systemName: "arrow.uturn.backward")
-                                    Text("Unskip Exercise")
-                                }
-                                .font(.subheadline)
-                                .fontWeight(.medium)
-                                .foregroundStyle(Color.groveSage)
-                                .padding(.horizontal, 20)
-                                .padding(.vertical, 12)
-                                .background(Color.groveSage.opacity(0.12))
-                                .clipShape(Capsule())
-                            }
-                            .buttonStyle(.plain)
+                            )
+                            .id(setLog.id)
                         }
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 40)
-                    } else {
-                        // Sets
-                        VStack(spacing: 12) {
-                            ForEach(Array(sortedSets.enumerated()), id: \.element.id) { index, setLog in
-                                SetRowView(
-                                    setLog: setLog,
-                                    setNumber: index + 1,
-                                    onComplete: onStartTimer,
-                                    onRemove: sortedSets.count > 1 ? {
-                                        removeSet(setLog)
-                                    } : nil,
-                                    onWeightChanged: index == 0 ? { newWeight in
-                                        autofillWeight(newWeight)
-                                    } : nil,
-                                    onRepsChanged: index == 0 ? { newReps in
-                                        autofillReps(newReps)
-                                    } : nil,
-                                    onSetStatusChanged: {
-                                        updateExerciseStatus()
-                                    },
-                                    onFocused: {
-                                        focusedSetID = setLog.id
-                                    }
-                                )
-                                .id(setLog.id)
-                            }
 
-                            // Add set button
-                            Button {
-                                addSet()
-                            } label: {
-                                HStack {
-                                    Image(systemName: "plus")
-                                    Text("Add Set")
-                                }
-                                .font(.subheadline)
-                                .foregroundStyle(Color.groveSage)
-                                .padding(.vertical, 12)
-                                .frame(maxWidth: .infinity)
-                                .background(Color.groveCardBackground)
-                                .clipShape(RoundedRectangle(cornerRadius: 10))
-                            }
-                            .buttonStyle(.plain)
-                        }
-                        .padding(.horizontal)
-
-                        // Skip exercise button
+                        // Add set button
                         Button {
-                            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                                exerciseLog.status = .skipped
+                            addSet()
+                        } label: {
+                            HStack {
+                                Image(systemName: "plus")
+                                Text("Add Set")
+                            }
+                            .font(.subheadline)
+                            .foregroundStyle(Color.groveSage)
+                            .padding(.vertical, 12)
+                            .frame(maxWidth: .infinity)
+                            .background(Color.groveCardBackground)
+                            .clipShape(RoundedRectangle(cornerRadius: 10))
+                        }
+                        .buttonStyle(.plain)
+                    }
+                    .padding(.horizontal)
+
+                    // Exercise actions
+                    HStack(spacing: 24) {
+                        Button {
+                            if let onSkip {
+                                onSkip()
+                            } else {
+                                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                                    exerciseLog.status = .skipped
+                                }
                             }
                         } label: {
-                            Text("Skip Exercise")
+                            Label("Skip", systemImage: "forward.fill")
                                 .font(.subheadline)
                                 .foregroundStyle(Color.groveMutedRust)
+                        }
+
+                        Button {
+                            onReplace?()
+                        } label: {
+                            Label("Replace", systemImage: "arrow.triangle.2.circlepath")
+                                .font(.subheadline)
+                                .foregroundStyle(Color.groveTextSecondary)
+                        }
+
+                        Button {
+                            onRemove?()
+                        } label: {
+                            Label("Remove", systemImage: "trash")
+                                .font(.subheadline)
+                                .foregroundStyle(Color.groveMutedRust.opacity(0.7))
                         }
                     }
 
@@ -623,6 +669,7 @@ struct ExerciseFullScreenCard: View {
             exerciseLog.status = .planned
         }
     }
+
 }
 
 // MARK: - Set Row View
@@ -1140,24 +1187,141 @@ struct AddExerciseToWorkoutView: View {
     }
 
     private func addExercise(_ exercise: Exercise) {
+        let lastSets = Self.getLastSetsForExercise(exercise, context: modelContext)
+        let numberOfSets = lastSets.isEmpty ? 3 : lastSets.count
         let newIndex = workout.exercises.count
         let exerciseLog = ExerciseLog(
             exercise: exercise,
             orderIndex: newIndex,
-            targetSets: 3,
+            targetSets: numberOfSets,
             targetReps: 10
         )
         exerciseLog.workout = workout
 
-        // Create default sets
-        for i in 1...3 {
-            let setLog = SetLog(setNumber: i)
+        for i in 1...numberOfSets {
+            let lastSetData = lastSets.indices.contains(i - 1) ? lastSets[i - 1] : nil
+            let setLog = SetLog(setNumber: i, weight: lastSetData?.weight, reps: lastSetData?.reps)
             setLog.exerciseLog = exerciseLog
             exerciseLog.sets.append(setLog)
         }
 
         modelContext.insert(exerciseLog)
         dismiss()
+    }
+
+    private static func getLastSetsForExercise(_ exercise: Exercise, context: ModelContext) -> [(weight: Double?, reps: Int?)] {
+        let exerciseID = exercise.id
+        let descriptor = FetchDescriptor<ExerciseLog>(
+            predicate: #Predicate<ExerciseLog> { log in
+                log.exercise?.id == exerciseID
+            },
+            sortBy: [SortDescriptor(\.workout?.completedAt, order: .reverse)]
+        )
+
+        guard let logs = try? context.fetch(descriptor) else { return [] }
+        guard let lastLog = logs.first(where: { $0.workout?.completedAt != nil }) else { return [] }
+
+        return lastLog.sets
+            .filter { $0.isCompleted }
+            .sorted { $0.setNumber < $1.setNumber }
+            .map { (weight: $0.weight, reps: $0.reps) }
+    }
+}
+
+// MARK: - Replace Exercise View
+
+struct ReplaceExerciseView: View {
+    @Environment(\.modelContext) private var modelContext
+    @Environment(\.dismiss) private var dismiss
+    @Query(sort: \Exercise.name) private var allExercises: [Exercise]
+
+    let workout: Workout
+    let exerciseLog: ExerciseLog
+
+    @State private var searchText = ""
+
+    private var filteredExercises: [Exercise] {
+        let workoutExerciseIDs = Set(workout.exercises.compactMap { $0.exercise?.id })
+        let available = allExercises.filter { !workoutExerciseIDs.contains($0.id) }
+        if searchText.isEmpty { return available }
+        return available.filter { $0.name.localizedCaseInsensitiveContains(searchText) }
+    }
+
+    var body: some View {
+        NavigationStack {
+            List(filteredExercises) { exercise in
+                Button {
+                    replaceWith(exercise)
+                } label: {
+                    HStack {
+                        VStack(alignment: .leading) {
+                            Text(exercise.name)
+                                .foregroundStyle(Color.groveText)
+                            Text(exercise.muscleGroup.rawValue)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                        Spacer()
+                        Image(systemName: "arrow.triangle.2.circlepath")
+                            .foregroundStyle(Color.groveSage)
+                    }
+                }
+            }
+            .searchable(text: $searchText, prompt: "Search exercises")
+            .navigationTitle("Replace Exercise")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") {
+                        dismiss()
+                    }
+                }
+            }
+        }
+    }
+
+    private func replaceWith(_ newExercise: Exercise) {
+        // Delete old sets
+        for set in exerciseLog.sets {
+            modelContext.delete(set)
+        }
+        exerciseLog.sets.removeAll()
+
+        // Swap the exercise
+        exerciseLog.exercise = newExercise
+        exerciseLog.status = .planned
+
+        // Auto-fill from last completed session
+        let lastSets = getLastSetsForExercise(newExercise)
+        let numberOfSets = lastSets.isEmpty ? 3 : lastSets.count
+
+        for i in 1...numberOfSets {
+            let lastSetData = lastSets.indices.contains(i - 1) ? lastSets[i - 1] : nil
+            let setLog = SetLog(setNumber: i, weight: lastSetData?.weight, reps: lastSetData?.reps)
+            setLog.exerciseLog = exerciseLog
+            exerciseLog.sets.append(setLog)
+            modelContext.insert(setLog)
+        }
+
+        dismiss()
+    }
+
+    private func getLastSetsForExercise(_ exercise: Exercise) -> [(weight: Double?, reps: Int?)] {
+        let exerciseID = exercise.id
+        let descriptor = FetchDescriptor<ExerciseLog>(
+            predicate: #Predicate<ExerciseLog> { log in
+                log.exercise?.id == exerciseID
+            },
+            sortBy: [SortDescriptor(\.workout?.completedAt, order: .reverse)]
+        )
+
+        guard let logs = try? modelContext.fetch(descriptor) else { return [] }
+        guard let lastLog = logs.first(where: { $0.workout?.completedAt != nil }) else { return [] }
+
+        return lastLog.sets
+            .filter { $0.isCompleted }
+            .sorted { $0.setNumber < $1.setNumber }
+            .map { (weight: $0.weight, reps: $0.reps) }
     }
 }
 

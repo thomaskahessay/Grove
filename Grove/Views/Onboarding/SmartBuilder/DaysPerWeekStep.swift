@@ -5,7 +5,7 @@ struct DaysPerWeekStep: View {
     @State private var appeared = false
 
     private let dayAbbreviations = ["M", "T", "W", "T", "F", "S", "S"]
-    private let dayOptions = [2, 3, 4, 5, 6]
+    private let dayOptions = [1, 2, 3, 4, 5, 6]
 
     var body: some View {
         VStack(spacing: 0) {

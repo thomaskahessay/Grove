@@ -231,6 +231,12 @@ class HealthKitManager {
     func populateWorkout(_ workout: Workout, from hkWorkout: HKWorkout) async {
         workout.healthKitWorkoutID = hkWorkout.uuid
 
+        // Override duration with Apple Watch timing
+        workout.startedAt = hkWorkout.startDate
+        if workout.completedAt != nil {
+            workout.completedAt = hkWorkout.endDate
+        }
+
         async let hrStats = getHeartRateStats(for: hkWorkout)
         async let calories = getCalories(for: hkWorkout)
 

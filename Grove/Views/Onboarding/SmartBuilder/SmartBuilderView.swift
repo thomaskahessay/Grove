@@ -12,13 +12,9 @@ struct SmartBuilderView: View {
 
     var body: some View {
         ZStack {
-            // Background
-            LinearGradient(
-                colors: [Color.groveBackground, Color.groveWarmSand.opacity(0.15)],
-                startPoint: .top,
-                endPoint: .bottom
-            )
-            .ignoresSafeArea()
+            // Background — use solid color to match container (gradient gets clipped by parent)
+            Color.groveBackground
+                .ignoresSafeArea()
 
             // Content
             VStack(spacing: 0) {

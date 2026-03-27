@@ -24,6 +24,13 @@ struct GroveApp: App {
             // Seed built-in exercises on first launch
             let context = ModelContext(modelContainer)
             ExerciseSeeds.seedExercises(context: context)
+
+            // Migrate existing templates to 3 default sets
+            let templates = (try? context.fetch(FetchDescriptor<WorkoutTemplate>())) ?? []
+            for template in templates where template.defaultSets != 3 {
+                template.defaultSets = 3
+            }
+            try? context.save()
         } catch {
             fatalError("Could not initialize ModelContainer: \(error)")
         }

@@ -90,8 +90,8 @@ enum RepRangePreference: String, Codable, CaseIterable {
 
     var compoundSets: Int {
         switch self {
-        case .strength: return 5
-        case .hypertrophy: return 4
+        case .strength: return 3
+        case .hypertrophy: return 3
         case .endurance: return 3
         }
     }
@@ -132,7 +132,7 @@ enum SplitType: String, Codable, CaseIterable, Identifiable {
 
     var validDayCounts: [Int] {
         switch self {
-        case .fullBody: return [2, 3]
+        case .fullBody: return [1, 2, 3]
         case .upperLower: return [2, 3, 4]
         case .pushPullLegs: return [3, 6]
         case .broSplit: return [5]

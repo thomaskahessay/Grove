@@ -32,6 +32,7 @@ class SmartBuilderState {
     /// Auto-distribution of training days across a week (Mon=0 .. Sun=6)
     var trainingDaySlots: [Int] {
         switch daysPerWeek {
+        case 1: return [2]              // Wed
         case 2: return [0, 3]           // Mon, Thu
         case 3: return [0, 2, 4]        // Mon, Wed, Fri
         case 4: return [0, 1, 3, 4]     // Mon, Tue, Thu, Fri

@@ -17,13 +17,9 @@ struct OnboardingReadyView: View {
 
     var body: some View {
         ZStack {
-            // Background
-            LinearGradient(
-                colors: [Color.groveBackground, Color.groveSage.opacity(0.08)],
-                startPoint: .top,
-                endPoint: .bottom
-            )
-            .ignoresSafeArea()
+            // Background — solid color to match container (gradient gets clipped by parent)
+            Color.groveBackground
+                .ignoresSafeArea()
 
             VStack(spacing: 0) {
                 Spacer()
