@@ -128,6 +128,14 @@ struct ActiveWorkoutView: View {
                         }
                     }
             )
+            .onAppear {
+                // Resume at the first incomplete exercise, or last exercise if all done
+                if let resumeIndex = activeExercises.firstIndex(where: { $0.status != .completed }) {
+                    currentExerciseIndex = resumeIndex
+                } else if !activeExercises.isEmpty {
+                    currentExerciseIndex = activeExercises.count - 1
+                }
+            }
             .onChange(of: currentExerciseIndex) {
                 exerciseNameVisible = true
                 UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)

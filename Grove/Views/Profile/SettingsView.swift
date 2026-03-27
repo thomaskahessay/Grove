@@ -267,7 +267,7 @@ struct SettingsView: View {
                 } else {
                     isConnectingHealthKit = true
                     Task {
-                        await HealthKitManager.shared.requestAuthorization()
+                        _ = await HealthKitManager.shared.requestAuthorization()
                         isConnectingHealthKit = false
                     }
                 }

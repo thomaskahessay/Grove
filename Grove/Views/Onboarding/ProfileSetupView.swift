@@ -42,6 +42,7 @@ struct ProfileSetupView: View {
     }
 
     var body: some View {
+        GeometryReader { geometry in
         ScrollView {
             VStack(spacing: 32) {
                 Spacer().frame(height: 40)
@@ -222,7 +223,7 @@ struct ProfileSetupView: View {
                 Spacer(minLength: 40)
             }
             .padding(.horizontal, 24)
-            .frame(maxWidth: .infinity, minHeight: UIScreen.main.bounds.height)
+            .frame(maxWidth: .infinity, minHeight: geometry.size.height)
         }
         .scrollDismissesKeyboard(.interactively)
         .scrollContentBackground(.hidden)
@@ -246,6 +247,7 @@ struct ProfileSetupView: View {
             CameraPickerView(selectedImage: $selectedImage, onDismiss: { showingCamera = false })
                 .ignoresSafeArea()
         }
+        } // GeometryReader
     }
 
     // MARK: - Unit Button
