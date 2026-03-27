@@ -101,13 +101,6 @@ struct HomeView: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 24) {
-                    // Welcome Message
-                    Text(welcomeMessage)
-                        .font(.title2)
-                        .fontWeight(.semibold)
-                        .foregroundStyle(Color.groveText)
-                        .frame(maxWidth: .infinity)
-
                     // Today's Workout Card
                     if let plan = todaysPlan {
                         if plan.isRestDay {
@@ -203,7 +196,15 @@ struct HomeView: View {
             .background(Color.groveBackground)
             .navigationTitle("")
             .navigationBarTitleDisplayMode(.inline)
-            .toolbar {}
+            .toolbar {
+                ToolbarItem(placement: .principal) {
+                    Text(welcomeMessage)
+                        .font(.headline)
+                        .foregroundStyle(Color.groveText)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.7)
+                }
+            }
             .sheet(isPresented: $showingWeeklyPlan) {
                 WeeklyPlanView()
             }
