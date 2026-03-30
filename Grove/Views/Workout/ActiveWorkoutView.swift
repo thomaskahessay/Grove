@@ -13,8 +13,9 @@ struct ActiveWorkoutView: View {
     @State private var showingAddExercise = false
     @State private var replacingExerciseLog: ExerciseLog?
     @State private var restTimerSeconds: Int = 0
-    @State private var restTimerActive = false
+    @State private var restTimerAfterSetID: UUID? = nil
     @State private var restTimerDuration: Int = 90 // Default 90 seconds
+    @State private var timerTask: Task<Void, Never>?
     @State private var exerciseNameVisible = true
     @State private var keyboardVisible = false
     @State private var dragOffset: CGFloat = 0
@@ -49,10 +50,6 @@ struct ActiveWorkoutView: View {
                     fullScreenView
                 }
 
-                // Rest Timer Overlay
-                if restTimerActive {
-                    restTimerOverlay
-                }
             }
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -192,7 +189,11 @@ struct ActiveWorkoutView: View {
                     ForEach(Array(activeExercises.enumerated()), id: \.element.id) { index, exerciseLog in
                         ExerciseFullScreenCard(
                             exerciseLog: exerciseLog,
-                            onStartTimer: { startRestTimer() },
+                            onStartTimer: { setID in startRestTimer(afterSetID: setID) },
+                            restTimerAfterSetID: restTimerAfterSetID,
+                            restTimerSeconds: restTimerSeconds,
+                            onAdjustTimer: { delta in restTimerSeconds = max(0, restTimerSeconds + delta) },
+                            onSkipTimer: { dismissRestTimer() },
                             onSkip: { skipExercise(exerciseLog) },
                             onReplace: { requestReplace(exerciseLog) },
                             onRemove: { removeExercise(exerciseLog) },
@@ -344,82 +345,33 @@ struct ActiveWorkoutView: View {
 
     // MARK: - Rest Timer
 
-    private var restTimerOverlay: some View {
-        ZStack {
-            Color.black.opacity(0.6)
-                .ignoresSafeArea()
-                .onTapGesture {
-                    restTimerActive = false
-                }
-
-            VStack(spacing: 24) {
-                Text("Rest")
-                    .font(.title2)
-                    .foregroundStyle(.white.opacity(0.8))
-
-                Text(formatTime(restTimerSeconds))
-                    .font(.system(size: 72, weight: .bold, design: .rounded))
-                    .foregroundStyle(.white)
-                    .monospacedDigit()
-
-                HStack(spacing: 20) {
-                    Button {
-                        restTimerSeconds = max(0, restTimerSeconds - 30)
-                    } label: {
-                        Text("-30s")
-                            .padding(.horizontal, 20)
-                            .padding(.vertical, 10)
-                            .background(.ultraThinMaterial)
-                            .clipShape(Capsule())
-                    }
-
-                    Button {
-                        restTimerSeconds += 30
-                    } label: {
-                        Text("+30s")
-                            .padding(.horizontal, 20)
-                            .padding(.vertical, 10)
-                            .background(.ultraThinMaterial)
-                            .clipShape(Capsule())
-                    }
-                }
-                .foregroundStyle(.white)
-
-                Button {
-                    restTimerActive = false
-                } label: {
-                    Text("Skip")
-                        .font(.headline)
-                        .foregroundStyle(.white.opacity(0.8))
-                }
-                .padding(.top, 8)
-            }
-        }
-        .onAppear {
-            startTimerCountdown()
-        }
-    }
-
-    private func startRestTimer() {
+    private func startRestTimer(afterSetID: UUID) {
+        timerTask?.cancel()
         restTimerSeconds = restTimerDuration
-        restTimerActive = true
-    }
-
-    private func startTimerCountdown() {
-        Task { @MainActor in
-            while restTimerActive && restTimerSeconds > 0 {
-                try? await Task.sleep(for: .seconds(1))
-                guard restTimerActive else { break }
+        withAnimation(.easeInOut(duration: 0.3)) {
+            restTimerAfterSetID = afterSetID
+        }
+        timerTask = Task { @MainActor in
+            while !Task.isCancelled && restTimerAfterSetID != nil && restTimerSeconds > 0 {
+                do {
+                    try await Task.sleep(for: .seconds(1))
+                } catch {
+                    break
+                }
+                guard !Task.isCancelled, restTimerAfterSetID != nil else { break }
                 restTimerSeconds -= 1
             }
-            restTimerActive = false
+            if !Task.isCancelled && restTimerSeconds <= 0 {
+                dismissRestTimer()
+            }
         }
     }
 
-    private func formatTime(_ seconds: Int) -> String {
-        let mins = seconds / 60
-        let secs = seconds % 60
-        return String(format: "%d:%02d", mins, secs)
+    private func dismissRestTimer() {
+        timerTask?.cancel()
+        withAnimation(.easeInOut(duration: 0.3)) {
+            restTimerAfterSetID = nil
+        }
     }
 
     // MARK: - Actions
@@ -473,7 +425,11 @@ struct ActiveWorkoutView: View {
 struct ExerciseFullScreenCard: View {
     @Environment(\.modelContext) private var modelContext
     @Bindable var exerciseLog: ExerciseLog
-    let onStartTimer: () -> Void
+    let onStartTimer: (UUID) -> Void
+    var restTimerAfterSetID: UUID? = nil
+    var restTimerSeconds: Int = 0
+    var onAdjustTimer: ((Int) -> Void)? = nil
+    var onSkipTimer: (() -> Void)? = nil
     var onSkip: (() -> Void)? = nil
     var onReplace: (() -> Void)? = nil
     var onRemove: (() -> Void)? = nil
@@ -551,7 +507,12 @@ struct ExerciseFullScreenCard: View {
                             SetRowView(
                                 setLog: setLog,
                                 setNumber: index + 1,
-                                onComplete: onStartTimer,
+                                onComplete: { setID in onStartTimer(setID) },
+                                onUncomplete: { setID in
+                                    if restTimerAfterSetID == setID {
+                                        onSkipTimer?()
+                                    }
+                                },
                                 onRemove: sortedSets.count > 1 ? {
                                     removeSet(setLog)
                                 } : nil,
@@ -571,6 +532,20 @@ struct ExerciseFullScreenCard: View {
                                 lastSessionReps: setLog.lastSessionReps
                             )
                             .id(setLog.id)
+
+                            // Inline rest timer appears after the set that triggered it
+                            if restTimerAfterSetID == setLog.id {
+                                RestTimerRowView(
+                                    seconds: restTimerSeconds,
+                                    onAdjust: { delta in onAdjustTimer?(delta) },
+                                    onSkip: { onSkipTimer?() }
+                                )
+                                .transition(.asymmetric(
+                                    insertion: .move(edge: .top).combined(with: .opacity),
+                                    removal: .opacity
+                                ))
+                                .id("timer-\(setLog.id)")
+                            }
                         }
 
                         // Add set button
@@ -634,6 +609,13 @@ struct ExerciseFullScreenCard: View {
                 if let newID {
                     withAnimation(.easeInOut(duration: 0.25)) {
                         proxy.scrollTo(newID, anchor: .center)
+                    }
+                }
+            }
+            .onChange(of: restTimerAfterSetID) { _, newID in
+                if let newID {
+                    withAnimation(.easeInOut(duration: 0.3)) {
+                        proxy.scrollTo("timer-\(newID)", anchor: .center)
                     }
                 }
             }
@@ -710,7 +692,8 @@ struct ExerciseFullScreenCard: View {
 struct SetRowView: View {
     @Bindable var setLog: SetLog
     let setNumber: Int
-    let onComplete: () -> Void
+    let onComplete: (UUID) -> Void
+    let onUncomplete: ((UUID) -> Void)?
     let onRemove: (() -> Void)?
     var onWeightChanged: ((Double?) -> Void)? = nil
     var onRepsChanged: ((Int?) -> Void)? = nil
@@ -984,11 +967,82 @@ struct SetRowView: View {
         setLog.isCompleted.toggle()
         if setLog.isCompleted {
             setLog.completedAt = Date()
-            onComplete()
+            onComplete(setLog.id)
         } else {
             setLog.completedAt = nil
+            onUncomplete?(setLog.id)
         }
         onSetStatusChanged?()
+    }
+}
+
+// MARK: - Rest Timer Row (inline)
+
+struct RestTimerRowView: View {
+    let seconds: Int
+    let onAdjust: (Int) -> Void
+    let onSkip: () -> Void
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Image(systemName: "timer")
+                .font(.headline)
+                .foregroundStyle(Color.groveSage)
+
+            Text(formatTime(seconds))
+                .font(.system(size: 28, weight: .bold, design: .rounded))
+                .foregroundStyle(Color.groveText)
+                .monospacedDigit()
+                .frame(minWidth: 60)
+
+            Spacer()
+
+            Button { onAdjust(-30) } label: {
+                Text("-30s")
+                    .font(.caption)
+                    .fontWeight(.semibold)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+                    .background(Color.groveWarmSand.opacity(0.2))
+                    .clipShape(Capsule())
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(Color.groveText)
+
+            Button { onAdjust(30) } label: {
+                Text("+30s")
+                    .font(.caption)
+                    .fontWeight(.semibold)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+                    .background(Color.groveWarmSand.opacity(0.2))
+                    .clipShape(Capsule())
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(Color.groveText)
+
+            Button { onSkip() } label: {
+                Text("Skip")
+                    .font(.caption)
+                    .fontWeight(.semibold)
+                    .foregroundStyle(Color.groveMutedRust)
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+        .background(Color.groveSage.opacity(0.08))
+        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .overlay(
+            RoundedRectangle(cornerRadius: 12)
+                .stroke(Color.groveSage.opacity(0.3), lineWidth: 1)
+        )
+    }
+
+    private func formatTime(_ seconds: Int) -> String {
+        let mins = seconds / 60
+        let secs = seconds % 60
+        return String(format: "%d:%02d", mins, secs)
     }
 }
 
