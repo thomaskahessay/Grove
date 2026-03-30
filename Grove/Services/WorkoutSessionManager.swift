@@ -118,9 +118,6 @@ class WorkoutSessionManager {
             try? context.save()
         }
 
-        // Use recalculateStreak for accuracy — recordWorkout relies on consecutiveRestDays
-        // which may be 0 when a rest day was set via the plan system rather than explicitly
-        // recorded, causing it to incorrectly reset the streak to 1.
         if let user = user, let context = context {
             let allWorkouts = (try? context.fetch(FetchDescriptor<Workout>())) ?? []
             let completedWorkouts = allWorkouts.filter { $0.completedAt != nil }
@@ -129,7 +126,6 @@ class WorkoutSessionManager {
             if user.currentStreak > 0 {
                 user.isStreakWilted = false
             }
-            user.lastWorkoutDate = Calendar.current.startOfDay(for: Date())
         }
 
         let postWorkoutStage = user.map { PlantStage.from(streak: $0.currentStreak) }
@@ -173,6 +169,9 @@ class WorkoutSessionManager {
         activeWorkout = nil
         isMinimized = false
         isFullScreenPresented = false
+
+        // Cancel abandoned workout notification since workout is now complete
+        NotificationService.shared.cancelAbandonedWorkoutReminder()
 
         // Delay presentation until fullScreenCover dismissal completes.
         // SwiftUI crashes if a sheet is presented while a fullScreenCover is being dismissed.
@@ -320,5 +319,8 @@ class WorkoutSessionManager {
         activeWorkout = nil
         isMinimized = false
         isFullScreenPresented = false
+
+        // Cancel abandoned workout notification since workout is discarded
+        NotificationService.shared.cancelAbandonedWorkoutReminder()
     }
 }

@@ -70,6 +70,15 @@ class SmartBuilderState {
         (dayExerciseSelections[dayIndex]?.count ?? 0) * 10
     }
 
+    /// Pre-fills state from existing user preferences (for edit mode)
+    convenience init(from user: User) {
+        self.init()
+        self.daysPerWeek = user.preferredDaysPerWeek
+        self.minutesPerWorkout = user.preferredWorkoutMinutes
+        self.selectedSplit = user.preferredSplit
+        self.repRange = user.preferredRepRange
+    }
+
     func advance() {
         if currentStep < totalSteps {
             currentStep += 1

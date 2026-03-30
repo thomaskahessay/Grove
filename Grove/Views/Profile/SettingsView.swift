@@ -14,6 +14,7 @@ struct SettingsView: View {
     @State private var showingDeleteConfirm = false
     @State private var showingSignOutConfirm = false
     @State private var isConnectingHealthKit = false
+    @State private var showingPlanEditor = false
 
     private var user: User? { users.first }
 
@@ -30,6 +31,7 @@ struct SettingsView: View {
             profilePhotoSection
             accountSection
             preferencesSection
+            trainingPlanSection
             sharingSection
             linksSection
             appearanceSection
@@ -79,6 +81,22 @@ struct SettingsView: View {
             Button("Cancel", role: .cancel) {}
         } message: {
             Text("This will permanently delete your account, workouts, and all data. This cannot be undone.")
+        }
+        .sheet(isPresented: $showingPlanEditor) {
+            if let user = user {
+                NavigationStack {
+                    SmartBuilderView(
+                        user: user,
+                        isEditMode: true,
+                        onComplete: { showingPlanEditor = false }
+                    )
+                    .toolbar {
+                        ToolbarItem(placement: .cancellationAction) {
+                            Button("Cancel") { showingPlanEditor = false }
+                        }
+                    }
+                }
+            }
         }
     }
 
@@ -221,6 +239,30 @@ struct SettingsView: View {
                         get: { user.vacationEndDate ?? Date() },
                         set: { user.vacationEndDate = $0 }
                     ), in: (user.vacationStartDate ?? Date())..., displayedComponents: .date)
+                }
+            }
+        }
+    }
+
+    // MARK: - Training Plan
+
+    private var trainingPlanSection: some View {
+        Section("Training Plan") {
+            Button {
+                showingPlanEditor = true
+            } label: {
+                HStack {
+                    Label("Edit Training Plan", systemImage: "calendar.badge.plus")
+                        .foregroundStyle(Color.groveText)
+                    Spacer()
+                    if let user = user {
+                        Text("\(user.preferredDaysPerWeek) days/week")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    Image(systemName: "chevron.right")
+                        .font(.caption)
+                        .foregroundStyle(.tertiary)
                 }
             }
         }

@@ -26,6 +26,56 @@ struct SmartBuilderEngine {
         return result
     }
 
+    /// Generates defaults for edit mode, reusing exercises from existing templates
+    /// where their category matches the new day's category.
+    static func generateDefaultsForEdit(
+        state: SmartBuilderState,
+        allExercises: [Exercise],
+        existingTemplates: [WorkoutTemplate]
+    ) -> [Int: [Exercise]] {
+        var result: [Int: [Exercise]] = [:]
+        let labels = state.dayLabels
+
+        // Group existing templates by category, preserving order for A/B matching
+        var templatesByCategory: [TemplateCategory: [WorkoutTemplate]] = [:]
+        for template in existingTemplates {
+            templatesByCategory[template.category, default: []].append(template)
+        }
+
+        // Track how many times we've used each category so we pull A first, then B, etc.
+        var categoryUsed: [TemplateCategory: Int] = [:]
+
+        for (dayIndex, label) in labels.enumerated() {
+            let category = categoryFor(label)
+            let usedCount = categoryUsed[category, default: 0]
+            categoryUsed[category] = usedCount + 1
+
+            // Try to find a matching existing template by category
+            if let templates = templatesByCategory[category],
+               usedCount < templates.count {
+                let template = templates[usedCount]
+                let exercises = template.exerciseIDs.compactMap { id in
+                    allExercises.first { $0.id == id }
+                }
+                if !exercises.isEmpty {
+                    result[dayIndex] = exercises
+                    continue
+                }
+            }
+
+            // No match — fall back to fresh defaults
+            let muscleGroups = SplitType.muscleGroups(for: label)
+            let budget = state.exerciseBudget
+            result[dayIndex] = pickExercises(
+                muscleGroups: muscleGroups,
+                budget: budget,
+                from: allExercises
+            )
+        }
+
+        return result
+    }
+
     /// Picks exercises for a day given muscle groups and budget
     private static func pickExercises(
         muscleGroups: [MuscleGroup],
@@ -52,35 +102,109 @@ struct SmartBuilderEngine {
         return selected.sorted { $0.sortPriority < $1.sortPriority }
     }
 
-    /// Creates templates and plans from the builder state
+    /// Creates templates and plans from the builder state (used during onboarding)
     static func createPlan(
         state: SmartBuilderState,
         user: User,
         context: ModelContext
     ) {
+        let templates = createTemplates(state: state, user: user, context: context)
+        generatePlansForCurrentWeek(
+            state: state,
+            templates: templates,
+            user: user,
+            context: context
+        )
+        savePreferences(state: state, templates: templates, user: user)
+    }
+
+    /// Updates an existing plan: deletes future unstarted plans, creates new templates,
+    /// and regenerates plans for 3 weeks (used from Settings edit mode)
+    static func updatePlan(
+        state: SmartBuilderState,
+        user: User,
+        context: ModelContext
+    ) {
+        let calendar = Calendar.current
+        let today = calendar.startOfDay(for: Date())
+
+        // Delete future unstarted plans (can't use relationship filtering in #Predicate)
+        let allPlans: [WorkoutPlan]
+        do {
+            allPlans = try context.fetch(FetchDescriptor<WorkoutPlan>())
+        } catch { return }
+
+        for plan in allPlans {
+            let planDate = calendar.startOfDay(for: plan.date)
+            if planDate >= today && plan.completedWorkout == nil {
+                context.delete(plan)
+            }
+        }
+
+        // Create new templates and generate plans for 3 weeks
+        let templates = createTemplates(state: state, user: user, context: context)
+        generatePlansForWeeks(
+            weekCount: 3,
+            state: state,
+            templates: templates,
+            user: user,
+            context: context
+        )
+        savePreferences(state: state, templates: templates, user: user)
+    }
+
+    // MARK: - Shared Helpers
+
+    /// Creates workout templates from the builder state
+    private static func createTemplates(
+        state: SmartBuilderState,
+        user: User,
+        context: ModelContext
+    ) -> [Int: WorkoutTemplate] {
         let labels = state.dayLabels
         var templates: [Int: WorkoutTemplate] = [:]
 
-        // Create a template for each unique day type
-        var templatesByLabel: [String: WorkoutTemplate] = [:]
+        // Count occurrences of each label to detect duplicates (e.g. Upper/Lower 4-day)
+        var labelCounts: [String: Int] = [:]
+        for label in labels { labelCounts[label, default: 0] += 1 }
+
+        // Track how many times we've seen each label so far for suffix assignment
+        var labelSeen: [String: Int] = [:]
+        let suffixes = ["A", "B", "C", "D", "E", "F"]
 
         for (dayIndex, label) in labels.enumerated() {
-            let exercises = state.sortedExercises(for: dayIndex)
+            let seen = labelSeen[label, default: 0]
+            labelSeen[label] = seen + 1
 
-            // For splits that repeat (e.g., PPL 2x), create separate templates
-            let templateKey = "\(label)-\(dayIndex)"
-            let template = WorkoutTemplate(name: label, category: categoryFor(label), isBuiltIn: false)
+            // Only add suffix if the label appears more than once
+            let name: String
+            if (labelCounts[label] ?? 1) > 1 {
+                let suffix = seen < suffixes.count ? suffixes[seen] : "\(seen + 1)"
+                name = "\(label) \(suffix)"
+            } else {
+                name = label
+            }
+
+            let exercises = state.sortedExercises(for: dayIndex)
+            let template = WorkoutTemplate(name: name, category: categoryFor(label), isBuiltIn: false)
             template.exerciseIDs = exercises.map { $0.id }
             template.defaultSets = state.repRange.compoundSets
             template.defaultReps = state.repRange.compoundReps
             template.user = user
             context.insert(template)
-
             templates[dayIndex] = template
-            templatesByLabel[templateKey] = template
         }
 
-        // Create plans for the current week (today onward)
+        return templates
+    }
+
+    /// Generates plans for the current week only (today onward) — used during onboarding
+    private static func generatePlansForCurrentWeek(
+        state: SmartBuilderState,
+        templates: [Int: WorkoutTemplate],
+        user: User,
+        context: ModelContext
+    ) {
         let calendar = Calendar.current
         let today = calendar.startOfDay(for: Date())
         let weekday = calendar.component(.weekday, from: today)
@@ -103,8 +227,51 @@ struct SmartBuilderEngine {
                 context.insert(plan)
             }
         }
+    }
 
-        // Save user preferences
+    /// Generates plans for multiple weeks (today onward, skipping existing plans)
+    private static func generatePlansForWeeks(
+        weekCount: Int,
+        state: SmartBuilderState,
+        templates: [Int: WorkoutTemplate],
+        user: User,
+        context: ModelContext
+    ) {
+        let calendar = Calendar.current
+        let today = calendar.startOfDay(for: Date())
+        let weekday = calendar.component(.weekday, from: today)
+        let daysSinceMonday = (weekday + 5) % 7
+        guard let thisMonday = calendar.date(byAdding: .day, value: -daysSinceMonday, to: today) else { return }
+
+        let trainingSlots = Set(state.trainingDaySlots)
+
+        for weekOffset in 0..<weekCount {
+            guard let monday = calendar.date(byAdding: .day, value: weekOffset * 7, to: thisMonday) else { continue }
+
+            for dayOffset in 0..<7 {
+                guard let date = calendar.date(byAdding: .day, value: dayOffset, to: monday) else { continue }
+                guard date >= today else { continue }
+
+                if trainingSlots.contains(dayOffset),
+                   let slotIndex = state.trainingDaySlots.firstIndex(of: dayOffset),
+                   let template = templates[slotIndex] {
+                    let plan = WorkoutPlan(date: date, user: user, template: template)
+                    context.insert(plan)
+                } else {
+                    let plan = WorkoutPlan(date: date, user: user, isRestDay: true)
+                    context.insert(plan)
+                }
+            }
+        }
+    }
+
+    /// Saves builder preferences to the user model
+    private static func savePreferences(
+        state: SmartBuilderState,
+        templates: [Int: WorkoutTemplate],
+        user: User
+    ) {
+        let labels = state.dayLabels
         user.preferredDaysPerWeek = state.daysPerWeek
         user.preferredWorkoutMinutes = state.minutesPerWorkout
         user.preferredRepRange = state.repRange
@@ -153,14 +320,15 @@ struct SmartBuilderEngine {
         let weekday = calendar.component(.weekday, from: today)
         let daysSinceMonday = (weekday + 5) % 7
         guard let thisMonday = calendar.date(byAdding: .day, value: -daysSinceMonday, to: today),
-              let nextMonday = calendar.date(byAdding: .day, value: 7, to: thisMonday) else { return }
+              let nextMonday = calendar.date(byAdding: .day, value: 7, to: thisMonday),
+              let thirdMonday = calendar.date(byAdding: .day, value: 14, to: thisMonday) else { return }
 
         let trainingSlotSet = Set(trainingSlots)
 
         // Set of dates that already have plans
         let existingDates = Set(existingPlans.map { calendar.startOfDay(for: $0.date) })
 
-        for monday in [thisMonday, nextMonday] {
+        for monday in [thisMonday, nextMonday, thirdMonday] {
             for dayOffset in 0..<7 {
                 guard let date = calendar.date(byAdding: .day, value: dayOffset, to: monday) else { continue }
                 // Only create plans for today onward, and only if no plan exists

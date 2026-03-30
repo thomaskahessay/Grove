@@ -3,12 +3,14 @@ import SwiftData
 
 struct SmartBuilderView: View {
     var user: User
+    var isEditMode: Bool = false
     var onBack: (() -> Void)?
     var onComplete: () -> Void
 
     @Environment(\.modelContext) private var modelContext
     @Query(filter: #Predicate<Exercise> { $0.isBuiltIn }) private var exercises: [Exercise]
     @State private var state = SmartBuilderState()
+    @State private var didInitState = false
 
     var body: some View {
         ZStack {
@@ -20,7 +22,7 @@ struct SmartBuilderView: View {
             VStack(spacing: 0) {
                 // Top bar: internal back + step dots
                 topBar
-                    .padding(.top, 52) // Below container progress bar
+                    .padding(.top, isEditMode ? 16 : 52)
                     .padding(.horizontal, 24)
 
                 // Step content — using Group + switch for clean transitions
@@ -60,14 +62,20 @@ struct SmartBuilderView: View {
                     .padding(.bottom, 16)
             }
         }
+        .onAppear {
+            if isEditMode && !didInitState {
+                state = SmartBuilderState(from: user)
+                didInitState = true
+            }
+        }
     }
 
     // MARK: - Top Bar
 
     private var topBar: some View {
         HStack(spacing: 0) {
-            // Back button — step 0 goes back to profile setup, other steps go back within builder
-            if state.currentStep > 0 || onBack != nil {
+            // Back button — step 0 goes back to profile setup (onboarding) or is hidden (edit mode)
+            if state.currentStep > 0 || (!isEditMode && onBack != nil) {
                 Button {
                     if state.currentStep == 0 {
                         onBack?()
@@ -113,7 +121,7 @@ struct SmartBuilderView: View {
     private var bottomButton: some View {
         Button(action: handleContinue) {
             HStack(spacing: 8) {
-                Text(state.currentStep == state.totalSteps ? "Looks Good" : "Continue")
+                Text(state.currentStep == state.totalSteps ? (isEditMode ? "Save Changes" : "Looks Good") : "Continue")
                     .font(.headline)
 
                 if state.currentStep == state.totalSteps {
@@ -136,17 +144,44 @@ struct SmartBuilderView: View {
         }
     }
 
+    /// Fetches the user's current weekly templates in order, for reuse in edit mode
+    private func fetchExistingTemplates() -> [WorkoutTemplate] {
+        let templateIDs = user.weeklyTemplateIDs
+        guard !templateIDs.isEmpty else { return [] }
+
+        let allTemplates: [WorkoutTemplate]
+        do {
+            allTemplates = try modelContext.fetch(FetchDescriptor<WorkoutTemplate>())
+        } catch { return [] }
+
+        let byID = Dictionary(uniqueKeysWithValues: allTemplates.compactMap { ($0.id, $0) })
+        return templateIDs.compactMap { byID[$0] }
+    }
+
     private func handleContinue() {
         if state.currentStep == state.totalSteps {
-            SmartBuilderEngine.createPlan(state: state, user: user, context: modelContext)
+            if isEditMode {
+                SmartBuilderEngine.updatePlan(state: state, user: user, context: modelContext)
+            } else {
+                SmartBuilderEngine.createPlan(state: state, user: user, context: modelContext)
+            }
             onComplete()
         } else {
             if state.currentStep == 2 {
-                // Moving from split to exercises — generate defaults
-                state.dayExerciseSelections = SmartBuilderEngine.generateDefaults(
-                    state: state,
-                    allExercises: exercises
-                )
+                if isEditMode {
+                    // In edit mode, reuse exercises from existing templates where categories match
+                    let existingTemplates = fetchExistingTemplates()
+                    state.dayExerciseSelections = SmartBuilderEngine.generateDefaultsForEdit(
+                        state: state,
+                        allExercises: exercises,
+                        existingTemplates: existingTemplates
+                    )
+                } else {
+                    state.dayExerciseSelections = SmartBuilderEngine.generateDefaults(
+                        state: state,
+                        allExercises: exercises
+                    )
+                }
             }
             withAnimation(.easeInOut(duration: 0.3)) {
                 state.advance()
