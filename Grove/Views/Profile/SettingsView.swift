@@ -179,24 +179,6 @@ struct SettingsView: View {
                     .multilineTextAlignment(.trailing)
                     .foregroundStyle(.secondary)
                 }
-
-                Picker("Fitness Goal", selection: Binding(
-                    get: { user.fitnessGoal },
-                    set: { user.fitnessGoal = $0 }
-                )) {
-                    ForEach(FitnessGoal.allCases, id: \.self) { goal in
-                        Text(goal.rawValue).tag(goal)
-                    }
-                }
-
-                Picker("Experience Level", selection: Binding(
-                    get: { user.experienceLevel },
-                    set: { user.experienceLevel = $0 }
-                )) {
-                    ForEach(ExperienceLevel.allCases, id: \.self) { level in
-                        Text(level.rawValue).tag(level)
-                    }
-                }
             }
         }
     }

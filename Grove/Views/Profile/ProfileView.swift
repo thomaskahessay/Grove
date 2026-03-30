@@ -32,6 +32,7 @@ struct ProfileView: View {
     @State private var cameraImage: UIImage? = nil
     @State private var showingPhotoPicker = false
     @State private var showingCamera = false
+    @State private var showingPlanEditor = false
 
     private var user: User? { users.first }
 
@@ -51,7 +52,7 @@ struct ProfileView: View {
                     statsCard
                     streakPlantCard
                     quickAccessCards
-                    fitnessInfoCard
+                    currentProgramCard
                 }
                 .padding(.horizontal)
                 .padding(.bottom, 32)
@@ -86,6 +87,22 @@ struct ProfileView: View {
             if let image = newImage {
                 user?.profileImageData = processImage(image)
                 cameraImage = nil
+            }
+        }
+        .sheet(isPresented: $showingPlanEditor) {
+            if let user = user {
+                NavigationStack {
+                    SmartBuilderView(
+                        user: user,
+                        isEditMode: true,
+                        onComplete: { showingPlanEditor = false }
+                    )
+                    .toolbar {
+                        ToolbarItem(placement: .cancellationAction) {
+                            Button("Cancel") { showingPlanEditor = false }
+                        }
+                    }
+                }
             }
         }
     }
@@ -146,18 +163,9 @@ struct ProfileView: View {
                     .fontWeight(.bold)
                     .foregroundStyle(Color.groveText)
 
-                VStack(spacing: 4) {
-                    Text("Member since \(memberSinceText(user.createdAt))")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-
-                    Text(user.fitnessGoal.rawValue)
-                        .font(.caption)
-                        .foregroundStyle(Color.groveSage)
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 3)
-                        .background(Color.groveSage.opacity(0.12), in: Capsule())
-                }
+                Text("Member since \(memberSinceText(user.createdAt))")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
             }
         }
         .frame(maxWidth: .infinity)
@@ -333,29 +341,36 @@ struct ProfileView: View {
         }
     }
 
-    // MARK: - Fitness Info Card
+    // MARK: - Current Program Card
 
-    private var fitnessInfoCard: some View {
+    private var currentProgramCard: some View {
         Group {
             if let user = user {
-                NavigationLink {
-                    SettingsView()
+                Button {
+                    showingPlanEditor = true
                 } label: {
-                    HStack {
-                        VStack(alignment: .leading, spacing: 6) {
-                            Text("Fitness Profile")
+                    HStack(spacing: 14) {
+                        Image(systemName: "calendar.badge.clock")
+                            .font(.title2)
+                            .foregroundStyle(Color.groveSage)
+                            .frame(width: 36)
+
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("Current Program")
                                 .font(.headline)
                                 .foregroundStyle(Color.groveText)
 
-                            HStack(spacing: 12) {
-                                Label(user.fitnessGoal.rawValue, systemImage: "target")
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
+                            Text(user.preferredSplit.rawValue)
+                                .font(.subheadline)
+                                .foregroundStyle(Color.groveSage)
 
-                                Label(user.experienceLevel.rawValue, systemImage: "figure.strengthtraining.traditional")
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                            }
+                            Text("\(user.preferredDaysPerWeek) days/week · \(user.preferredRepRange.rawValue)")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+
+                            Text("\(user.preferredWorkoutMinutes) min sessions")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
                         }
 
                         Spacer()
