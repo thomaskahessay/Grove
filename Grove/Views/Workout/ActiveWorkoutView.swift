@@ -763,6 +763,23 @@ struct SetRowView: View {
                         .keyboardType(.decimalPad)
                         .focused($weightFocused)
                         .onSubmit { syncWeightFromText() }
+                        .onChange(of: weightText) { _, newValue in
+                            // Only allow whole numbers or .5 increments
+                            if let dotIndex = newValue.firstIndex(of: ".") {
+                                let decimals = newValue[newValue.index(after: dotIndex)...]
+                                if decimals.count > 1 {
+                                    weightText = String(newValue.prefix(through: newValue.index(dotIndex, offsetBy: 1)))
+                                } else if decimals.count == 1 {
+                                    if decimals == "0" {
+                                        // Strip ".0" — show as whole number
+                                        weightText = String(newValue.prefix(upTo: dotIndex))
+                                    } else if decimals != "5" {
+                                        // Only .5 allowed as decimal
+                                        weightText = String(newValue.prefix(upTo: dotIndex))
+                                    }
+                                }
+                            }
+                        }
                         .onChange(of: weightFocused) { _, focused in
                             if focused { onFocused?() }
                             else { syncWeightFromText() }

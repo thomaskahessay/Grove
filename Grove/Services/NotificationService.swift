@@ -1,0 +1,235 @@
+import Foundation
+import UserNotifications
+
+@MainActor @Observable
+class NotificationService {
+    static let shared = NotificationService()
+
+    var authorizationStatus: UNAuthorizationStatus = .notDetermined
+
+    // MARK: - Notification Identifiers
+
+    private static let dailyWorkoutID = "grove.daily.workout"
+    private static let weeklyPlanSundayID = "grove.weekly.plan.sunday"
+    private static let weeklyPlanMondayID = "grove.weekly.plan.monday"
+    private static let abandonedWorkoutID = "grove.abandoned.workout"
+
+    private init() {}
+
+    // MARK: - Authorization
+
+    func requestAuthorization() async -> Bool {
+        do {
+            let granted = try await UNUserNotificationCenter.current()
+                .requestAuthorization(options: [.alert, .sound, .badge])
+            await checkAuthorizationStatus()
+            return granted
+        } catch {
+            return false
+        }
+    }
+
+    func checkAuthorizationStatus() async {
+        let settings = await UNUserNotificationCenter.current().notificationSettings()
+        authorizationStatus = settings.authorizationStatus
+    }
+
+    // MARK: - Daily Workout Reminder (8 AM)
+
+    func scheduleDailyWorkoutReminder(plans: [WorkoutPlan], user: User) {
+        let center = UNUserNotificationCenter.current()
+        center.removePendingNotificationRequests(withIdentifiers: [Self.dailyWorkoutID])
+
+        guard authorizationStatus == .authorized,
+              user.notifyWorkoutReminder else { return }
+
+        let calendar = Calendar.current
+        let today = calendar.startOfDay(for: Date())
+
+        // Find today's actionable plan
+        guard let todaysPlan = plans.first(where: {
+            calendar.isDate($0.date, inSameDayAs: today)
+            && !$0.isRestDay
+            && $0.completedWorkout == nil
+            && $0.template != nil
+        }) else { return }
+
+        let templateName = todaysPlan.template?.name ?? "Workout"
+
+        // Check if 8 AM today is in quiet hours
+        var triggerComponents = calendar.dateComponents([.year, .month, .day], from: today)
+        triggerComponents.hour = 8
+        triggerComponents.minute = 0
+        guard let triggerDate = calendar.date(from: triggerComponents) else { return }
+
+        if isInQuietHours(triggerDate, user: user) { return }
+
+        // If 8 AM already passed today, skip
+        if triggerDate < Date() { return }
+
+        let content = UNMutableNotificationContent()
+        content.title = "Grove"
+        content.body = "Today's workout: \(templateName). Let's grow!"
+        content.sound = .default
+
+        let trigger = UNCalendarNotificationTrigger(
+            dateMatching: DateComponents(hour: 8, minute: 0),
+            repeats: false
+        )
+
+        let request = UNNotificationRequest(
+            identifier: Self.dailyWorkoutID,
+            content: content,
+            trigger: trigger
+        )
+
+        center.add(request)
+    }
+
+    // MARK: - Weekly Planning Nudge (Sunday 6 PM + Monday 8 AM)
+
+    func scheduleWeeklyPlanningNudge(plans: [WorkoutPlan], user: User) {
+        let center = UNUserNotificationCenter.current()
+        center.removePendingNotificationRequests(withIdentifiers: [
+            Self.weeklyPlanSundayID,
+            Self.weeklyPlanMondayID
+        ])
+
+        guard authorizationStatus == .authorized,
+              user.notifyWeeklySummary else { return }
+
+        let calendar = Calendar.current
+        let today = calendar.startOfDay(for: Date())
+
+        // Compute next Monday (start of upcoming week)
+        let weekday = calendar.component(.weekday, from: today)
+        let daysUntilMonday = weekday == 2 ? 7 : ((9 - weekday) % 7)
+        guard let nextMonday = calendar.date(byAdding: .day, value: daysUntilMonday, to: today),
+              let nextSunday = calendar.date(byAdding: .day, value: 6, to: nextMonday) else { return }
+
+        // Check if user has any workout plans for next week
+        let hasPlansNextWeek = plans.contains { plan in
+            let planDate = calendar.startOfDay(for: plan.date)
+            return planDate >= nextMonday && planDate <= nextSunday
+                && !plan.isRestDay
+                && plan.template != nil
+        }
+
+        if hasPlansNextWeek { return }
+
+        // Schedule Sunday 6 PM nudge
+        let sundayComponents = DateComponents(hour: 18, minute: 0, weekday: 1) // Sunday = 1
+        if let sundayDate = calendar.nextDate(after: Date(), matching: sundayComponents, matchingPolicy: .nextTime) {
+            if !isInQuietHours(sundayDate, user: user) {
+                let content = UNMutableNotificationContent()
+                content.title = "Grove"
+                content.body = "Plan your week ahead \u{2014} tap to set up your workouts!"
+                content.sound = .default
+
+                let trigger = UNCalendarNotificationTrigger(
+                    dateMatching: sundayComponents,
+                    repeats: false
+                )
+
+                let request = UNNotificationRequest(
+                    identifier: Self.weeklyPlanSundayID,
+                    content: content,
+                    trigger: trigger
+                )
+
+                center.add(request)
+            }
+        }
+
+        // Schedule Monday 8 AM follow-up
+        let mondayComponents = DateComponents(hour: 8, minute: 0, weekday: 2) // Monday = 2
+        if let mondayDate = calendar.nextDate(after: Date(), matching: mondayComponents, matchingPolicy: .nextTime) {
+            if !isInQuietHours(mondayDate, user: user) {
+                let content = UNMutableNotificationContent()
+                content.title = "Grove"
+                content.body = "You haven't planned your week yet. A few minutes now saves guesswork later!"
+                content.sound = .default
+
+                let trigger = UNCalendarNotificationTrigger(
+                    dateMatching: mondayComponents,
+                    repeats: false
+                )
+
+                let request = UNNotificationRequest(
+                    identifier: Self.weeklyPlanMondayID,
+                    content: content,
+                    trigger: trigger
+                )
+
+                center.add(request)
+            }
+        }
+    }
+
+    // MARK: - Abandoned Workout Reminder (15 min)
+
+    func scheduleAbandonedWorkoutReminder() {
+        let center = UNUserNotificationCenter.current()
+        center.removePendingNotificationRequests(withIdentifiers: [Self.abandonedWorkoutID])
+
+        guard authorizationStatus == .authorized else { return }
+
+        let content = UNMutableNotificationContent()
+        content.title = "Grove"
+        content.body = "You have a workout in progress \u{2014} continue or finish up?"
+        content.sound = .default
+
+        let trigger = UNTimeIntervalNotificationTrigger(
+            timeInterval: 900, // 15 minutes
+            repeats: false
+        )
+
+        let request = UNNotificationRequest(
+            identifier: Self.abandonedWorkoutID,
+            content: content,
+            trigger: trigger
+        )
+
+        center.add(request)
+    }
+
+    func cancelAbandonedWorkoutReminder() {
+        UNUserNotificationCenter.current()
+            .removePendingNotificationRequests(withIdentifiers: [Self.abandonedWorkoutID])
+    }
+
+    // MARK: - Reschedule All (called from settings toggle changes)
+
+    func rescheduleAll(plans: [WorkoutPlan], user: User) {
+        scheduleDailyWorkoutReminder(plans: plans, user: user)
+        scheduleWeeklyPlanningNudge(plans: plans, user: user)
+    }
+
+    // MARK: - Quiet Hours
+
+    private func isInQuietHours(_ date: Date, user: User) -> Bool {
+        guard let start = user.quietHoursStart,
+              let end = user.quietHoursEnd else { return false }
+
+        let calendar = Calendar.current
+        let startHour = calendar.component(.hour, from: start)
+        let startMinute = calendar.component(.minute, from: start)
+        let endHour = calendar.component(.hour, from: end)
+        let endMinute = calendar.component(.minute, from: end)
+
+        let checkHour = calendar.component(.hour, from: date)
+        let checkMinute = calendar.component(.minute, from: date)
+
+        let startMinutes = startHour * 60 + startMinute
+        let endMinutes = endHour * 60 + endMinute
+        let checkMinutes = checkHour * 60 + checkMinute
+
+        if startMinutes <= endMinutes {
+            // Same-day range (e.g. 09:00 - 17:00)
+            return checkMinutes >= startMinutes && checkMinutes < endMinutes
+        } else {
+            // Overnight range (e.g. 22:00 - 07:00)
+            return checkMinutes >= startMinutes || checkMinutes < endMinutes
+        }
+    }
+}

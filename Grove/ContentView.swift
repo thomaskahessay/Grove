@@ -9,8 +9,10 @@ struct ContentView: View {
     @Query(sort: \Exercise.name) private var allExercises: [Exercise]
     @State private var showingWorkoutCreation = false
     @State private var showingDayPlanSheet = false
+    @State private var showNotificationPrompt = false
     @State private var selectedTab: Int = 0
     @AppStorage("appearanceMode") private var appearanceMode: String = "System"
+    @AppStorage("notificationPromptShown") private var notificationPromptShown = false
 
     private var colorScheme: ColorScheme? {
         switch appearanceMode {
@@ -50,6 +52,19 @@ struct ContentView: View {
                         let today = calendar.startOfDay(for: Date())
                         if let todaysPlan = workoutPlans.first(where: { calendar.isDate($0.date, inSameDayAs: today) && !$0.isRestDay }) {
                             todaysPlan.completedWorkout = workout
+                        }
+                    }
+
+                    // Schedule notifications on each app launch
+                    let notificationService = NotificationService.shared
+                    await notificationService.checkAuthorizationStatus()
+                    if let user = users.first {
+                        notificationService.scheduleDailyWorkoutReminder(plans: workoutPlans, user: user)
+                        notificationService.scheduleWeeklyPlanningNudge(plans: workoutPlans, user: user)
+
+                        // Prompt existing users who haven't been asked yet
+                        if !notificationPromptShown && notificationService.authorizationStatus == .notDetermined {
+                            showNotificationPrompt = true
                         }
                     }
                 }
@@ -200,6 +215,23 @@ struct ContentView: View {
                     sessionManager.dismissStreakMoment()
                 }
             }
+        }
+        .alert("Enable Notifications?", isPresented: $showNotificationPrompt) {
+            Button("Enable") {
+                notificationPromptShown = true
+                Task {
+                    let granted = await NotificationService.shared.requestAuthorization()
+                    if granted, let user = users.first {
+                        NotificationService.shared.scheduleDailyWorkoutReminder(plans: workoutPlans, user: user)
+                        NotificationService.shared.scheduleWeeklyPlanningNudge(plans: workoutPlans, user: user)
+                    }
+                }
+            }
+            Button("Not Now", role: .cancel) {
+                notificationPromptShown = true
+            }
+        } message: {
+            Text("Get reminders for your planned workouts and weekly check-ins.")
         }
     }
 }

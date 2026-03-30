@@ -3,16 +3,56 @@ import SwiftData
 
 struct NotificationSettingsView: View {
     @Query private var users: [User]
+    @Query(sort: \WorkoutPlan.date, order: .reverse) private var workoutPlans: [WorkoutPlan]
 
     private var user: User? { users.first }
+    private var notificationService: NotificationService { NotificationService.shared }
 
     var body: some View {
         List {
+            // Permission status section
+            Section {
+                HStack {
+                    Text("Status")
+                    Spacer()
+                    switch notificationService.authorizationStatus {
+                    case .authorized:
+                        Text("Enabled")
+                            .foregroundStyle(Color.groveSage)
+                    case .denied:
+                        Button("Open Settings") {
+                            if let url = URL(string: UIApplication.openSettingsURLString) {
+                                UIApplication.shared.open(url)
+                            }
+                        }
+                    case .notDetermined:
+                        Button("Enable") {
+                            Task {
+                                await notificationService.requestAuthorization()
+                                reschedule()
+                            }
+                        }
+                    default:
+                        Text("Not Available")
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            } header: {
+                Text("Notification Permission")
+            } footer: {
+                if notificationService.authorizationStatus == .denied {
+                    Text("Notifications are disabled. Open Settings to enable them.")
+                }
+            }
+
             Section {
                 if let user = user {
                     Toggle("Workout Reminders", isOn: Binding(
                         get: { user.notifyWorkoutReminder },
-                        set: { user.notifyWorkoutReminder = $0 }
+                        set: {
+                            user.notifyWorkoutReminder = $0
+                            reschedule()
+                        }
                     ))
                     Toggle("Streak at Risk", isOn: Binding(
                         get: { user.notifyStreakAtRisk },
@@ -28,13 +68,16 @@ struct NotificationSettingsView: View {
                     ))
                     Toggle("Weekly Summary", isOn: Binding(
                         get: { user.notifyWeeklySummary },
-                        set: { user.notifyWeeklySummary = $0 }
+                        set: {
+                            user.notifyWeeklySummary = $0
+                            reschedule()
+                        }
                     ))
                 }
             } header: {
                 Text("Notification Types")
             } footer: {
-                Text("Preferences will apply when notifications are enabled.")
+                Text("Workout Reminders sends a daily 8 AM reminder when you have a planned workout. Weekly Summary sends nudges to plan your week.")
             }
 
             Section("Quiet Hours") {
@@ -56,18 +99,25 @@ struct NotificationSettingsView: View {
                                 user.quietHoursStart = nil
                                 user.quietHoursEnd = nil
                             }
+                            reschedule()
                         }
                     ))
 
                     if user.quietHoursStart != nil {
                         DatePicker("From", selection: Binding(
                             get: { user.quietHoursStart ?? Date() },
-                            set: { user.quietHoursStart = $0 }
+                            set: {
+                                user.quietHoursStart = $0
+                                reschedule()
+                            }
                         ), displayedComponents: .hourAndMinute)
 
                         DatePicker("To", selection: Binding(
                             get: { user.quietHoursEnd ?? Date() },
-                            set: { user.quietHoursEnd = $0 }
+                            set: {
+                                user.quietHoursEnd = $0
+                                reschedule()
+                            }
                         ), displayedComponents: .hourAndMinute)
                     }
                 }
@@ -75,6 +125,14 @@ struct NotificationSettingsView: View {
         }
         .navigationTitle("Notifications")
         .navigationBarTitleDisplayMode(.inline)
+        .task {
+            await notificationService.checkAuthorizationStatus()
+        }
+    }
+
+    private func reschedule() {
+        guard let user = user else { return }
+        notificationService.rescheduleAll(plans: workoutPlans, user: user)
     }
 }
 

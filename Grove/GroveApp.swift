@@ -40,6 +40,7 @@ struct GroveApp: App {
     }
 
     @State private var workoutSessionManager = WorkoutSessionManager()
+    @Environment(\.scenePhase) private var scenePhase
 
     var body: some Scene {
         WindowGroup {
@@ -47,5 +48,22 @@ struct GroveApp: App {
                 .environment(workoutSessionManager)
         }
         .modelContainer(modelContainer)
+        .onChange(of: scenePhase) { _, newPhase in
+            switch newPhase {
+            case .background:
+                if workoutSessionManager.hasActiveWorkout {
+                    Task { @MainActor in
+                        await NotificationService.shared.checkAuthorizationStatus()
+                        NotificationService.shared.scheduleAbandonedWorkoutReminder()
+                    }
+                }
+            case .active:
+                Task { @MainActor in
+                    NotificationService.shared.cancelAbandonedWorkoutReminder()
+                }
+            default:
+                break
+            }
+        }
     }
 }

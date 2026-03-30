@@ -8,17 +8,18 @@ struct OnboardingContainerView: View {
         case profileSetup = 2
         case smartBuilder = 3
         case healthKit = 4
-        case ready = 5
+        case notifications = 5
+        case ready = 6
     }
 
     @Query private var users: [User]
     @State private var currentStep: OnboardingStep = .welcome
 
     /// Steps that show in the progress bar (excludes welcome, ready, & smartBuilder which has its own)
-    private var progressSteps: [OnboardingStep] { [.signIn, .profileSetup, .smartBuilder, .healthKit] }
+    private var progressSteps: [OnboardingStep] { [.signIn, .profileSetup, .smartBuilder, .healthKit, .notifications] }
     private var showsProgress: Bool { progressSteps.contains(currentStep) && currentStep != .smartBuilder }
     private var progressIndex: Int { progressSteps.firstIndex(of: currentStep) ?? 0 }
-    private var showsBack: Bool { currentStep == .profileSetup || currentStep == .healthKit }
+    private var showsBack: Bool { currentStep == .profileSetup || currentStep == .healthKit || currentStep == .notifications }
 
     var body: some View {
         ZStack(alignment: .top) {
@@ -60,6 +61,12 @@ struct OnboardingContainerView: View {
 
                 case .healthKit:
                     HealthKitOnboardingView {
+                        advance(to: .notifications)
+                    }
+                    .transition(.move(edge: .trailing))
+
+                case .notifications:
+                    NotificationOnboardingView {
                         advance(to: .ready)
                     }
                     .transition(.move(edge: .trailing))
