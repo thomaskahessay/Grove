@@ -41,7 +41,8 @@ Grove/
 │   ├── WorkoutPlan.swift          # @Model - scheduled workouts on calendar
 │   ├── PersonalRecord.swift       # @Model - PR tracking (max weight, est. 1RM)
 │   ├── PlantStage.swift           # Enum: 5 growth stages with streak thresholds
-│   └── Enums.swift                # All enums (MuscleGroup, FitnessGoal, etc.)
+│   ├── Enums.swift                # All enums (MuscleGroup, FitnessGoal, etc.)
+│   └── InteractionTypes.swift     # InteractionType, InteractionSummary, SeedMessage, RootConnection, etc.
 ├── Services/
 │   ├── AuthService.swift          # Sign in with Apple handling
 │   ├── HealthKitManager.swift     # HealthKit authorization and queries
@@ -51,20 +52,28 @@ Grove/
 │   ├── PRDetectionService.swift   # PR detection after workout completion
 │   ├── AchievementService.swift   # Achievement detection + progress tracking
 │   ├── MotivationalMessages.swift # Plant-themed motivational messages
-│   └── WorkoutSessionManager.swift # @MainActor @Observable - active workout + streak moment state + shared createAndStartWorkout helper
+│   ├── WorkoutSessionManager.swift # @MainActor @Observable - active workout + streak moment state + shared createAndStartWorkout helper
+│   ├── CloudKitSocialService.swift # @MainActor @Observable - social feed, interactions, friends, invite codes
+│   ├── InviteCodeGenerator.swift  # Generates unique invite codes
+│   └── SeedMessages.swift         # Preset seed message options
 ├── Views/
 │   ├── Onboarding/
+│   │   ├── OnboardingContainerView.swift  # 7-step onboarding flow container
 │   │   ├── SignInView.swift
 │   │   ├── ProfileSetupView.swift
+│   │   ├── WelcomeCarouselView.swift       # 3-slide intro carousel
+│   │   ├── OnboardingReadyView.swift       # Final "You're all set" screen
 │   │   ├── WeeklyPlanSetupView.swift      # Legacy (replaced by SmartBuilder)
 │   │   ├── HealthKitOnboardingView.swift  # Optional Apple Health connection during onboarding
+│   │   ├── NotificationOnboardingView.swift # Optional notification setup during onboarding
 │   │   └── SmartBuilder/
-│   │       ├── SmartBuilderView.swift     # 4-step workout builder container
+│   │       ├── SmartBuilderView.swift     # 4/5-step workout builder container
 │   │       ├── SmartBuilderState.swift    # @Observable state for builder flow
 │   │       ├── DaysPerWeekStep.swift      # Step 1: training days selection
 │   │       ├── WorkoutLengthStep.swift    # Step 2: workout duration
 │   │       ├── SplitAndStyleStep.swift    # Step 3: split type + rep range
-│   │       └── ExerciseSelectionStep.swift # Step 4: per-day exercise customization
+│   │       ├── CustomSplitConfigStep.swift # Step 4 (custom only): name days + pick muscle groups
+│   │       └── ExerciseSelectionStep.swift # Step 4/5: per-day exercise customization
 │   ├── Home/
 │   │   ├── HomeView.swift
 │   │   ├── CalendarStripView.swift
@@ -82,15 +91,28 @@ Grove/
 │   │   ├── WorkoutDetailView.swift         # Past workout detail view + PR display + share
 │   │   ├── WorkoutShareCardView.swift     # Rendered share image (compact/detailed modes)
 │   │   ├── StreakMomentView.swift          # Post-workout streak celebration screen
-│   │   └── HealthKitConnectView.swift     # Post-workout Apple Watch data connect sheet
+│   │   ├── HealthKitConnectView.swift     # Post-workout Apple Watch data connect sheet
+│   │   └── ExercisePickerView.swift       # Exercise browser for adding to workouts
 │   ├── Progress/
-│   │   ├── ProgressView.swift
-│   │   └── ExerciseChartView.swift
+│   │   └── ProgressView.swift
 │   ├── Social/
-│   │   └── SocialFeedView.swift
+│   │   ├── SocialFeedView.swift           # Main activity feed (Canopy/Soil filter)
+│   │   ├── FeedItemCard.swift             # Feed card with evolving plant background
+│   │   ├── InteractionBar.swift           # Water/Seed/Sunlight action buttons
+│   │   ├── CanopySoilToggle.swift         # Feed filter toggle
+│   │   ├── SunlightPromptCard.swift       # Sunlight availability prompt
+│   │   ├── WorkoutInteractionDetailView.swift # Detailed view of post interactions
+│   │   ├── SeedPickerSheet.swift          # Seed message picker
+│   │   ├── FriendProfileView.swift        # Friend profile page
+│   │   ├── GroveNetworkView.swift         # Root connection visualization
+│   │   ├── InteractionBreakdownSheet.swift # Bidirectional interaction detail
+│   │   ├── AddFriendSheet.swift           # Add friend via invite code
+│   │   └── InviteCodeCard.swift           # Invite code display/generate
 │   ├── Profile/
 │   │   ├── ProfileView.swift
+│   │   ├── SettingsView.swift             # Full settings: account, preferences, vacation, appearance
 │   │   ├── AchievementsGalleryView.swift  # Achievement gallery with progress
+│   │   ├── PersonalRecordsView.swift      # Personal records list
 │   │   └── NotificationSettingsView.swift
 │   └── Library/
 │       ├── ExerciseLibraryView.swift
@@ -100,13 +122,21 @@ Grove/
 │   ├── GlassButton.swift
 │   ├── ConfettiView.swift         # Celebratory confetti animation
 │   ├── ColorExtensions.swift      # Color palette extension
-│   └── StreakPlant/
-│       ├── PlantCanvasRenderer.swift  # Canvas drawing logic for all plant stages
-│       ├── StreakPlantView.swift       # Reusable animated plant view
-│       └── EvolutionTimelineView.swift # Horizontal stage progression timeline
+│   ├── StreakPlant/
+│   │   ├── PlantCanvasRenderer.swift  # Canvas drawing logic for all plant stages
+│   │   ├── StreakPlantView.swift       # Reusable animated plant view
+│   │   └── EvolutionTimelineView.swift # Horizontal stage progression timeline
+│   └── FeedCard/
+│       ├── CardGrowthState.swift          # Maps interaction counts → visual growth params
+│       ├── CardSceneRenderer.swift        # Canvas: soil, grass, plant, flowers for card bg
+│       ├── CardSceneBackgroundView.swift   # SwiftUI wrapper with TimelineView (20fps sway)
+│       ├── WaterTapAnimation.swift        # Particle drops + ripple splash animation
+│       ├── SeedTapAnimation.swift         # Seed drop from above + sprout unfurl animation
+│       └── SunlightTapAnimation.swift     # Golden light rays + bloom animation
 ├── Data/
 │   ├── ExerciseSeeds.swift        # ~100 built-in exercises
-│   └── PreviewSampleData.swift    # Sample data for SwiftUI previews
+│   ├── PreviewSampleData.swift    # Sample data for SwiftUI previews
+│   └── SocialPreviewData.swift    # Mock social data (friends, feed items, interactions)
 └── docs/
     └── PRODUCT_SPEC.md            # Full product specification
 ```
@@ -174,7 +204,8 @@ class Workout {
   - Support for decimal weights (e.g., 137.5)
   - Auto-fill subsequent sets from first set values
   - Add/remove sets during workout
-  - Manual rest timer with countdown, +30s/-30s controls
+  - Inline rest timer row below completed sets (replaces overlay)
+  - Per-set history hints showing previous workout's weight/reps
   - Add exercise mid-workout
   - Skip/unskip exercise functionality
   - End workout with save or discard options (Menu dropdown)
@@ -413,17 +444,41 @@ class Workout {
   - Accessible via chevron on "Recent Workouts" header in HomeView
   - Full workout history grouped by month (e.g. "March 2026")
   - Each workout tappable → WorkoutDetailView
-- [ ] Social feed UI
+- [x] Social feed UI
+  - SocialFeedView with Canopy (all posts) / Soil (interacted-only) filter toggle
+  - GroveNetworkView: visual root connection graph between friends
+  - FeedItemCard with evolving plant background (Canvas API)
+    - Background grows based on interactions: soil (water) → grass → plant (seeds) → flowers (sunlight)
+    - Seed growth uses unique senders (not total count) to reflect community engagement
+    - CardSceneRenderer draws landscape scene at 35% opacity with gradient scrim for text readability
+    - CardSceneBackgroundView uses TimelineView at 20fps with drawingGroup() for scroll performance
+  - Three Canvas-based tap animations replacing placeholder overlays:
+    - Water: particle droplets fall with gravity, splash ripples on soil, soil darkens at impact
+    - Seed: seed drops from above card with spin + shadow, burrows into soil, sprout unfurls with spring animation, sparkle particles
+    - Sunlight: 6 golden light rays fan from top, bloom glow at plant, warm rising particles
+  - Each animation has distinct haptic feedback (light/medium/rigid)
+  - InteractionBar hides used buttons (water hidden after watering, sunlight hidden after sunlit)
+  - Interaction counters hidden from feed cards, shown only in detail view (showCounts parameter)
+  - Seed animation triggers optimistically on picker selection (before CloudKit round-trip)
+  - Own posts appear in feed with "Your Workout" header (sage-colored), no interaction buttons
+  - Own posts: detail view hides bottom action bar (can't interact with yourself)
+  - CloudKitSocialService.fetchFeed() includes myAppleUserID in query
+  - Invite code system: generate/copy code, add friend via code
+  - Root connections with 4 levels (Scattered → Growing → Intertwined → Deep Roots)
+  - WorkoutInteractionDetailView: full interaction breakdown (waterers, sunlighters, seeds with messages)
+  - Profile: "Shared Workouts" section shows own posts with mini plant preview + interaction icons
+  - SeedPickerSheet for choosing/writing seed messages
+  - InteractionBreakdownSheet for bidirectional interaction stats between two users
 - [ ] Sharing preferences
 
-### 📋 Not Started
+### 📋 Remaining
 
 **Phase 5: Polish & Launch**
 - [x] Sign in with Apple + Onboarding flow
   - WelcomeCarouselView (3-slide carousel → Get Started, icon bounce on page change)
   - SignInView (Sign in with Apple + Debug skip button)
   - ProfileSetupView (animated: typing "What should I call you?" bubble, photo, unit buttons)
-  - SmartBuilderView (4-step: Days → Length → Split+RepRange → Exercises with plan summary)
+  - SmartBuilderView (4/5-step: Days → Length → Split+RepRange → [Custom Config] → Exercises with plan summary)
   - HealthKitOnboardingView (optional Apple Health connection)
   - OnboardingReadyView ("You're all set! Let's grow." → sets onboardingCompletedAt)
   - OnboardingContainerView: back navigation on all steps (SmartBuilder step 0 → ProfileSetup)
@@ -436,9 +491,17 @@ class Workout {
   - Generates plans for current week + next week when no plans exist
   - Only fills days from today onward that don't already have a plan (respects manual edits)
   - Template-to-slot mapping preserved via ordered UUID array on User model
-- [ ] Notification system
+- [x] Notification system (NotificationService.swift + NotificationOnboardingView.swift)
+  - Daily workout reminders (8 AM when today has planned workout)
+  - Weekly planning nudges (Sunday 6 PM if next week unplanned, Monday 8 AM follow-up)
+  - Abandoned workout reminders (15 min after starting)
+  - Quiet hours support (custom time ranges)
+  - Smart rescheduling respects user preference toggles
+  - NotificationOnboardingView: hero bell icon with floating animations, benefits list, enable/skip
+  - Inserted as step 5 in OnboardingContainerView (between HealthKit and Ready)
 - [x] Profile/Settings screen
   - Profile header with photo, name, streak, workout count
+  - Current Program card (replaces old Fitness Profile card)
   - Account: inline name edit, fitness goal + experience level pickers
   - Preferences: weight units, vacation mode with date pickers
   - Sharing Defaults: 4 toggles for social feed sharing
@@ -446,8 +509,12 @@ class Workout {
   - Appearance: System/Light/Dark with checkmark indicator
   - Data: Export History (coming soon), Delete Account with confirmation
   - NotificationSettingsView: 5 notification toggles + quiet hours (From/To DatePickers)
+- [x] Pause Streak
+  - Simple toggle in Settings (Preferences section)
+  - When paused: streak value is frozen (recalculation returns current value unchanged)
+  - When paused: `extendPlansIfNeeded()` skips plan generation
+  - User model property: `streakPaused: Bool`
 - [ ] Data export (CSV/PDF)
-- [ ] Vacation mode
 
 ### Known Issues & Fixes
 - [x] Streak badge — now wired to StreakManager with recalculation on app launch

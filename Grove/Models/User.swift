@@ -16,17 +16,21 @@ class User {
     var preferredSplit: SplitType = SplitType.pushPullLegs
     var preferredTrainingSlots: [Int] = [0, 2, 4]  // Mon=0..Sun=6 weekday slots
     var weeklyTemplateIDs: [UUID] = []  // Ordered template IDs matching training day indices
+    var customDayNames: [String] = []              // Custom split: day names
+    var customDayMuscleGroups: [[String]] = []     // Custom split: MuscleGroup rawValues per day
 
-    // Vacation mode
-    var vacationModeEnabled: Bool = false
-    var vacationStartDate: Date?
-    var vacationEndDate: Date?
+    // Streak pause
+    var streakPaused: Bool = false
+
+    // Social
+    var inviteCode: String?
 
     // Sharing preferences (defaults)
     var shareWorkoutName: Bool = true
     var shareDuration: Bool = true
     var shareExercises: Bool = false
     var shareWeights: Bool = false
+    var sharePRs: Bool = true
 
     // Notification preferences
     var notifyWorkoutReminder: Bool = true
@@ -34,6 +38,9 @@ class User {
     var notifyFriendActivity: Bool = true
     var notifyPersonalRecord: Bool = true
     var notifyWeeklySummary: Bool = true
+    var notifySeedReceived: Bool = true
+    var notifyConnectionMilestone: Bool = true
+    var notifyWateringReminder: Bool = true
     var quietHoursStart: Date?
     var quietHoursEnd: Date?
 

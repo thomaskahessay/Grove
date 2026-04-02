@@ -46,6 +46,12 @@ struct SmartBuilderView: View {
                                 insertion: .move(edge: .trailing),
                                 removal: .move(edge: .leading)
                             ))
+                    case 3 where state.selectedSplit == .custom:
+                        CustomSplitConfigStep(state: state)
+                            .transition(.asymmetric(
+                                insertion: .move(edge: .trailing),
+                                removal: .move(edge: .leading)
+                            ))
                     default:
                         ExerciseSelectionStep(state: state, exercises: exercises)
                             .transition(.asymmetric(
@@ -81,7 +87,7 @@ struct SmartBuilderView: View {
                         onBack?()
                     } else {
                         withAnimation(.easeInOut(duration: 0.3)) {
-                            if state.currentStep == 3 {
+                            if state.currentStep == state.totalSteps {
                                 state.dayExerciseSelections.removeAll()
                             }
                             state.goBack()
@@ -142,6 +148,8 @@ struct SmartBuilderView: View {
             .clipShape(RoundedRectangle(cornerRadius: 16))
             .shadow(color: Color.groveSage.opacity(0.3), radius: 8, y: 4)
         }
+        .disabled(!state.isCustomConfigValid && state.selectedSplit == .custom && state.currentStep == 3)
+        .opacity(!state.isCustomConfigValid && state.selectedSplit == .custom && state.currentStep == 3 ? 0.5 : 1.0)
     }
 
     /// Fetches the user's current weekly templates in order, for reuse in edit mode
@@ -167,9 +175,15 @@ struct SmartBuilderView: View {
             }
             onComplete()
         } else {
-            if state.currentStep == 2 {
+            // When leaving split selection with custom selected, initialize day configs
+            if state.currentStep == 2 && state.selectedSplit == .custom {
+                state.syncCustomDayCount()
+            }
+
+            // Generate exercise defaults on the step just before exercise selection
+            let preExerciseStep = state.totalSteps - 1
+            if state.currentStep == preExerciseStep {
                 if isEditMode {
-                    // In edit mode, reuse exercises from existing templates where categories match
                     let existingTemplates = fetchExistingTemplates()
                     state.dayExerciseSelections = SmartBuilderEngine.generateDefaultsForEdit(
                         state: state,

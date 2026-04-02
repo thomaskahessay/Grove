@@ -12,8 +12,8 @@ struct SmartBuilderEngine {
         var result: [Int: [Exercise]] = [:]
         let labels = state.dayLabels
 
-        for (dayIndex, label) in labels.enumerated() {
-            let muscleGroups = SplitType.muscleGroups(for: label)
+        for (dayIndex, _) in labels.enumerated() {
+            let muscleGroups = state.muscleGroups(forDayIndex: dayIndex)
             let budget = state.exerciseBudget
             let exercises = pickExercises(
                 muscleGroups: muscleGroups,
@@ -64,7 +64,7 @@ struct SmartBuilderEngine {
             }
 
             // No match — fall back to fresh defaults
-            let muscleGroups = SplitType.muscleGroups(for: label)
+            let muscleGroups = state.muscleGroups(forDayIndex: dayIndex)
             let budget = state.exerciseBudget
             result[dayIndex] = pickExercises(
                 muscleGroups: muscleGroups,
@@ -278,6 +278,14 @@ struct SmartBuilderEngine {
         user.preferredSplit = state.selectedSplit
         user.preferredTrainingSlots = state.trainingDaySlots
         user.weeklyTemplateIDs = (0..<labels.count).compactMap { templates[$0]?.id }
+
+        if state.selectedSplit == .custom {
+            user.customDayNames = state.customDayConfigs.map { $0.name }
+            user.customDayMuscleGroups = state.customDayConfigs.map { $0.muscleGroups.map(\.rawValue) }
+        } else {
+            user.customDayNames = []
+            user.customDayMuscleGroups = []
+        }
     }
 
     /// Extends the user's workout plan into weeks that don't have any plans yet.
@@ -288,6 +296,8 @@ struct SmartBuilderEngine {
         existingPlans: [WorkoutPlan],
         context: ModelContext
     ) {
+        guard !user.streakPaused else { return }
+
         let templateIDs = user.weeklyTemplateIDs
         let trainingSlots = user.preferredTrainingSlots
         guard !templateIDs.isEmpty, !trainingSlots.isEmpty else { return }

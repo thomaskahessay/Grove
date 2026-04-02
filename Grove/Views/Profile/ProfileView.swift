@@ -27,12 +27,14 @@ enum AppearanceMode: String, CaseIterable {
 struct ProfileView: View {
     @Query private var users: [User]
     @Environment(\.modelContext) private var modelContext
+    @Environment(CloudKitSocialService.self) private var socialService
 
     @State private var photoItem: PhotosPickerItem? = nil
     @State private var cameraImage: UIImage? = nil
     @State private var showingPhotoPicker = false
     @State private var showingCamera = false
     @State private var showingPlanEditor = false
+    @State private var selectedSharedWorkout: SharedWorkoutItem?
 
     private var user: User? { users.first }
 
@@ -53,11 +55,18 @@ struct ProfileView: View {
                     streakPlantCard
                     quickAccessCards
                     currentProgramCard
+                    sharedWorkoutsSection
                 }
                 .padding(.horizontal)
                 .padding(.bottom, 32)
             }
             .background(Color.groveBackground)
+            .task {
+                await socialService.fetchMySharedWorkouts()
+            }
+            .navigationDestination(item: $selectedSharedWorkout) { item in
+                WorkoutInteractionDetailView(item: item)
+            }
             .navigationTitle("Profile")
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
@@ -387,6 +396,101 @@ struct ProfileView: View {
                 .buttonStyle(.plain)
             }
         }
+    }
+
+    // MARK: - Shared Workouts Section
+
+    private var sharedWorkoutsSection: some View {
+        Group {
+            if !socialService.mySharedWorkouts.isEmpty {
+                VStack(alignment: .leading, spacing: 12) {
+                    Label("Shared Workouts", systemImage: "square.and.arrow.up.fill")
+                        .font(.headline)
+                        .foregroundStyle(Color.groveText)
+                        .padding(.leading, 4)
+
+                    ForEach(socialService.mySharedWorkouts) { item in
+                        let interactions = socialService.interactionsByWorkout[item.id]
+
+                        Button {
+                            selectedSharedWorkout = item
+                        } label: {
+                            HStack(spacing: 12) {
+                                // Mini plant background preview
+                                CardSceneBackgroundView(interactions: interactions, hasPRs: item.hasPRs)
+                                    .frame(width: 56, height: 56)
+                                    .clipShape(RoundedRectangle(cornerRadius: 10))
+
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text(item.workoutName)
+                                        .font(.subheadline)
+                                        .fontWeight(.medium)
+                                        .foregroundStyle(Color.groveText)
+
+                                    Text(sharedWorkoutDateText(item.completedAt))
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                }
+
+                                Spacer()
+
+                                // Interaction summary icons
+                                interactionIcons(for: interactions)
+
+                                Image(systemName: "chevron.right")
+                                    .font(.caption2)
+                                    .foregroundStyle(.tertiary)
+                            }
+                            .padding(12)
+                            .background(Color.groveCardBackground)
+                            .clipShape(RoundedRectangle(cornerRadius: 12))
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+            }
+        }
+    }
+
+    private func interactionIcons(for interactions: InteractionSummary?) -> some View {
+        HStack(spacing: 6) {
+            if let interactions, interactions.waterCount > 0 {
+                HStack(spacing: 2) {
+                    Image(systemName: "drop.fill")
+                        .font(.system(size: 9))
+                        .foregroundStyle(.blue.opacity(0.7))
+                    Text("\(interactions.waterCount)")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            if let interactions, !interactions.seeds.isEmpty {
+                HStack(spacing: 2) {
+                    Image(systemName: "leaf.fill")
+                        .font(.system(size: 9))
+                        .foregroundStyle(Color.groveSage.opacity(0.7))
+                    Text("\(interactions.seeds.count)")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            if let interactions, interactions.sunlightCount > 0 {
+                HStack(spacing: 2) {
+                    Image(systemName: "sun.max.fill")
+                        .font(.system(size: 9))
+                        .foregroundStyle(.orange.opacity(0.7))
+                    Text("\(interactions.sunlightCount)")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+            }
+        }
+    }
+
+    private func sharedWorkoutDateText(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "MMM d, yyyy"
+        return formatter.string(from: date)
     }
 
     // MARK: - Helpers

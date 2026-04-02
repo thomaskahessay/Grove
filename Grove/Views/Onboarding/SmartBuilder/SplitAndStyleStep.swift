@@ -92,7 +92,9 @@ struct SplitAndStyleStep: View {
                 }
 
                 // Week preview
-                Text(split.weekPreview(for: state.daysPerWeek))
+                Text(split == .custom
+                    ? "You choose the muscle groups for each day"
+                    : split.weekPreview(for: state.daysPerWeek))
                     .font(.caption)
                     .foregroundStyle(isSelected ? .white.opacity(0.8) : Color.groveTextSecondary)
                     .lineLimit(2)

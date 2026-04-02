@@ -9,6 +9,7 @@ struct WorkoutDetailView: View {
 
     @State private var shareData: ShareableData?
     @State private var showingHealthKitConnect = false
+    @State private var showingShareToFeed = false
 
     private var workoutExercises: [ExerciseLog] {
         workout.exercises
@@ -113,6 +114,14 @@ struct WorkoutDetailView: View {
                         }
                     }
 
+                    if !workout.isShared && workout.completedAt != nil {
+                        Button {
+                            showingShareToFeed = true
+                        } label: {
+                            Image(systemName: "person.2.fill")
+                        }
+                    }
+
                     Button {
                         prepareShareImage()
                     } label: {
@@ -123,6 +132,10 @@ struct WorkoutDetailView: View {
         }
         .sheet(item: $shareData) { data in
             WorkoutShareSheet(data: data)
+        }
+        .sheet(isPresented: $showingShareToFeed) {
+            ShareToFeedSheet(workout: workout)
+                .presentationDetents([.medium])
         }
         .sheet(isPresented: $showingHealthKitConnect) {
             HealthKitConnectView(

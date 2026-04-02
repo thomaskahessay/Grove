@@ -27,6 +27,7 @@ class Workout {
     var shareDuration: Bool = true
     var shareExercises: Bool = false
     var shareWeights: Bool = false
+    var sharePRs: Bool = true
 
     var notes: String?
 

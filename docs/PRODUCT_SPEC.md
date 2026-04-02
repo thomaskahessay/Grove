@@ -731,11 +731,10 @@ The primary hub users see after login.
    - Chevron indicates tappable → opens WorkoutDetailView
    - WorkoutDetailView shows full details: all exercises, sets, weight × reps, total volume
 
-6. **Recent Activity** (future - social feed)
-   - "Friends" section header
-   - Compact list of shared workouts
-   - Each shows: Avatar, name, workout name, time ago
-   - View-only, no interactions
+6. **Recent Activity** → moved to Activity tab (Social Feed)
+   - Full social feed with Water/Seed/Sunlight interactions
+   - Evolving plant backgrounds on cards based on interaction counts
+   - Own posts visible in feed with "Your Workout" label, no self-interaction
 
 ### Active Workout Screen - Full View
 
@@ -882,60 +881,107 @@ Metrics: Est. 1RM, Best Set, Volume
 Time Ranges: 1M, 3M, 6M, All
 ```
 
-### Social Feed Screen
+### Social Feed Screen (Activity Tab)
 
 ```
 ┌────────────────────────────────────┐
-│            FRIENDS                 │
+│  + Add Friend       Activity  CODE │
+├────────────────────────────────────┤
+│    ┌──Grove Network Graph──┐       │
+│    │  (Root connections)   │       │
+│    └───────────────────────┘       │
+│     [  Canopy  |  Soil  ]          │
 ├────────────────────────────────────┤
 │ ┌────────────────────────────────┐ │
-│ │ 🟤 Alex                        │ │
-│ │ Push Day • 45 min • 2h ago     │ │
+│ │ Your Workout         2h ago    │ │
+│ │ Push Day                       │ │
+│ │ 5 Exercises  15 Sets  52min    │ │
+│ │ ┌──────────────────────────┐   │ │
+│ │ │ (evolving plant bg)      │   │ │
+│ │ │  🌱 soil → grass → plant │   │ │
+│ │ └──────────────────────────┘   │ │
+│ │ (no interaction buttons)       │ │
 │ └────────────────────────────────┘ │
 │ ┌────────────────────────────────┐ │
-│ │ 🟢 Jordan                      │ │
-│ │ Leg Day • 52 min • 5h ago      │ │
-│ │ 6 exercises                    │ │
+│ │ 🟤 Alex                2h ago │ │
+│ │ Push Day          ⭐ PR        │ │
+│ │ 5 Exercises  15 Sets  52min    │ │
+│ │ ┌──────────────────────────┐   │ │
+│ │ │ (evolving plant bg)      │   │ │
+│ │ └──────────────────────────┘   │ │
+│ │ [💧 Water] [🌱 Seed] [☀️ Sun] │ │
 │ └────────────────────────────────┘ │
 │ ┌────────────────────────────────┐ │
-│ │ 🔵 Sam                         │ │
-│ │ Pull Day • 38 min • Yesterday  │ │
+│ │ 🟢 Jordan               5h ago│ │
+│ │ Leg Day                        │ │
+│ │ 6 Exercises  18 Sets  52min    │ │
+│ │ [🌱 Seed]  (already watered)   │ │
 │ └────────────────────────────────┘ │
-│                                    │
-│         (View only - no likes      │
-│          or comments)              │
 └────────────────────────────────────┘
+
+Interactions:
+- Water (💧): one-time per post, button hidden after
+- Seed (🌱): send encouragement message, unlimited
+- Sunlight (☀️): rare, earned by completing own workout
+- Counters shown only in detail view, not on feed cards
+
+Evolving Card Backgrounds:
+- Water → soil darkens, grass tufts sprout (1-6)
+- Seeds → plant grows (unique senders drive growth)
+- Sunlight → flowers bloom with golden glow
+- Canvas API at 35% opacity with gradient scrim
+- TimelineView at 20fps for ambient sway
+
+Tap Animations (Canvas-based):
+- Water: particle droplets + splash ripples + soil darkening
+- Seed: seed drops from above + burrows + sprout unfurls
+- Sunlight: golden light rays + bloom glow + warm particles
+
+Feed Modes:
+- Canopy: all posts (yours + friends')
+- Soil: only posts with interactions
 ```
 
 ### Profile Screen
 
 ```
 ┌────────────────────────────────────┐
-│            PROFILE                 │
+│            PROFILE            ⚙️   │
 ├────────────────────────────────────┤
-│  ACCOUNT                           │
-│  Display Name         [Edit →]     │
-│  Fitness Goal         [Edit →]     │
-│  Experience Level     [Edit →]     │
+│         [Photo]                    │
+│       Display Name                 │
+│     Member since Mar 2026          │
+│                                    │
+│  Workouts | Streak | PRs | Badges  │
+│     47    |   12   |  8  |   3     │
 ├────────────────────────────────────┤
-│  PREFERENCES                       │
-│  Units               [Imperial ▼]  │
-│  Vacation Mode           [OFF]     │
+│  🌱 Your Grove                  →  │
+│  Seedling • 12-day streak          │
 ├────────────────────────────────────┤
-│  SHARING DEFAULTS                  │
-│  Share workout name      [ON]      │
-│  Share duration          [ON]      │
-│  Share exercises         [OFF]     │
-│  Share weights           [OFF]     │
+│  🏆 Achievements  │ 📈 Records    │
+│     3 / 7         │    8 PRs       │
 ├────────────────────────────────────┤
-│  NOTIFICATIONS           [→]       │
+│  📅 Current Program             →  │
+│  Push/Pull/Legs • 4 days/week      │
 ├────────────────────────────────────┤
-│  DATA                              │
-│  Export History          [→]       │
-│  Delete Account          [→]       │
-├────────────────────────────────────┤
-│  Grove v1.0                        │
+│  📤 SHARED WORKOUTS                │
+│  ┌──────────────────────────────┐  │
+│  │ 🌱 Push Day    Mar 28        │  │
+│  │    💧3  🌱2  ☀️1          → │  │
+│  └──────────────────────────────┘  │
+│  ┌──────────────────────────────┐  │
+│  │    Leg Day     Mar 26        │  │
+│  │    💧1                    → │  │
+│  └──────────────────────────────┘  │
 └────────────────────────────────────┘
+
+Each shared workout row shows:
+- Mini plant background preview (reflects interactions)
+- Workout name + date
+- Interaction count icons (water/seed/sunlight)
+- Tap → WorkoutInteractionDetailView
+
+Settings moved to ⚙️ gear icon in toolbar
 ```
 
 ---
@@ -1323,9 +1369,9 @@ class NotificationService {
 | Workout detection | High | Find overlapping Apple workouts |
 | Heart rate integration | High | Query samples, calc stats |
 | Calorie integration | Medium | Query active energy |
-| Social feed UI | Medium | List of shared workouts |
+| Social feed UI | Medium | ✅ Full feed with evolving plant backgrounds, Canvas animations, interactions |
 | Sharing preferences | Medium | Per-workout and defaults |
-| Friend activity display | Low | On home screen |
+| Friend activity display | Low | ✅ Own + friends' posts in Activity tab, own posts on Profile |
 
 **Deliverable:** User can connect Watch data, see friends' activity.
 

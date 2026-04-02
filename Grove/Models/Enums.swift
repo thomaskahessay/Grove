@@ -129,6 +129,7 @@ enum SplitType: String, Codable, CaseIterable, Identifiable {
     case pushPullLegs = "Push / Pull / Legs"
     case broSplit = "Bro Split"
     case arnoldSplit = "Arnold Split"
+    case custom = "Custom"
 
     var validDayCounts: [Int] {
         switch self {
@@ -137,6 +138,7 @@ enum SplitType: String, Codable, CaseIterable, Identifiable {
         case .pushPullLegs: return [3, 6]
         case .broSplit: return [5]
         case .arnoldSplit: return [5, 6]
+        case .custom: return Array(1...6)
         }
     }
 
@@ -165,6 +167,8 @@ enum SplitType: String, Codable, CaseIterable, Identifiable {
             case 6: return ["Chest & Back", "Shoulders & Arms", "Legs", "Chest & Back", "Shoulders & Arms", "Legs"]
             default: return []
             }
+        case .custom:
+            return (1...dayCount).map { "Day \($0)" }
         }
     }
 

@@ -13,6 +13,9 @@ class NotificationService {
     private static let weeklyPlanSundayID = "grove.weekly.plan.sunday"
     private static let weeklyPlanMondayID = "grove.weekly.plan.monday"
     private static let abandonedWorkoutID = "grove.abandoned.workout"
+    private static let wateringReminderID = "grove.social.watering"
+    private static let seedReceivedID = "grove.social.seed"
+    private static let connectionMilestoneID = "grove.social.milestone"
 
     private init() {}
 
@@ -196,6 +199,89 @@ class NotificationService {
     func cancelAbandonedWorkoutReminder() {
         UNUserNotificationCenter.current()
             .removePendingNotificationRequests(withIdentifiers: [Self.abandonedWorkoutID])
+    }
+
+    // MARK: - Watering Reminder (7 PM)
+
+    func scheduleWateringReminder(hasUnwateredPosts: Bool, user: User) {
+        let center = UNUserNotificationCenter.current()
+        center.removePendingNotificationRequests(withIdentifiers: [Self.wateringReminderID])
+
+        guard authorizationStatus == .authorized,
+              user.notifyWateringReminder,
+              hasUnwateredPosts else { return }
+
+        let calendar = Calendar.current
+        var components = calendar.dateComponents([.year, .month, .day], from: Date())
+        components.hour = 19
+        components.minute = 0
+
+        guard let triggerDate = calendar.date(from: components),
+              triggerDate > Date(),
+              !isInQuietHours(triggerDate, user: user) else { return }
+
+        let content = UNMutableNotificationContent()
+        content.title = "Grove"
+        content.body = "Your friends shared workouts today — water their plants!"
+        content.sound = .default
+
+        let trigger = UNCalendarNotificationTrigger(
+            dateMatching: DateComponents(hour: 19, minute: 0),
+            repeats: false
+        )
+
+        let request = UNNotificationRequest(
+            identifier: Self.wateringReminderID,
+            content: content,
+            trigger: trigger
+        )
+
+        center.add(request)
+    }
+
+    // MARK: - Seed Received Notification
+
+    func scheduleSeedReceivedNotification(senderName: String, message: String, user: User) {
+        let center = UNUserNotificationCenter.current()
+
+        guard authorizationStatus == .authorized,
+              user.notifySeedReceived else { return }
+
+        if isInQuietHours(Date(), user: user) { return }
+
+        let content = UNMutableNotificationContent()
+        content.title = "Grove"
+        content.body = "\(senderName) planted a seed: \"\(message)\""
+        content.sound = .default
+
+        // Fire immediately (1 second delay)
+        let trigger = UNTimeIntervalNotificationTrigger(timeInterval: 1, repeats: false)
+
+        let id = "\(Self.seedReceivedID).\(UUID().uuidString.prefix(8))"
+        let request = UNNotificationRequest(identifier: id, content: content, trigger: trigger)
+        center.add(request)
+    }
+
+    // MARK: - Connection Milestone Notification
+
+    func scheduleConnectionMilestone(friendName: String, level: RootLevel, user: User) {
+        let center = UNUserNotificationCenter.current()
+
+        guard authorizationStatus == .authorized,
+              user.notifyConnectionMilestone else { return }
+
+        if isInQuietHours(Date(), user: user) { return }
+
+        let content = UNMutableNotificationContent()
+        content.title = "Grove"
+        content.body = "Your roots with \(friendName) are now \(level.rawValue)!"
+        content.sound = .default
+
+        let trigger = UNTimeIntervalNotificationTrigger(timeInterval: 1, repeats: false)
+
+        let id = "\(Self.connectionMilestoneID).\(UUID().uuidString.prefix(8))"
+        let request = UNNotificationRequest(identifier: id, content: content, trigger: trigger)
+        center.add(request)
     }
 
     // MARK: - Reschedule All (called from settings toggle changes)

@@ -4,6 +4,7 @@ import SwiftData
 struct ContentView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(WorkoutSessionManager.self) private var sessionManager
+    @Environment(CloudKitSocialService.self) private var socialService
     @Query private var users: [User]
     @Query(sort: \WorkoutPlan.date, order: .reverse) private var workoutPlans: [WorkoutPlan]
     @Query(sort: \Exercise.name) private var allExercises: [Exercise]
@@ -55,12 +56,35 @@ struct ContentView: View {
                         }
                     }
 
+                    // Preload social feed in background
+                    if let user = users.first {
+                        await socialService.ensureUserProfile(user: user)
+                    }
+                    await socialService.fetchFriends()
+                    await socialService.fetchFeed()
+                    await socialService.fetchRootConnections()
+                    await socialService.checkAvailableSunlight()
+
                     // Schedule notifications on each app launch
                     let notificationService = NotificationService.shared
                     await notificationService.checkAuthorizationStatus()
                     if let user = users.first {
                         notificationService.scheduleDailyWorkoutReminder(plans: workoutPlans, user: user)
                         notificationService.scheduleWeeklyPlanningNudge(plans: workoutPlans, user: user)
+
+                        // Schedule watering reminder if there are un-watered posts today
+                        let hasUnwatered = socialService.feedItems.contains { item in
+                            let interactions = socialService.interactionsByWorkout[item.id]
+                            return interactions?.iWatered != true
+                                && Calendar.current.isDateInToday(item.completedAt)
+                        }
+                        notificationService.scheduleWateringReminder(hasUnwateredPosts: hasUnwatered, user: user)
+
+                        // Check for connection milestones
+                        let milestones = socialService.checkForConnectionMilestones()
+                        for (friendName, level) in milestones {
+                            notificationService.scheduleConnectionMilestone(friendName: friendName, level: level, user: user)
+                        }
 
                         // Prompt existing users who haven't been asked yet
                         if !notificationPromptShown && notificationService.authorizationStatus == .notDetermined {
@@ -89,7 +113,7 @@ struct ContentView: View {
                 }
 
                 Tab("Social", systemImage: "person.2.fill", value: 2) {
-                    Text("Social")
+                    SocialFeedView()
                 }
 
                 Tab("Profile", systemImage: "person.fill", value: 3) {

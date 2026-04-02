@@ -80,6 +80,27 @@ struct NotificationSettingsView: View {
                 Text("Workout Reminders sends a daily 8 AM reminder when you have a planned workout. Weekly Summary sends nudges to plan your week.")
             }
 
+            Section {
+                if let user = user {
+                    Toggle("Watering Reminders", isOn: Binding(
+                        get: { user.notifyWateringReminder },
+                        set: { user.notifyWateringReminder = $0 }
+                    ))
+                    Toggle("Seed Received", isOn: Binding(
+                        get: { user.notifySeedReceived },
+                        set: { user.notifySeedReceived = $0 }
+                    ))
+                    Toggle("Connection Milestones", isOn: Binding(
+                        get: { user.notifyConnectionMilestone },
+                        set: { user.notifyConnectionMilestone = $0 }
+                    ))
+                }
+            } header: {
+                Text("Social")
+            } footer: {
+                Text("Watering Reminders notify you when friends share workouts. Seed Received alerts you when someone plants a seed on your post. Connection Milestones celebrate when your roots grow deeper.")
+            }
+
             Section("Quiet Hours") {
                 if let user = user {
                     Toggle("Enable Quiet Hours", isOn: Binding(

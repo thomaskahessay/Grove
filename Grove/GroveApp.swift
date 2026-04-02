@@ -40,12 +40,14 @@ struct GroveApp: App {
     }
 
     @State private var workoutSessionManager = WorkoutSessionManager()
+    @State private var socialService = CloudKitSocialService()
     @Environment(\.scenePhase) private var scenePhase
 
     var body: some Scene {
         WindowGroup {
             ContentView()
                 .environment(workoutSessionManager)
+                .environment(socialService)
         }
         .modelContainer(modelContainer)
         .onChange(of: scenePhase) { _, newPhase in
@@ -60,6 +62,8 @@ struct GroveApp: App {
             case .active:
                 Task { @MainActor in
                     NotificationService.shared.cancelAbandonedWorkoutReminder()
+                    await socialService.fetchInteractionsForFeed()
+                    await socialService.checkAvailableSunlight()
                 }
             default:
                 break

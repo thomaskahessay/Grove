@@ -21,7 +21,7 @@ struct ExerciseSelectionStep: View {
     }
 
     private var muscleGroupsForDay: [MuscleGroup] {
-        SplitType.muscleGroups(for: currentDayLabel)
+        state.muscleGroups(forDayIndex: selectedDayIndex)
     }
 
     private var availableExercises: [Exercise] {

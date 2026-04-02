@@ -11,10 +11,10 @@ struct StreakManager {
     /// - Streak increments by 1 for each unique day a workout was completed.
     /// - Two workouts on the same day count as 1.
     /// - **Plan-aware mode** (user has an active plan): streak breaks if an entire
-    ///   Mon-Sun calendar week passes with zero workouts (unless the whole week is vacation).
+    ///   Mon-Sun calendar week passes with zero workouts.
     /// - **No-plan mode**: streak breaks after 7 consecutive days of inactivity.
     /// - Today is a grace period — the current (partial) week is never counted as empty.
-    /// - Vacation days do not count toward inactivity.
+    /// - When `streakPaused` is true, the current streak value is preserved unchanged.
     static func recalculateStreak(for user: User, workouts: [Workout], plans: [WorkoutPlan]) {
         let calendar = Calendar.current
         let today = calendar.startOfDay(for: Date())
@@ -62,13 +62,16 @@ struct StreakManager {
     // MARK: - Plan-Aware Streak (Week Chunks)
 
     /// Walks backwards week by week (Mon-Sun). The current partial week always contributes.
-    /// A full past week with zero workouts (and not entirely vacation) breaks the streak.
+    /// A full past week with zero workouts breaks the streak (unless streak is paused).
     private static func calculatePlanAwareStreak(
         workoutDates: Set<Date>,
         user: User,
         today: Date,
         calendar: Calendar
     ) -> Int {
+        // When paused, preserve the current streak value — don't recalculate
+        if user.streakPaused { return user.currentStreak }
+
         var streak = 0
         let currentMonday = mondayOfWeek(for: today, calendar: calendar)
 
@@ -94,10 +97,7 @@ struct StreakManager {
             )
 
             if workoutsInWeek == 0 {
-                // Check if entire week is vacation — if so, skip it without breaking
-                if !entireWeekIsVacation(from: weekMonday, user: user, calendar: calendar) {
-                    break
-                }
+                break
             }
 
             streak += workoutsInWeek
@@ -109,14 +109,16 @@ struct StreakManager {
 
     // MARK: - No-Plan Streak (7-Day Inactivity)
 
-    /// Walks backwards day by day. Streak breaks after 7 consecutive non-workout,
-    /// non-vacation days.
+    /// Walks backwards day by day. Streak breaks after 7 consecutive non-workout days.
     private static func calculateNoPlanStreak(
         workoutDates: Set<Date>,
         user: User,
         today: Date,
         calendar: Calendar
     ) -> Int {
+        // When paused, preserve the current streak value — don't recalculate
+        if user.streakPaused { return user.currentStreak }
+
         var streak = 0
         var consecutiveInactiveDays = 0
         var currentDate = today
@@ -128,8 +130,6 @@ struct StreakManager {
                 consecutiveInactiveDays = 0
             } else if isFirstDay {
                 // Grace period — skip today
-            } else if isOnVacation(user: user, on: currentDate) {
-                // Vacation days don't count toward inactivity
             } else {
                 consecutiveInactiveDays += 1
                 if consecutiveInactiveDays >= 7 {
@@ -173,37 +173,4 @@ struct StreakManager {
         return count
     }
 
-    /// Checks if every day in a Mon-Sun week is a vacation day.
-    private static func entireWeekIsVacation(
-        from monday: Date,
-        user: User,
-        calendar: Calendar
-    ) -> Bool {
-        for offset in 0..<7 {
-            guard let date = calendar.date(byAdding: .day, value: offset, to: monday) else { return false }
-            if !isOnVacation(user: user, on: date) {
-                return false
-            }
-        }
-        return true
-    }
-
-    // MARK: - Vacation Check
-
-    /// Checks if the user is on vacation on a given date.
-    static func isOnVacation(user: User, on date: Date = Date()) -> Bool {
-        guard user.vacationModeEnabled else { return false }
-
-        // If no date range is set, vacation mode applies broadly
-        guard let start = user.vacationStartDate, let end = user.vacationEndDate else {
-            return user.vacationModeEnabled
-        }
-
-        let calendar = Calendar.current
-        let day = calendar.startOfDay(for: date)
-        let vacStart = calendar.startOfDay(for: start)
-        let vacEnd = calendar.startOfDay(for: end)
-
-        return day >= vacStart && day <= vacEnd
-    }
 }

@@ -196,32 +196,10 @@ struct SettingsView: View {
                     Text("kg (Metric)").tag(UnitSystem.metric)
                 }
 
-                Toggle("Vacation Mode", isOn: Binding(
-                    get: { user.vacationModeEnabled },
-                    set: { enabled in
-                        user.vacationModeEnabled = enabled
-                        if enabled {
-                            if user.vacationStartDate == nil {
-                                user.vacationStartDate = Date()
-                            }
-                            if user.vacationEndDate == nil {
-                                user.vacationEndDate = Calendar.current.date(byAdding: .day, value: 7, to: Date())
-                            }
-                        }
-                    }
+                Toggle("Pause Streak", isOn: Binding(
+                    get: { user.streakPaused },
+                    set: { user.streakPaused = $0 }
                 ))
-
-                if user.vacationModeEnabled {
-                    DatePicker("Start Date", selection: Binding(
-                        get: { user.vacationStartDate ?? Date() },
-                        set: { user.vacationStartDate = $0 }
-                    ), displayedComponents: .date)
-
-                    DatePicker("End Date", selection: Binding(
-                        get: { user.vacationEndDate ?? Date() },
-                        set: { user.vacationEndDate = $0 }
-                    ), in: (user.vacationStartDate ?? Date())..., displayedComponents: .date)
-                }
             }
         }
     }
@@ -270,6 +248,10 @@ struct SettingsView: View {
                 Toggle("Share Weights", isOn: Binding(
                     get: { user.shareWeights },
                     set: { user.shareWeights = $0 }
+                ))
+                Toggle("Share Personal Records", isOn: Binding(
+                    get: { user.sharePRs },
+                    set: { user.sharePRs = $0 }
                 ))
             }
         } header: {

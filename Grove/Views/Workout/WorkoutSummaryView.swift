@@ -4,9 +4,18 @@ import SwiftData
 struct WorkoutSummaryView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(WorkoutSessionManager.self) private var sessionManager
+    @Environment(CloudKitSocialService.self) private var socialService
+    @Query private var users: [User]
     @Query(sort: \Workout.startedAt, order: .reverse) private var allWorkouts: [Workout]
 
     let workout: Workout
+
+    private var user: User? { users.first }
+    @State private var showSharingOptions = false
+
+    private var prExerciseNames: Set<String> {
+        Set(sessionManager.newPRs.map { $0.exercise.name })
+    }
 
     private var totalVolume: Double {
         workout.exercises.reduce(0) { exerciseTotal, exerciseLog in
@@ -91,6 +100,12 @@ struct WorkoutSummaryView: View {
 
                     // Exercise breakdown
                     exerciseBreakdownSection
+
+                    // Social sharing
+                    sharingSection
+
+                    // Sunlight prompt (if available)
+                    sunlightPrompt
 
                     // Done button
                     doneButton
@@ -285,8 +300,100 @@ struct WorkoutSummaryView: View {
         }
     }
 
+    private var sharingSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Label("Social Feed", systemImage: "person.2.fill")
+                .font(.headline)
+                .foregroundStyle(Color.groveText)
+
+            VStack(spacing: 12) {
+                Toggle("Share with Friends", isOn: Binding(
+                    get: { workout.isShared },
+                    set: { newValue in
+                        workout.isShared = newValue
+                        if newValue, let user {
+                            workout.shareWorkoutName = user.shareWorkoutName
+                            workout.shareDuration = user.shareDuration
+                            workout.shareExercises = user.shareExercises
+                            workout.shareWeights = user.shareWeights
+                        }
+                    }
+                ))
+                .tint(.groveSage)
+
+                if workout.isShared {
+                    DisclosureGroup("Customize Sharing", isExpanded: $showSharingOptions) {
+                        VStack(spacing: 8) {
+                            Toggle("Workout Name", isOn: Binding(
+                                get: { workout.shareWorkoutName },
+                                set: { workout.shareWorkoutName = $0 }
+                            ))
+                            Toggle("Duration", isOn: Binding(
+                                get: { workout.shareDuration },
+                                set: { workout.shareDuration = $0 }
+                            ))
+                            Toggle("Exercises", isOn: Binding(
+                                get: { workout.shareExercises },
+                                set: { workout.shareExercises = $0 }
+                            ))
+                            Toggle("Weights", isOn: Binding(
+                                get: { workout.shareWeights },
+                                set: { workout.shareWeights = $0 }
+                            ))
+                            if !prExerciseNames.isEmpty {
+                                Toggle("Personal Records", isOn: Binding(
+                                    get: { workout.sharePRs },
+                                    set: { workout.sharePRs = $0 }
+                                ))
+                            }
+                        }
+                        .font(.subheadline)
+                        .tint(.groveSage)
+                        .padding(.top, 8)
+                    }
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                }
+            }
+            .padding()
+            .background(Color.groveCardBackground)
+            .clipShape(RoundedRectangle(cornerRadius: 12))
+        }
+    }
+
+    @State private var showSunlightPrompt = true
+
+    @ViewBuilder
+    private var sunlightPrompt: some View {
+        if showSunlightPrompt && !socialService.feedItems.isEmpty && workout.isShared {
+            SunlightPromptCard(
+                feedItems: socialService.feedItems,
+                onSend: { item in
+                    Task {
+                        if let myWorkout = await socialService.myLatestSharedWorkoutRecordName() {
+                            await socialService.sendSunlight(
+                                to: item.id,
+                                recipientID: item.userID,
+                                fromWorkoutRecordName: myWorkout
+                            )
+                        }
+                    }
+                },
+                onDismiss: {
+                    withAnimation { showSunlightPrompt = false }
+                }
+            )
+        }
+    }
+
     private var doneButton: some View {
         Button {
+            if workout.isShared, let user {
+                Task {
+                    await socialService.shareWorkout(workout, user: user, prExerciseNames: workout.sharePRs ? prExerciseNames : [])
+                    await socialService.updateMyStats(user: user)
+                }
+            }
             sessionManager.dismissSummary()
         } label: {
             Text("Done")
@@ -781,5 +888,6 @@ struct AchievementRow: View {
 
     return WorkoutSummaryView(workout: workout)
         .environment(WorkoutSessionManager())
+        .environment(CloudKitSocialService())
         .modelContainer(container)
 }

@@ -1,6 +1,12 @@
 import SwiftUI
 import SwiftData
 
+/// Configuration for a single day in a custom split
+struct CustomDayConfig {
+    var name: String
+    var muscleGroups: [MuscleGroup]
+}
+
 /// Holds all state for the Smart Workout Builder flow
 @Observable
 class SmartBuilderState {
@@ -14,19 +20,52 @@ class SmartBuilderState {
     var selectedSplit: SplitType = .pushPullLegs
     var repRange: RepRangePreference = .hypertrophy
 
+    // Custom split configuration
+    var customDayConfigs: [CustomDayConfig] = []
+
     // Step 4 — per-day exercise selections (keyed by day index)
     var dayExerciseSelections: [Int: [Exercise]] = [:]
 
     // Internal step tracking
     var currentStep: Int = 0
-    let totalSteps = 3 // Last step index: 0=days, 1=length, 2=split, 3=exercises
+    var totalSteps: Int { selectedSplit == .custom ? 4 : 3 }
 
     var exerciseBudget: Int {
         minutesPerWorkout / 10
     }
 
     var dayLabels: [String] {
-        selectedSplit.dayLabels(for: daysPerWeek)
+        if selectedSplit == .custom && !customDayConfigs.isEmpty {
+            return customDayConfigs.map { $0.name }
+        }
+        return selectedSplit.dayLabels(for: daysPerWeek)
+    }
+
+    /// Returns muscle groups for a given day index, using custom config when applicable
+    func muscleGroups(forDayIndex index: Int) -> [MuscleGroup] {
+        if selectedSplit == .custom, index < customDayConfigs.count {
+            return customDayConfigs[index].muscleGroups
+        }
+        guard index < dayLabels.count else { return [] }
+        let label = dayLabels[index]
+        return SplitType.muscleGroups(for: label)
+    }
+
+    /// Ensures customDayConfigs count matches daysPerWeek
+    func syncCustomDayCount() {
+        while customDayConfigs.count < daysPerWeek {
+            customDayConfigs.append(CustomDayConfig(name: "", muscleGroups: []))
+        }
+        if customDayConfigs.count > daysPerWeek {
+            customDayConfigs = Array(customDayConfigs.prefix(daysPerWeek))
+        }
+    }
+
+    /// Whether the custom split configuration is valid for advancing
+    var isCustomConfigValid: Bool {
+        guard selectedSplit == .custom else { return true }
+        return customDayConfigs.count == daysPerWeek
+            && customDayConfigs.allSatisfy { !$0.name.trimmingCharacters(in: .whitespaces).isEmpty && !$0.muscleGroups.isEmpty }
     }
 
     /// Auto-distribution of training days across a week (Mon=0 .. Sun=6)
@@ -77,6 +116,15 @@ class SmartBuilderState {
         self.minutesPerWorkout = user.preferredWorkoutMinutes
         self.selectedSplit = user.preferredSplit
         self.repRange = user.preferredRepRange
+
+        if user.preferredSplit == .custom {
+            self.customDayConfigs = zip(user.customDayNames, user.customDayMuscleGroups).map { name, rawGroups in
+                CustomDayConfig(
+                    name: name,
+                    muscleGroups: rawGroups.compactMap { MuscleGroup(rawValue: $0) }
+                )
+            }
+        }
     }
 
     func advance() {
