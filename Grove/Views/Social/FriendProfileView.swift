@@ -57,7 +57,7 @@ struct FriendProfileView: View {
             // Avatar
             Circle()
                 .fill(Color.groveSage.opacity(0.15))
-                .frame(width: 100, height: 100)
+                .frame(width: 80, height: 80)
                 .overlay {
                     if let data = profile.profileImageData,
                        let img = UIImage(data: data) {
@@ -67,7 +67,7 @@ struct FriendProfileView: View {
                             .clipShape(Circle())
                     } else {
                         Text(profile.initials)
-                            .font(.title)
+                            .font(.title2)
                             .fontWeight(.semibold)
                             .foregroundStyle(Color.groveSage)
                     }
@@ -77,6 +77,13 @@ struct FriendProfileView: View {
                 .font(.title2)
                 .fontWeight(.bold)
                 .foregroundStyle(Color.groveText)
+
+            // Their plant based on streak
+            StreakPlantView(
+                streak: profile.currentStreak,
+                size: 140,
+                showLabel: true
+            )
 
             Text("Member since \(memberSinceText(profile.memberSince))")
                 .font(.subheadline)

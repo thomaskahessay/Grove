@@ -41,6 +41,21 @@ enum TemplateCategory: String, Codable, CaseIterable, Identifiable {
     case backBiceps = "Back & Biceps"
     case shoulders = "Shoulders"
     case custom = "Custom"
+
+    var icon: String {
+        switch self {
+        case .push: return "arrow.up.circle"
+        case .pull: return "arrow.down.circle"
+        case .legs: return "figure.run"
+        case .upper: return "figure.arms.open"
+        case .lower: return "figure.walk"
+        case .fullBody: return "figure.mixed.cardio"
+        case .chestTriceps: return "arrowtriangle.down.fill"
+        case .backBiceps: return "dumbbell.fill"
+        case .shoulders: return "figure.boxing"
+        case .custom: return "slider.horizontal.3"
+        }
+    }
 }
 
 enum ExerciseStatus: String, Codable {

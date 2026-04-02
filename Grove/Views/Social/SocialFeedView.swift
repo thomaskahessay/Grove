@@ -11,6 +11,7 @@ struct SocialFeedView: View {
     @State private var selectedDetailItem: SharedWorkoutItem?
     @State private var feedMode: FeedMode = .canopy
     @State private var selectedConnection: RootConnection?
+    @State private var selectedProfileUserID: String?
     /// Tracks which workout just had a seed sent — triggers the drop animation immediately
     @State private var seedAnimationWorkoutID: String?
 
@@ -77,7 +78,6 @@ struct SocialFeedView: View {
                                         selectedConnection = connection
                                     }
                                 )
-                                .padding(.vertical, 4)
 
                                 // Canopy/Soil toggle
                                 HStack {
@@ -181,6 +181,9 @@ struct SocialFeedView: View {
             .navigationDestination(for: String.self) { userID in
                 FriendProfileView(userID: userID)
             }
+            .navigationDestination(item: $selectedProfileUserID) { userID in
+                FriendProfileView(userID: userID)
+            }
             .navigationDestination(item: $selectedDetailItem) { item in
                 WorkoutInteractionDetailView(item: item)
             }
@@ -216,8 +219,7 @@ struct SocialFeedView: View {
                         set: { if !$0 { seedAnimationWorkoutID = nil } }
                     ),
                     onProfileTap: {
-                        selectedDetailItem = nil // Clear detail selection
-                        // Navigate to profile via NavigationLink value
+                        selectedProfileUserID = item.userID
                     },
                     onWater: {
                         Task {
@@ -243,7 +245,6 @@ struct SocialFeedView: View {
                         }
                     }
                 )
-                .contentShape(RoundedRectangle(cornerRadius: 12))
                 .onTapGesture {
                     selectedDetailItem = item
                 }

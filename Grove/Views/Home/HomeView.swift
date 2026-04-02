@@ -583,8 +583,8 @@ struct RecentWorkoutRow: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            // Icon
-            Image(systemName: "checkmark.circle.fill")
+            // Category icon
+            Image(systemName: workout.templateUsed?.category.icon ?? "dumbbell.fill")
                 .font(.title2)
                 .foregroundStyle(Color.groveSage)
 
@@ -623,18 +623,36 @@ struct AllWorkoutsView: View {
     let workouts: [Workout]
 
     var body: some View {
-        List {
-            ForEach(groupedWorkouts, id: \.month) { group in
-                Section(group.month) {
-                    ForEach(group.workouts, id: \.id) { workout in
-                        NavigationLink(destination: WorkoutDetailView(workout: workout)) {
-                            AllWorkoutsRow(workout: workout)
+        ScrollView {
+            LazyVStack(spacing: 20) {
+                ForEach(groupedWorkouts, id: \.month) { group in
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text(group.month)
+                            .font(.headline)
+                            .foregroundStyle(Color.groveText)
+                            .padding(.horizontal, 4)
+
+                        VStack(spacing: 0) {
+                            ForEach(Array(group.workouts.enumerated()), id: \.element.id) { index, workout in
+                                NavigationLink(destination: WorkoutDetailView(workout: workout)) {
+                                    RecentWorkoutRow(workout: workout)
+                                }
+                                .buttonStyle(.plain)
+
+                                if index < group.workouts.count - 1 {
+                                    Divider()
+                                        .padding(.leading, 48)
+                                }
+                            }
                         }
+                        .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 12))
+                        .shadow(color: .black.opacity(0.07), radius: 10, y: 3)
                     }
                 }
             }
+            .padding(.horizontal)
+            .padding(.bottom, 32)
         }
-        .scrollContentBackground(.hidden)
         .background(Color.groveBackground)
         .navigationTitle("All Workouts")
         .navigationBarTitleDisplayMode(.large)
@@ -674,51 +692,6 @@ struct AllWorkoutsView: View {
     }
 }
 
-private struct AllWorkoutsRow: View {
-    let workout: Workout
-
-    private var formattedDate: String {
-        guard let completedAt = workout.completedAt else { return "" }
-        let calendar = Calendar.current
-        if calendar.isDateInToday(completedAt) {
-            return "Today"
-        } else if calendar.isDateInYesterday(completedAt) {
-            return "Yesterday"
-        } else {
-            let formatter = DateFormatter()
-            formatter.dateFormat = "EEE, MMM d"
-            return formatter.string(from: completedAt)
-        }
-    }
-
-    private var formattedDuration: String {
-        let minutes = Int(workout.duration / 60)
-        return "\(minutes) min"
-    }
-
-    var body: some View {
-        HStack(spacing: 12) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(workout.name)
-                    .font(.subheadline)
-                    .fontWeight(.medium)
-                    .foregroundStyle(Color.groveText)
-
-                HStack(spacing: 6) {
-                    Text(formattedDate)
-                    Text("·")
-                    Text(formattedDuration)
-                    Text("·")
-                    Text("\(workout.completedExerciseCount) exercises")
-                }
-                .font(.caption)
-                .foregroundStyle(Color.groveTextSecondary)
-            }
-
-            Spacer()
-        }
-    }
-}
 
 #Preview {
     HomeView()

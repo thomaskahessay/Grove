@@ -508,6 +508,12 @@ class CloudKitSocialService {
         let interQuery = CKQuery(recordType: RecordType.interaction, predicate: interPred)
         guard let (interResults, _) = try? await publicDB.records(matching: interQuery, resultsLimit: 200) else { return }
 
+        // Build fresh summaries to avoid duplicating counts on repeated calls
+        var freshSummaries: [String: InteractionSummary] = [:]
+        for id in workoutIDs {
+            freshSummaries[id] = .empty(for: id)
+        }
+
         for (_, interResult) in interResults {
             guard let record = try? interResult.get() else { continue }
             let workoutRecordName = record["workoutRecordName"] as? String ?? ""
@@ -517,7 +523,7 @@ class CloudKitSocialService {
             let senderImage = record["senderProfileImage"] as? Data
             let createdAt = record["createdAt"] as? Date
 
-            var summary = interactionsByWorkout[workoutRecordName] ?? .empty(for: workoutRecordName)
+            guard var summary = freshSummaries[workoutRecordName] else { continue }
 
             switch type {
             case "water":
@@ -549,7 +555,12 @@ class CloudKitSocialService {
             default: break
             }
 
-            interactionsByWorkout[workoutRecordName] = summary
+            freshSummaries[workoutRecordName] = summary
+        }
+
+        // Replace (not merge) entries for these workouts
+        for (key, summary) in freshSummaries {
+            interactionsByWorkout[key] = summary
         }
     }
 

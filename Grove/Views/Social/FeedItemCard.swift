@@ -34,25 +34,24 @@ struct FeedItemCard: View {
                         .foregroundStyle(.secondary)
                 }
             } else {
-                Button {
-                    onProfileTap()
-                } label: {
-                    HStack(spacing: 8) {
-                        avatarView
+                HStack(spacing: 8) {
+                    avatarView
 
-                        Text(item.friendName)
-                            .font(.subheadline)
-                            .fontWeight(.semibold)
-                            .foregroundStyle(Color.groveText)
+                    Text(item.friendName)
+                        .font(.subheadline)
+                        .fontWeight(.semibold)
+                        .foregroundStyle(Color.groveText)
 
-                        Spacer()
+                    Spacer()
 
-                        Text(item.timeAgo)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
+                    Text(item.timeAgo)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                 }
-                .buttonStyle(.plain)
+                .contentShape(Rectangle())
+                .highPriorityGesture(TapGesture().onEnded {
+                    onProfileTap()
+                })
             }
 
             // PR banner
