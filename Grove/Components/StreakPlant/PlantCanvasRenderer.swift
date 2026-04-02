@@ -27,6 +27,8 @@ struct PlantCanvasRenderer {
     static let grassColor = Color(red: 0.48, green: 0.62, blue: 0.38)
     static let grassLight = Color(red: 0.55, green: 0.70, blue: 0.42)
     static let seedGlow = Color.groveWarmSand.opacity(0.2)
+    static let groveGlow = Color(red: 0.95, green: 0.88, blue: 0.55)
+    static let birdColor = Color(red: 0.35, green: 0.30, blue: 0.28)
 
     // MARK: - Sway Physics
 
@@ -73,8 +75,18 @@ struct PlantCanvasRenderer {
             drawSeedling(context: &context, size: size, groundY: groundY, isWilted: isWilted, swayOffset: swayOffset)
         case .youngPlant:
             drawYoungPlant(context: &context, size: size, groundY: groundY, isWilted: isWilted, swayOffset: swayOffset)
+        case .bush:
+            drawBush(context: &context, size: size, groundY: groundY, isWilted: isWilted, swayOffset: swayOffset)
+        case .floweringBush:
+            drawFloweringBush(context: &context, size: size, groundY: groundY, isWilted: isWilted, swayOffset: swayOffset)
+        case .sapling:
+            drawSapling(context: &context, size: size, groundY: groundY, isWilted: isWilted, swayOffset: swayOffset)
+        case .youngTree:
+            drawYoungTree(context: &context, size: size, groundY: groundY, isWilted: isWilted, swayOffset: swayOffset)
         case .tree:
             drawTree(context: &context, size: size, groundY: groundY, isWilted: isWilted, swayOffset: swayOffset)
+        case .groveTree:
+            drawGroveTree(context: &context, size: size, groundY: groundY, isWilted: isWilted, swayOffset: swayOffset)
         }
     }
 
@@ -621,6 +633,638 @@ struct PlantCanvasRenderer {
             ]
             for (pos, rf) in fruitSpots {
                 drawFruit(context: &context, center: pos, radius: size.width * rf)
+            }
+        }
+    }
+
+    // MARK: - Bush
+
+    static func drawBush(
+        context: inout GraphicsContext,
+        size: CGSize,
+        groundY: CGFloat,
+        isWilted: Bool,
+        swayOffset: CGFloat
+    ) {
+        drawBushBody(context: &context, size: size, groundY: groundY, isWilted: isWilted, swayOffset: swayOffset, withFlowers: false)
+    }
+
+    // MARK: - Flowering Bush
+
+    static func drawFloweringBush(
+        context: inout GraphicsContext,
+        size: CGSize,
+        groundY: CGFloat,
+        isWilted: Bool,
+        swayOffset: CGFloat
+    ) {
+        let cx = size.width / 2
+        let bushH = size.height * 0.45
+
+        // Warm glow behind bush
+        if !isWilted {
+            let glowR = size.width * 0.28
+            let glowRect = CGRect(
+                x: cx - glowR,
+                y: groundY - bushH * 0.55 - glowR * 0.3,
+                width: glowR * 2,
+                height: glowR * 0.8
+            )
+            context.fill(Path(ellipseIn: glowRect), with: .color(flowerPetal.opacity(0.08)))
+        }
+
+        drawBushBody(context: &context, size: size, groundY: groundY, isWilted: isWilted, swayOffset: swayOffset, withFlowers: true)
+    }
+
+    /// Shared bush drawing used by both bush and flowering bush
+    private static func drawBushBody(
+        context: inout GraphicsContext,
+        size: CGSize,
+        groundY: CGFloat,
+        isWilted: Bool,
+        swayOffset: CGFloat,
+        withFlowers: Bool
+    ) {
+        let cx = size.width / 2
+        let bushH = size.height * 0.40
+        let bushBase = CGPoint(x: cx, y: groundY)
+        let domeSway = swayForHeight(0.5, swayOffset, scale: 1.5)
+
+        // Ground shadow
+        drawGroundShadow(context: &context, center: CGPoint(x: cx, y: groundY + 3), width: size.width * 0.40, height: size.height * 0.016)
+
+        // Roots
+        drawRoots(context: &context, basePoint: bushBase, size: size, count: 3, isWilted: isWilted)
+
+        // Short stub trunk (will be mostly hidden)
+        let stubH = bushH * 0.25
+        let stubTop = CGPoint(x: cx + domeSway * 0.3, y: groundY - stubH)
+        drawCurvedTrunk(
+            context: &context,
+            base: bushBase, top: stubTop,
+            control1: CGPoint(x: cx, y: groundY - stubH * 0.5),
+            control2: CGPoint(x: cx + domeSway * 0.15, y: groundY - stubH * 0.8),
+            baseWidth: size.width * 0.03, topWidth: size.width * 0.015,
+            isWilted: isWilted
+        )
+
+        // --- Dense dome ---
+        // The dome center sits just above the stub trunk
+        let domeCenter = CGPoint(x: cx + domeSway * 0.4, y: groundY - bushH * 0.55)
+        let domeW = size.width * 0.22  // half-width of dome
+        let domeH = bushH * 0.45       // half-height of dome
+        let droopAngle: CGFloat = isWilted ? 0.5 : 0
+        let leafLen = size.width * 0.10
+
+        // Solid fill ellipse as bush mass (back)
+        let massRect = CGRect(
+            x: domeCenter.x - domeW,
+            y: domeCenter.y - domeH,
+            width: domeW * 2,
+            height: domeH * 2
+        )
+        let massColor = isWilted ? wiltedLeaf.opacity(0.6) : leafDark.opacity(0.55)
+        context.fill(Path(ellipseIn: massRect), with: .color(massColor))
+
+        // Leaf positions: distributed across the dome surface, NOT just perimeter
+        // Grid of points inside the ellipse for dense coverage
+        let leafPoints: [(dx: CGFloat, dy: CGFloat, shade: Int, angles: [CGFloat])] = [
+            // Bottom row
+            (-0.65, 0.55, 0, [0.3, -0.8]),
+            (-0.2, 0.7, 1, [0.5, -0.4]),
+            (0.25, 0.65, 0, [0.2, -0.6]),
+            (0.7, 0.5, 1, [-0.2, -1.0]),
+            // Middle-bottom row
+            (-0.8, 0.15, 0, [0.4, -0.5, -1.2]),
+            (-0.35, 0.2, 2, [0.6, -0.3, -1.0]),
+            (0.0, 0.25, 1, [0.3, -0.7, .pi + 0.3]),
+            (0.4, 0.15, 0, [-0.2, -0.9, .pi + 0.5]),
+            (0.8, 0.2, 2, [-0.4, -1.1]),
+            // Center row
+            (-0.7, -0.15, 1, [0.5, -0.6, -1.3]),
+            (-0.25, -0.1, 0, [0.4, -0.5, .pi + 0.4]),
+            (0.15, -0.15, 2, [-0.3, -0.8, .pi + 0.6]),
+            (0.6, -0.1, 1, [-0.5, -1.0]),
+            // Upper row
+            (-0.5, -0.5, 2, [0.3, -0.7, -1.2]),
+            (-0.05, -0.55, 1, [0.2, -0.5, .pi + 0.3]),
+            (0.45, -0.45, 0, [-0.3, -0.9]),
+            // Top
+            (-0.15, -0.8, 2, [0.1, -0.4, -1.0]),
+            (0.2, -0.75, 1, [-0.2, -0.7]),
+        ]
+
+        // Back layer — darker shade leaves filling dome
+        for lp in leafPoints {
+            let pt = CGPoint(
+                x: domeCenter.x + domeW * lp.dx + swayForHeight(0.5 - lp.dy * 0.3, swayOffset, scale: 1.5) * 0.3,
+                y: domeCenter.y + domeH * lp.dy
+            )
+            let angleSway = swayForHeight(0.5 - lp.dy * 0.3, swayOffset, scale: 0.03)
+            for angle in lp.angles {
+                let isLeft = lp.dx < 0
+                let adj = angle + (isLeft ? -droopAngle : droopAngle) + angleSway
+                drawGradientLeaf(context: &context, origin: pt,
+                    length: leafLen * 0.8, angle: adj,
+                    width: size.width * 0.04, isWilted: isWilted, shade: lp.shade)
+            }
+        }
+
+        // Front highlight layer — sparser, lighter leaves on top
+        let frontPoints: [(dx: CGFloat, dy: CGFloat, angle: CGFloat, shade: Int)] = [
+            (-0.5, 0.3, -0.6, 2),
+            (0.0, 0.35, -0.4, 2),
+            (0.5, 0.25, -0.8, 2),
+            (-0.35, -0.2, -0.5, 2),
+            (0.3, -0.25, -0.7, 2),
+            (0.0, -0.6, -0.3, 2),
+            (-0.6, -0.0, 0.3, 1),
+            (0.55, 0.0, -1.0, 1),
+        ]
+        for fp in frontPoints {
+            let pt = CGPoint(
+                x: domeCenter.x + domeW * fp.dx + swayForHeight(0.5 - fp.dy * 0.3, swayOffset, scale: 1.5) * 0.3,
+                y: domeCenter.y + domeH * fp.dy
+            )
+            let angleSway = swayForHeight(0.5 - fp.dy * 0.3, swayOffset, scale: 0.03)
+            drawGradientLeaf(context: &context, origin: pt,
+                length: leafLen * 0.9, angle: fp.angle + angleSway + (fp.dx < 0 ? -droopAngle : droopAngle),
+                width: size.width * 0.042, isWilted: isWilted, shade: fp.shade)
+        }
+
+        // Flowers (only for flowering bush)
+        if withFlowers && !isWilted {
+            let flowerSpots: [(dx: CGFloat, dy: CGFloat, r: CGFloat)] = [
+                (-0.4, -0.5, 0.018),
+                (0.35, -0.45, 0.016),
+                (0.0, -0.8, 0.02),
+                (-0.65, 0.0, 0.015),
+                (0.6, 0.05, 0.016),
+                (0.1, -0.15, 0.014),
+            ]
+            for spot in flowerSpots {
+                let center = CGPoint(
+                    x: domeCenter.x + domeW * spot.dx + swayForHeight(0.5, swayOffset, scale: 1.5) * 0.3,
+                    y: domeCenter.y + domeH * spot.dy
+                )
+                drawFlower(context: &context, center: center, radius: size.width * spot.r)
+            }
+        }
+    }
+
+    // MARK: - Sapling
+
+    static func drawSapling(
+        context: inout GraphicsContext,
+        size: CGSize,
+        groundY: CGFloat,
+        isWilted: Bool,
+        swayOffset: CGFloat
+    ) {
+        let cx = size.width / 2
+        let trunkH = size.height * 0.55
+        let trunkBase = CGPoint(x: cx, y: groundY)
+
+        let sway30 = swayForHeight(0.3, swayOffset, scale: 1.6)
+        let sway70 = swayForHeight(0.7, swayOffset, scale: 1.6)
+        let swayTop = swayForHeight(1.0, swayOffset, scale: 1.6)
+
+        let trunkTop = CGPoint(x: cx + swayTop, y: groundY - trunkH)
+        let tCtrl1 = CGPoint(x: cx - size.width * 0.012 + sway30, y: groundY - trunkH * 0.3)
+        let tCtrl2 = CGPoint(x: cx + size.width * 0.015 + sway70, y: groundY - trunkH * 0.7)
+
+        // Ground shadow
+        drawGroundShadow(context: &context, center: CGPoint(x: cx + swayTop * 0.3, y: groundY + 2), width: size.width * 0.3, height: size.height * 0.014)
+
+        // Roots
+        drawRoots(context: &context, basePoint: trunkBase, size: size, count: 3, isWilted: isWilted)
+
+        // Thin trunk
+        drawCurvedTrunk(
+            context: &context,
+            base: trunkBase, top: trunkTop,
+            control1: tCtrl1, control2: tCtrl2,
+            baseWidth: size.width * 0.035, topWidth: size.width * 0.015,
+            isWilted: isWilted
+        )
+
+        // Light bark
+        drawBarkTexture(context: &context, base: trunkBase, top: trunkTop, control1: tCtrl1, control2: tCtrl2, width: size.width * 0.03, isWilted: isWilted)
+
+        // 3 short branches near top
+        let branchDefs: [(startT: CGFloat, dx: CGFloat, endYRatio: CGFloat)] = [
+            (0.6, 0.14, 0.72),
+            (0.65, -0.12, 0.78),
+            (0.8, 0.09, 0.88),
+        ]
+
+        var branchEnds: [CGPoint] = []
+        for b in branchDefs {
+            let startPt = cubicBezierPoint(from: trunkBase, to: trunkTop, control1: tCtrl1, control2: tCtrl2, t: b.startT)
+            let endY = groundY - trunkH * b.endYRatio
+            let endH = normalizedHeight(y: endY, groundY: groundY, totalHeight: trunkH)
+            let endSway = swayForHeight(endH, swayOffset, scale: 2.2)
+            let endPt = CGPoint(x: cx + size.width * b.dx + endSway, y: endY)
+            drawBranch(context: &context, from: startPt, to: endPt, width: size.width * 0.008, isWilted: isWilted)
+            branchEnds.append(endPt)
+        }
+
+        // Small canopy — leaf clusters at branches and crown
+        let droopAngle: CGFloat = isWilted ? 0.6 : 0
+        let leafLen = size.width * 0.09
+
+        for (i, end) in branchEnds.enumerated() {
+            let h = normalizedHeight(y: end.y, groundY: groundY, totalHeight: trunkH)
+            let angleSway = swayForHeight(h, swayOffset, scale: 0.04)
+            let angles: [(CGFloat, Int, CGFloat)] = [
+                (CGFloat(-0.7), i % 3, CGFloat(1.0)),
+                (CGFloat(-1.1), (i + 1) % 3, CGFloat(0.85)),
+                (CGFloat(0.2), (i + 2) % 3, CGFloat(0.9)),
+            ]
+            for (angle, shade, scale) in angles {
+                let adj = angle + (end.x > cx ? droopAngle : -droopAngle) + angleSway
+                drawGradientLeaf(context: &context, origin: end,
+                    length: leafLen * scale, angle: adj,
+                    width: size.width * 0.035, isWilted: isWilted, shade: shade)
+            }
+        }
+
+        // Crown cluster
+        let crownSway = swayForHeight(1.0, swayOffset, scale: 0.03)
+        let crownDefs: [(dx: CGFloat, dy: CGFloat, angle: CGFloat, shade: Int)] = [
+            (0, 0, -.pi / 4 + droopAngle, 0),
+            (0, 0, .pi + .pi / 4 - droopAngle, 1),
+            (0, -0.02, -.pi / 6 + droopAngle, 2),
+            (0, -0.02, .pi + .pi / 6 - droopAngle, 0),
+            (0.02, -0.015, -.pi / 3 + droopAngle, 1),
+            (-0.02, -0.015, .pi + .pi / 3 - droopAngle, 2),
+        ]
+        for c in crownDefs {
+            let pt = CGPoint(x: trunkTop.x + size.width * c.dx, y: trunkTop.y + size.height * c.dy)
+            drawGradientLeaf(context: &context, origin: pt,
+                length: leafLen, angle: c.angle + crownSway,
+                width: size.width * 0.036, isWilted: isWilted, shade: c.shade)
+        }
+    }
+
+    // MARK: - Young Tree
+
+    static func drawYoungTree(
+        context: inout GraphicsContext,
+        size: CGSize,
+        groundY: CGFloat,
+        isWilted: Bool,
+        swayOffset: CGFloat
+    ) {
+        let cx = size.width / 2
+        let trunkH = size.height * 0.55
+        let trunkBase = CGPoint(x: cx, y: groundY)
+
+        let sway25 = swayForHeight(0.25, swayOffset, scale: 1.6)
+        let sway65 = swayForHeight(0.65, swayOffset, scale: 1.6)
+        let swayTop = swayForHeight(1.0, swayOffset, scale: 1.6)
+
+        let trunkTop = CGPoint(x: cx + swayTop, y: groundY - trunkH)
+        let tCtrl1 = CGPoint(x: cx + size.width * 0.02 + sway25, y: groundY - trunkH * 0.25)
+        let tCtrl2 = CGPoint(x: cx - size.width * 0.012 + sway65, y: groundY - trunkH * 0.65)
+
+        // Ground shadow
+        drawGroundShadow(context: &context, center: CGPoint(x: cx + swayTop * 0.25, y: groundY + 3), width: size.width * 0.35, height: size.height * 0.016)
+
+        // Ground line
+        var groundLine = Path()
+        groundLine.move(to: CGPoint(x: size.width * 0.2, y: groundY))
+        groundLine.addLine(to: CGPoint(x: size.width * 0.8, y: groundY))
+        context.stroke(groundLine, with: .color(soilColor), lineWidth: 1.2)
+
+        // Roots
+        drawRoots(context: &context, basePoint: trunkBase, size: size, count: 4, isWilted: isWilted)
+
+        // Trunk — thicker than sapling
+        drawCurvedTrunk(
+            context: &context,
+            base: trunkBase, top: trunkTop,
+            control1: tCtrl1, control2: tCtrl2,
+            baseWidth: size.width * 0.05, topWidth: size.width * 0.02,
+            isWilted: isWilted
+        )
+
+        // Bark
+        drawBarkTexture(context: &context, base: trunkBase, top: trunkTop, control1: tCtrl1, control2: tCtrl2, width: size.width * 0.042, isWilted: isWilted)
+
+        // 4 branches
+        let branchDefs: [(startT: CGFloat, dx: CGFloat, endYRatio: CGFloat)] = [
+            (0.42, 0.18, 0.58),
+            (0.45, -0.16, 0.62),
+            (0.65, 0.15, 0.78),
+            (0.68, -0.12, 0.82),
+        ]
+
+        var branchEnds: [CGPoint] = []
+        for b in branchDefs {
+            let startPt = cubicBezierPoint(from: trunkBase, to: trunkTop, control1: tCtrl1, control2: tCtrl2, t: b.startT)
+            let endY = groundY - trunkH * b.endYRatio
+            let endH = normalizedHeight(y: endY, groundY: groundY, totalHeight: trunkH)
+            let endSway = swayForHeight(endH, swayOffset, scale: 2.2)
+            let endPt = CGPoint(x: cx + size.width * b.dx + endSway, y: endY)
+            drawBranch(context: &context, from: startPt, to: endPt, width: size.width * 0.01, isWilted: isWilted)
+            branchEnds.append(endPt)
+        }
+
+        let droopAngle: CGFloat = isWilted ? 0.7 : 0
+        let leafLen = size.width * 0.088
+
+        // 2-layer canopy
+        // Back layer
+        for (i, end) in branchEnds.enumerated() {
+            let h = normalizedHeight(y: end.y, groundY: groundY, totalHeight: trunkH)
+            let angleSway = swayForHeight(h, swayOffset, scale: 0.035)
+            let backAngles: [CGFloat] = [-.pi / 5, .pi + .pi / 5, -.pi / 2.5]
+            for (j, angle) in backAngles.enumerated() {
+                if (i + j) % 3 == 0 { continue }
+                let adj = angle + (end.x > cx ? droopAngle : -droopAngle) + angleSway
+                drawGradientLeaf(context: &context, origin: end,
+                    length: leafLen * 0.82, angle: adj,
+                    width: size.width * 0.033, isWilted: isWilted, shade: 0)
+            }
+        }
+
+        // Front layer
+        for (i, end) in branchEnds.enumerated() {
+            let h = normalizedHeight(y: end.y, groundY: groundY, totalHeight: trunkH)
+            let angleSway = swayForHeight(h, swayOffset, scale: 0.035)
+            let frontAngles: [CGFloat] = [-.pi / 4, .pi + .pi / 4]
+            let count = i % 2 == 0 ? 2 : 1
+            for angle in frontAngles.prefix(count + 1) {
+                let adj = angle + (end.x > cx ? droopAngle : -droopAngle) + angleSway
+                drawGradientLeaf(context: &context, origin: end,
+                    length: leafLen * 0.92, angle: adj,
+                    width: size.width * 0.035, isWilted: isWilted, shade: i % 2 == 0 ? 1 : 2)
+            }
+        }
+
+        // Crown leaves
+        let crownSway = swayForHeight(1.0, swayOffset, scale: 0.03)
+        let crownDefs: [(dx: CGFloat, dy: CGFloat, angle: CGFloat, shade: Int)] = [
+            (0, 0, -.pi / 4, 0),
+            (0, 0, .pi + .pi / 4, 1),
+            (0, -0.025, -.pi / 6, 2),
+            (0, -0.025, .pi + .pi / 6, 0),
+            (0.025, -0.015, -.pi / 3, 1),
+            (-0.025, -0.015, .pi + .pi / 3, 2),
+        ]
+        for c in crownDefs {
+            let pt = CGPoint(x: trunkTop.x + size.width * c.dx, y: trunkTop.y + size.height * c.dy)
+            let adj = c.angle + (c.dx >= 0 ? droopAngle : -droopAngle) + crownSway
+            drawGradientLeaf(context: &context, origin: pt,
+                length: leafLen, angle: adj,
+                width: size.width * 0.036, isWilted: isWilted, shade: c.shade)
+        }
+
+        // Small fruits
+        if !isWilted {
+            let fruitSpots: [(CGPoint, CGFloat)] = [
+                (CGPoint(x: branchEnds[0].x - 1, y: branchEnds[0].y + 2), 0.011),
+                (CGPoint(x: branchEnds[2].x + 1, y: branchEnds[2].y + 2), 0.010),
+                (CGPoint(x: trunkTop.x + size.width * 0.02, y: trunkTop.y + size.height * 0.01), 0.009),
+            ]
+            for (pos, rf) in fruitSpots {
+                drawFruit(context: &context, center: pos, radius: size.width * rf)
+            }
+        }
+    }
+
+    // MARK: - Grove Tree
+
+    static func drawGroveTree(
+        context: inout GraphicsContext,
+        size: CGSize,
+        groundY: CGFloat,
+        isWilted: Bool,
+        swayOffset: CGFloat
+    ) {
+        let cx = size.width / 2
+        let trunkH = size.height * 0.6
+        let trunkBase = CGPoint(x: cx, y: groundY)
+
+        let sway25 = swayForHeight(0.25, swayOffset, scale: 1.5)
+        let sway65 = swayForHeight(0.65, swayOffset, scale: 1.5)
+        let swayTop = swayForHeight(1.0, swayOffset, scale: 1.5)
+
+        let trunkTop = CGPoint(x: cx + swayTop, y: groundY - trunkH)
+        let tCtrl1 = CGPoint(x: cx + size.width * 0.03 + sway25, y: groundY - trunkH * 0.25)
+        let tCtrl2 = CGPoint(x: cx - size.width * 0.018 + sway65, y: groundY - trunkH * 0.65)
+
+        // Golden glow behind tree
+        if !isWilted {
+            let glowR = size.width * 0.35
+            let glowRect = CGRect(
+                x: cx - glowR,
+                y: groundY - trunkH * 0.65 - glowR * 0.3,
+                width: glowR * 2,
+                height: glowR * 1.2
+            )
+            context.fill(Path(ellipseIn: glowRect), with: .color(groveGlow.opacity(0.12)))
+            let innerRect = CGRect(
+                x: cx - glowR * 0.6,
+                y: groundY - trunkH * 0.55 - glowR * 0.2,
+                width: glowR * 1.2,
+                height: glowR * 0.8
+            )
+            context.fill(Path(ellipseIn: innerRect), with: .color(groveGlow.opacity(0.08)))
+        }
+
+        // Ground shadow
+        drawGroundShadow(context: &context, center: CGPoint(x: cx + swayTop * 0.2, y: groundY + 3), width: size.width * 0.48, height: size.height * 0.02)
+
+        // Ground line
+        var groundLine = Path()
+        groundLine.move(to: CGPoint(x: size.width * 0.1, y: groundY))
+        groundLine.addLine(to: CGPoint(x: size.width * 0.9, y: groundY))
+        context.stroke(groundLine, with: .color(soilColor), lineWidth: 1.5)
+
+        // 5 roots (wider spread)
+        drawRoots(context: &context, basePoint: trunkBase, size: size, count: 4, isWilted: isWilted)
+        // Extra root
+        let extraRootColor = isWilted ? wiltedTrunk : trunkMid
+        var extraRoot = Path()
+        extraRoot.move(to: trunkBase)
+        extraRoot.addQuadCurve(
+            to: CGPoint(x: trunkBase.x - size.width * 0.13, y: trunkBase.y + size.height * 0.015),
+            control: CGPoint(x: trunkBase.x - size.width * 0.08, y: trunkBase.y + size.height * 0.02)
+        )
+        context.stroke(extraRoot, with: .color(extraRootColor), lineWidth: size.width * 0.007)
+
+        // Thick trunk
+        drawCurvedTrunk(
+            context: &context,
+            base: trunkBase, top: trunkTop,
+            control1: tCtrl1, control2: tCtrl2,
+            baseWidth: size.width * 0.07, topWidth: size.width * 0.025,
+            isWilted: isWilted
+        )
+
+        // Bark
+        drawBarkTexture(context: &context, base: trunkBase, top: trunkTop, control1: tCtrl1, control2: tCtrl2, width: size.width * 0.058, isWilted: isWilted)
+
+        // 8 branches
+        let branchDefs: [(startT: CGFloat, dx: CGFloat, endYRatio: CGFloat)] = [
+            (0.32, 0.22, 0.48),
+            (0.35, -0.20, 0.52),
+            (0.48, 0.19, 0.62),
+            (0.50, -0.17, 0.65),
+            (0.62, 0.16, 0.76),
+            (0.65, -0.14, 0.78),
+            (0.78, 0.11, 0.88),
+            (0.80, -0.10, 0.90),
+        ]
+
+        var branchEnds: [CGPoint] = []
+        for b in branchDefs {
+            let startPt = cubicBezierPoint(from: trunkBase, to: trunkTop, control1: tCtrl1, control2: tCtrl2, t: b.startT)
+            let endY = groundY - trunkH * b.endYRatio
+            let endH = normalizedHeight(y: endY, groundY: groundY, totalHeight: trunkH)
+            let endSway = swayForHeight(endH, swayOffset, scale: 2.2)
+            let endPt = CGPoint(x: cx + size.width * b.dx + endSway, y: endY)
+            drawBranch(context: &context, from: startPt, to: endPt, width: size.width * 0.009, isWilted: isWilted)
+            branchEnds.append(endPt)
+        }
+
+        let droopAngle: CGFloat = isWilted ? 0.7 : 0
+        let leafLen = size.width * 0.088
+
+        // 4-layer canopy
+
+        // Layer 1 — deepest/darkest
+        for (i, end) in branchEnds.enumerated() {
+            let h = normalizedHeight(y: end.y, groundY: groundY, totalHeight: trunkH)
+            let angleSway = swayForHeight(h, swayOffset, scale: 0.035)
+            if i % 2 == 0 {
+                let adj: CGFloat = -.pi / 5 + (end.x > cx ? droopAngle : -droopAngle) + angleSway
+                let offset = CGPoint(x: end.x + 2, y: end.y + 1)
+                drawGradientLeaf(context: &context, origin: offset,
+                    length: leafLen * 0.75, angle: adj,
+                    width: size.width * 0.03, isWilted: isWilted, shade: 0)
+            }
+        }
+
+        // Layer 2 — back
+        for (i, end) in branchEnds.enumerated() {
+            let h = normalizedHeight(y: end.y, groundY: groundY, totalHeight: trunkH)
+            let angleSway = swayForHeight(h, swayOffset, scale: 0.035)
+            let backAngles: [CGFloat] = [-.pi / 5, .pi + .pi / 5, -.pi / 2.5]
+            for (j, angle) in backAngles.enumerated() {
+                if (i + j) % 3 == 0 { continue }
+                let adj = angle + (end.x > cx ? droopAngle : -droopAngle) + angleSway
+                drawGradientLeaf(context: &context, origin: end,
+                    length: leafLen * 0.85, angle: adj,
+                    width: size.width * 0.033, isWilted: isWilted, shade: 0)
+            }
+        }
+
+        // Layer 3 — mid
+        for (i, end) in branchEnds.enumerated() {
+            let h = normalizedHeight(y: end.y, groundY: groundY, totalHeight: trunkH)
+            let angleSway = swayForHeight(h, swayOffset, scale: 0.035)
+            let midAngles: [CGFloat] = [-.pi / 4, .pi + .pi / 4, -.pi / 3]
+            let count = i % 2 == 0 ? 3 : 2
+            for angle in midAngles.prefix(count) {
+                let adj = angle + (end.x > cx ? droopAngle : -droopAngle) + angleSway
+                drawGradientLeaf(context: &context, origin: end,
+                    length: leafLen, angle: adj,
+                    width: size.width * 0.036, isWilted: isWilted, shade: 1)
+            }
+        }
+
+        // Layer 4 — front/lightest
+        for end in branchEnds {
+            let h = normalizedHeight(y: end.y, groundY: groundY, totalHeight: trunkH)
+            let angleSway = swayForHeight(h, swayOffset, scale: 0.035)
+            let frontAngles: [CGFloat] = [-.pi / 3.5, .pi + .pi / 3.5]
+            for angle in frontAngles {
+                let adj = angle + (end.x > cx ? droopAngle : -droopAngle) + angleSway
+                drawGradientLeaf(context: &context, origin: end,
+                    length: leafLen * 0.92, angle: adj,
+                    width: size.width * 0.035, isWilted: isWilted, shade: 2)
+            }
+        }
+
+        // Crown leaves (dense)
+        let crownSway = swayForHeight(1.0, swayOffset, scale: 0.03)
+        let crownDefs: [(dx: CGFloat, dy: CGFloat, angle: CGFloat, shade: Int)] = [
+            (0, 0, -.pi / 4, 0),
+            (0, 0, .pi + .pi / 4, 1),
+            (0, -0.035, -.pi / 6, 2),
+            (0, -0.035, .pi + .pi / 6, 0),
+            (0.04, -0.025, -.pi / 3, 1),
+            (-0.04, -0.025, .pi + .pi / 3, 2),
+            (0.02, -0.045, -.pi / 5, 0),
+            (-0.02, -0.045, .pi + .pi / 5, 1),
+            (0, -0.05, -.pi / 4.5, 2),
+            (0, -0.05, .pi + .pi / 4.5, 0),
+        ]
+        for c in crownDefs {
+            let pt = CGPoint(x: trunkTop.x + size.width * c.dx, y: trunkTop.y + size.height * c.dy)
+            let adj = c.angle + (c.dx >= 0 ? droopAngle : -droopAngle) + crownSway
+            drawGradientLeaf(context: &context, origin: pt,
+                length: leafLen * 1.05, angle: adj,
+                width: size.width * 0.038, isWilted: isWilted, shade: c.shade)
+        }
+
+        if !isWilted {
+            // Flowers in canopy
+            let flowerSpots: [(CGPoint, CGFloat)] = [
+                (CGPoint(x: branchEnds[1].x + 2, y: branchEnds[1].y - 2), 0.014),
+                (CGPoint(x: branchEnds[4].x - 1, y: branchEnds[4].y - 1), 0.012),
+                (CGPoint(x: trunkTop.x - size.width * 0.03, y: trunkTop.y + size.height * 0.015), 0.013),
+                (CGPoint(x: branchEnds[6].x, y: branchEnds[6].y - 2), 0.011),
+            ]
+            for (pos, rf) in flowerSpots {
+                drawFlower(context: &context, center: pos, radius: size.width * rf)
+            }
+
+            // Fruits
+            let fruitSpots: [(CGPoint, CGFloat)] = [
+                (CGPoint(x: branchEnds[0].x - 2, y: branchEnds[0].y + 3), 0.014),
+                (CGPoint(x: branchEnds[2].x + 1, y: branchEnds[2].y + 2), 0.013),
+                (CGPoint(x: branchEnds[3].x - 1, y: branchEnds[3].y + 2), 0.013),
+                (CGPoint(x: branchEnds[5].x + 2, y: branchEnds[5].y + 3), 0.012),
+                (CGPoint(x: trunkTop.x + size.width * 0.03, y: trunkTop.y + size.height * 0.015), 0.011),
+                (CGPoint(x: trunkTop.x - size.width * 0.025, y: trunkTop.y + size.height * 0.022), 0.010),
+                (CGPoint(x: branchEnds[7].x, y: branchEnds[7].y + 2), 0.012),
+            ]
+            for (pos, rf) in fruitSpots {
+                drawFruit(context: &context, center: pos, radius: size.width * rf)
+            }
+
+            // Bird silhouettes
+            let birdDefs: [(dx: CGFloat, dy: CGFloat, wingSpan: CGFloat, flapPhase: CGFloat)] = [
+                (-0.18, -0.15, 0.035, 0.0),
+                (0.2, -0.2, 0.03, 1.5),
+                (-0.08, -0.25, 0.025, 3.0),
+            ]
+            for bird in birdDefs {
+                let flapOffset = sin(swayOffset * 0.8 + bird.flapPhase) * size.height * 0.008
+                let birdCenter = CGPoint(
+                    x: cx + size.width * bird.dx + swayForHeight(0.9, swayOffset, scale: 1.0),
+                    y: groundY - trunkH * 0.9 + size.height * bird.dy + flapOffset
+                )
+                let wingW = size.width * bird.wingSpan
+                let wingDip = size.height * 0.004 + flapOffset * 0.5
+
+                var birdPath = Path()
+                // Left wing
+                birdPath.move(to: CGPoint(x: birdCenter.x - wingW, y: birdCenter.y - wingDip))
+                birdPath.addQuadCurve(
+                    to: birdCenter,
+                    control: CGPoint(x: birdCenter.x - wingW * 0.5, y: birdCenter.y + wingDip)
+                )
+                // Right wing
+                birdPath.addQuadCurve(
+                    to: CGPoint(x: birdCenter.x + wingW, y: birdCenter.y - wingDip),
+                    control: CGPoint(x: birdCenter.x + wingW * 0.5, y: birdCenter.y + wingDip)
+                )
+                context.stroke(birdPath, with: .color(birdColor), lineWidth: size.width * 0.004)
             }
         }
     }

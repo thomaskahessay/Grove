@@ -225,7 +225,7 @@ struct SocialFeedView: View {
                         Task {
                             let generator = UIImpactFeedbackGenerator(style: .light)
                             generator.impactOccurred()
-                            await socialService.sendWater(to: item.id, recipientID: item.userID)
+                            _ = await socialService.sendWater(to: item.id, recipientID: item.userID)
                         }
                     },
                     onSeed: {
@@ -236,7 +236,7 @@ struct SocialFeedView: View {
                             let generator = UIImpactFeedbackGenerator(style: .medium)
                             generator.impactOccurred()
                             if let myWorkout = await socialService.myLatestSharedWorkoutRecordName() {
-                                await socialService.sendSunlight(
+                                _ = await socialService.sendSunlight(
                                     to: item.id,
                                     recipientID: item.userID,
                                     fromWorkoutRecordName: myWorkout

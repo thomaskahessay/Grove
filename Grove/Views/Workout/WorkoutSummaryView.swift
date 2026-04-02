@@ -371,7 +371,7 @@ struct WorkoutSummaryView: View {
                 onSend: { item in
                     Task {
                         if let myWorkout = await socialService.myLatestSharedWorkoutRecordName() {
-                            await socialService.sendSunlight(
+                            _ = await socialService.sendSunlight(
                                 to: item.id,
                                 recipientID: item.userID,
                                 fromWorkoutRecordName: myWorkout

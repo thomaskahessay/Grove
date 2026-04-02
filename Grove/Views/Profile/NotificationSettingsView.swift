@@ -28,7 +28,7 @@ struct NotificationSettingsView: View {
                     case .notDetermined:
                         Button("Enable") {
                             Task {
-                                await notificationService.requestAuthorization()
+                                _ = await notificationService.requestAuthorization()
                                 reschedule()
                             }
                         }

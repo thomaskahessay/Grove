@@ -16,7 +16,7 @@ struct GroveSceneCanvas: View {
                 drawGroundBand(context: context, size: size)
                 drawGrassTufts(context: context, size: size, time: time)
                 drawRootConnections(context: context, size: size, time: time)
-                if userStage == .tree && !isWilted {
+                if userStage >= .tree && !isWilted {
                     drawParticles(context: context, size: size, time: time)
                 }
             }

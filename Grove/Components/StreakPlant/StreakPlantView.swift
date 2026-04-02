@@ -126,8 +126,28 @@ struct StreakPlantView: View {
     StreakPlantView(streak: 10, size: 250)
 }
 
+#Preview("Bush") {
+    StreakPlantView(streak: 14, size: 250)
+}
+
+#Preview("Flowering Bush") {
+    StreakPlantView(streak: 21, size: 250)
+}
+
+#Preview("Sapling") {
+    StreakPlantView(streak: 30, size: 280)
+}
+
+#Preview("Young Tree") {
+    StreakPlantView(streak: 45, size: 300)
+}
+
 #Preview("Tree") {
     StreakPlantView(streak: 60, size: 300)
+}
+
+#Preview("Grove Tree") {
+    StreakPlantView(streak: 100, size: 320)
 }
 
 #Preview("Wilted") {

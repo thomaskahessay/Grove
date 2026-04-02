@@ -40,7 +40,7 @@ Grove/
 │   ├── WorkoutTemplate.swift      # @Model - reusable workout templates
 │   ├── WorkoutPlan.swift          # @Model - scheduled workouts on calendar
 │   ├── PersonalRecord.swift       # @Model - PR tracking (max weight, est. 1RM)
-│   ├── PlantStage.swift           # Enum: 5 growth stages with streak thresholds
+│   ├── PlantStage.swift           # Enum: 10 growth stages with streak thresholds
 │   ├── Enums.swift                # All enums (MuscleGroup, FitnessGoal, etc.)
 │   └── InteractionTypes.swift     # InteractionType, InteractionSummary, SeedMessage, RootConnection, etc.
 ├── Services/
@@ -370,13 +370,13 @@ class Workout {
 
 **Phase 3f: Streak Plant ("Your Grove")**
 - [x] PlantStage enum (Models/PlantStage.swift)
-  - 5 stages: Seed (0), Sprout (1-2), Seedling (3-6), Young Plant (7-59), Tree (60+)
+  - 10 stages: Seed (0), Sprout (1-2), Seedling (3-6), Young Plant (7-13), Bush (14-20), Flowering Bush (21-29), Sapling (30-44), Young Tree (45-59), Tree (60-99), Grove Tree (100+)
   - Progress calculation, stage-up detection, display names
 - [x] User model additions: previousStreak, lastSeenPlantStage, isStreakWilted, wiltedAtStage
 - [x] StreakManager wilting support
   - Records previousStreak on streak reset, sets wiltedAtStage/isStreakWilted on breaks
 - [x] PlantCanvasRenderer (Components/StreakPlant/PlantCanvasRenderer.swift)
-  - SwiftUI Canvas API with Bezier curves for all 5 stages + wilted variants
+  - SwiftUI Canvas API with Bezier curves for all 10 stages + wilted variants
   - Height-based quadratic sway: base stays planted, flex increases upward
   - Gradient fills, teardrop leaves, curved trunks with bark texture
   - Roots, fruits with highlights, 5-petal flowers, layered soil, multi-shade canopy
@@ -658,7 +658,5 @@ Key: We READ from Apple Fitness workouts, we don't create our own HKWorkout sess
 
 ## 💡 Future Ideas
 
-### Streak Plant Expansion
-- Add 3 more growth stages: Bush (14-29), Sapling (30-59), Grove Tree (100+)
-  - Currently 5 stages implemented; PlantStage enum is extensible (insert cases + update thresholds)
-  - PlantCanvasRenderer needs new draw methods for each additional stage
+### ~~Streak Plant Expansion~~ (Completed)
+- Expanded from 5 to 10 stages: Seed, Sprout, Seedling, Young Plant, Bush, Flowering Bush, Sapling, Young Tree, Tree, Grove Tree

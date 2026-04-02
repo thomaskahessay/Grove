@@ -5,7 +5,12 @@ enum PlantStage: Int, Codable, CaseIterable, Comparable {
     case sprout = 1
     case seedling = 2
     case youngPlant = 3
-    case tree = 4
+    case bush = 4
+    case floweringBush = 5
+    case sapling = 6
+    case youngTree = 7
+    case tree = 8
+    case groveTree = 9
 
     static func < (lhs: PlantStage, rhs: PlantStage) -> Bool {
         lhs.rawValue < rhs.rawValue
@@ -17,7 +22,12 @@ enum PlantStage: Int, Codable, CaseIterable, Comparable {
         case .sprout: return 1
         case .seedling: return 3
         case .youngPlant: return 7
+        case .bush: return 14
+        case .floweringBush: return 21
+        case .sapling: return 30
+        case .youngTree: return 45
         case .tree: return 60
+        case .groveTree: return 100
         }
     }
 
@@ -27,7 +37,12 @@ enum PlantStage: Int, Codable, CaseIterable, Comparable {
         case .sprout: return "Sprout"
         case .seedling: return "Seedling"
         case .youngPlant: return "Young Plant"
+        case .bush: return "Bush"
+        case .floweringBush: return "Flowering Bush"
+        case .sapling: return "Sapling"
+        case .youngTree: return "Young Tree"
         case .tree: return "Tree"
+        case .groveTree: return "Grove Tree"
         }
     }
 
@@ -36,10 +51,7 @@ enum PlantStage: Int, Codable, CaseIterable, Comparable {
     }
 
     var showsSoil: Bool {
-        switch self {
-        case .seed, .sprout, .seedling: return true
-        case .youngPlant, .tree: return false
-        }
+        rawValue <= 2
     }
 
     static func from(streak: Int) -> PlantStage {

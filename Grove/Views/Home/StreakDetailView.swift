@@ -3,10 +3,22 @@ import SwiftUI
 struct StreakDetailView: View {
     let user: User
 
+    @State private var previewStage: PlantStage? = nil
+    @State private var previewTimer: Timer? = nil
+
     private var stage: PlantStage {
         user.isStreakWilted
             ? PlantStage(rawValue: user.wiltedAtStage) ?? .seed
             : PlantStage.from(streak: user.currentStreak)
+    }
+
+    private var displayedStage: PlantStage {
+        previewStage ?? stage
+    }
+
+    private var isPreviewingFuture: Bool {
+        guard let preview = previewStage else { return false }
+        return preview > stage
     }
 
     private var progressToNext: Double {
@@ -29,23 +41,38 @@ struct StreakDetailView: View {
         ScrollView {
             VStack(spacing: 24) {
                 // Large plant
-                StreakPlantView(
-                    streak: user.currentStreak,
-                    isWilted: user.isStreakWilted,
-                    wiltedAtStage: PlantStage(rawValue: user.wiltedAtStage) ?? .seed,
-                    size: 300,
-                    showLabel: false
-                )
+                ZStack {
+                    StreakPlantView(
+                        streak: previewStage != nil ? displayedStage.minStreak : user.currentStreak,
+                        isWilted: previewStage == nil && user.isStreakWilted,
+                        wiltedAtStage: PlantStage(rawValue: user.wiltedAtStage) ?? .seed,
+                        size: 300,
+                        showLabel: false
+                    )
+                    .saturation(isPreviewingFuture ? 0 : 1)
+                    .opacity(isPreviewingFuture ? 0.5 : 1)
+                }
                 .frame(maxWidth: .infinity)
+                .animation(.easeInOut(duration: 0.3), value: previewStage)
 
                 // Stage name + streak
                 VStack(spacing: 4) {
-                    Text(stage.displayName)
+                    Text(displayedStage.displayName)
                         .font(.title2)
                         .fontWeight(.bold)
-                        .foregroundStyle(Color.groveText)
+                        .foregroundStyle(isPreviewingFuture ? .secondary : Color.groveText)
 
-                    if user.isStreakWilted {
+                    if previewStage != nil {
+                        if isPreviewingFuture {
+                            Text("Day \(displayedStage.minStreak)+ to unlock")
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+                        } else {
+                            Text("Reached!")
+                                .font(.subheadline)
+                                .foregroundStyle(Color.groveSage)
+                        }
+                    } else if user.isStreakWilted {
                         Text("Streak broken")
                             .font(.subheadline)
                             .foregroundStyle(Color.groveMutedRust)
@@ -55,6 +82,7 @@ struct StreakDetailView: View {
                             .foregroundStyle(Color.groveSage)
                     }
                 }
+                .animation(.easeInOut(duration: 0.3), value: previewStage)
 
                 // Progress bar
                 if !user.isStreakWilted, daysUntilNext != nil, let next = stage.nextStage {
@@ -99,7 +127,19 @@ struct StreakDetailView: View {
                         .foregroundStyle(Color.groveText)
                         .padding(.horizontal)
 
-                    EvolutionTimelineView(currentStage: stage)
+                    EvolutionTimelineView(currentStage: stage) { tappedStage in
+                        previewTimer?.invalidate()
+                        withAnimation(.easeInOut(duration: 0.3)) {
+                            previewStage = tappedStage
+                        }
+                        previewTimer = Timer.scheduledTimer(withTimeInterval: 7.0, repeats: false) { _ in
+                            Task { @MainActor in
+                                withAnimation(.easeInOut(duration: 0.3)) {
+                                    previewStage = nil
+                                }
+                            }
+                        }
+                    }
                 }
 
                 // Motivational message

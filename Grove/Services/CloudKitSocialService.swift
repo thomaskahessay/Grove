@@ -360,47 +360,43 @@ class CloudKitSocialService {
     func fetchFriends() async {
         guard let myAppleUserID else { return }
 
-        do {
-            // Query both sides of friend links
-            let pred1 = NSPredicate(format: "userID1 == %@", myAppleUserID)
-            let pred2 = NSPredicate(format: "userID2 == %@", myAppleUserID)
+        // Query both sides of friend links
+        let pred1 = NSPredicate(format: "userID1 == %@", myAppleUserID)
+        let pred2 = NSPredicate(format: "userID2 == %@", myAppleUserID)
 
-            let query1 = CKQuery(recordType: RecordType.friendLink, predicate: pred1)
-            let query2 = CKQuery(recordType: RecordType.friendLink, predicate: pred2)
+        let query1 = CKQuery(recordType: RecordType.friendLink, predicate: pred1)
+        let query2 = CKQuery(recordType: RecordType.friendLink, predicate: pred2)
 
-            // These may fail if FriendLink record type doesn't exist yet — that's fine
-            let results1 = (try? await publicDB.records(matching: query1))?.0 ?? []
-            let results2 = (try? await publicDB.records(matching: query2))?.0 ?? []
+        // These may fail if FriendLink record type doesn't exist yet — that's fine
+        let results1 = (try? await publicDB.records(matching: query1))?.0 ?? []
+        let results2 = (try? await publicDB.records(matching: query2))?.0 ?? []
 
-            // Extract friend user IDs
-            var friendIDs: Set<String> = []
-            for (_, result) in results1 {
-                if let record = try? result.get(),
-                   let id = record["userID2"] as? String {
-                    friendIDs.insert(id)
-                }
+        // Extract friend user IDs
+        var friendIDs: Set<String> = []
+        for (_, result) in results1 {
+            if let record = try? result.get(),
+               let id = record["userID2"] as? String {
+                friendIDs.insert(id)
             }
-            for (_, result) in results2 {
-                if let record = try? result.get(),
-                   let id = record["userID1"] as? String {
-                    friendIDs.insert(id)
-                }
-            }
-
-            // Batch fetch friend profiles
-            var profiles: [CKFriendProfile] = []
-            for friendID in friendIDs {
-                let recordID = CKRecord.ID(recordName: friendID)
-                if let record = try? await publicDB.record(for: recordID) {
-                    profiles.append(profileFromRecord(record))
-                }
-            }
-
-            self.friends = profiles.sorted { $0.displayName < $1.displayName }
-            self.error = nil
-        } catch {
-            self.error = "Could not load friends: \(error.localizedDescription)"
         }
+        for (_, result) in results2 {
+            if let record = try? result.get(),
+               let id = record["userID1"] as? String {
+                friendIDs.insert(id)
+            }
+        }
+
+        // Batch fetch friend profiles
+        var profiles: [CKFriendProfile] = []
+        for friendID in friendIDs {
+            let recordID = CKRecord.ID(recordName: friendID)
+            if let record = try? await publicDB.record(for: recordID) {
+                profiles.append(profileFromRecord(record))
+            }
+        }
+
+        self.friends = profiles.sorted { $0.displayName < $1.displayName }
+        self.error = nil
     }
 
     // MARK: - Social Feed
@@ -596,7 +592,7 @@ class CloudKitSocialService {
                     .map { log -> [String: Any] in
                         var entry: [String: Any] = ["name": log.exercise?.name ?? "Exercise"]
                         if workout.shareWeights {
-                            entry["sets"] = log.sets.map { ["weight": $0.weight, "reps": $0.reps] }
+                            entry["sets"] = log.sets.map { ["weight": $0.weight as Any, "reps": $0.reps as Any] }
                         } else {
                             entry["setCount"] = log.sets.count
                         }
@@ -1256,7 +1252,7 @@ class CloudKitSocialService {
                     let friendID = (id1 == myAppleUserID) ? id2 : id1
                     if friendID.hasPrefix("debug_friend_") {
                         debugFriendIDs.insert(friendID)
-                        try? await publicDB.deleteRecord(withID: recordID)
+                        _ = try? await publicDB.deleteRecord(withID: recordID)
                     }
                 }
             }
@@ -1265,14 +1261,14 @@ class CloudKitSocialService {
             for friendID in debugFriendIDs {
                 // Delete profile
                 let profileID = CKRecord.ID(recordName: friendID)
-                try? await publicDB.deleteRecord(withID: profileID)
+                _ = try? await publicDB.deleteRecord(withID: profileID)
 
                 // Delete their shared workouts
                 let wPred = NSPredicate(format: "userID == %@", friendID)
                 let wQuery = CKQuery(recordType: RecordType.sharedWorkout, predicate: wPred)
                 if let (workouts, _) = try? await publicDB.records(matching: wQuery) {
                     for (wRecordID, _) in workouts {
-                        try? await publicDB.deleteRecord(withID: wRecordID)
+                        _ = try? await publicDB.deleteRecord(withID: wRecordID)
                     }
                 }
 
@@ -1281,14 +1277,14 @@ class CloudKitSocialService {
                 let iQuery1 = CKQuery(recordType: RecordType.interaction, predicate: iPred1)
                 if let (interactions, _) = try? await publicDB.records(matching: iQuery1) {
                     for (iRecordID, _) in interactions {
-                        try? await publicDB.deleteRecord(withID: iRecordID)
+                        _ = try? await publicDB.deleteRecord(withID: iRecordID)
                     }
                 }
                 let iPred2 = NSPredicate(format: "recipientID == %@", friendID)
                 let iQuery2 = CKQuery(recordType: RecordType.interaction, predicate: iPred2)
                 if let (interactions, _) = try? await publicDB.records(matching: iQuery2) {
                     for (iRecordID, _) in interactions {
-                        try? await publicDB.deleteRecord(withID: iRecordID)
+                        _ = try? await publicDB.deleteRecord(withID: iRecordID)
                     }
                 }
             }
