@@ -852,34 +852,78 @@ The primary hub users see after login.
 └────────────────────────────────────┘
 ```
 
-### Progress Screen
+### Progress Screen (Dashboard)
+
+Single scrollable dashboard with 7 sections:
 
 ```
 ┌────────────────────────────────────┐
+│ This Week           Mar 31 – Apr 6 │
+│  M  T  W  T  F  S  S              │
+│  ●  ●  ○  ·  ○  ·  ·              │
+│  [3/5 workouts] [12.5k lbs vol]    │
+├────────────────────────────────────┤
+│ Personal Records         See All > │
+│ ┌──────┐ ┌──────┐ ┌──────┐        │
+│ │Bench │ │Squat │ │DL    │  →     │
+│ │225lbs│ │315lbs│ │405lbs│        │
+│ │5 reps│ │3 reps│ │1 rep │        │
+│ └──────┘ └──────┘ └──────┘        │
+│ (horizontal scroll, tap → chart)   │
+├────────────────────────────────────┤
+│ Exercise Progress                  │
 │ ┌────────────────────────────────┐ │
-│ │ Bench Press              ▼     │ │
-│ │ 12 workouts                    │ │
+│ │ Bench Press    12 wkts  ╱╲╱ > │ │
+│ │ Squat           8 wkts  ╱╲  > │ │
+│ │ Deadlift        6 wkts  ╱╲╱ > │ │
+│ └────────────────────────────────┘ │
+│ (tap → full chart detail view)     │
+│    [View All Exercises]            │
+├────────────────────────────────────┤
+│ Consistency                        │
+│ ┌────────────────────────────────┐ │
+│ │ Plan Adherence     ┌──┐       │ │
+│ │ 85%                │○ │       │ │
+│ │                    └──┘       │ │
+│ │ Workouts per Week             │ │
+│ │ ▐ ▐▐ ▐▐▐ ▐▐ ---- goal       │ │
+│ │ 🔥 12 current  🏆 28 longest │ │
 │ └────────────────────────────────┘ │
 ├────────────────────────────────────┤
+│ Your Program                       │
 │ ┌────────────────────────────────┐ │
-│ │ Current  Change  Best   Max   │ │
-│ │  185     +10    195    185    │ │
+│ │ Push / Pull / Legs             │ │
+│ │ 4 days/week · Hypertrophy      │ │
+│ │ M  T  W  T  F  S  S           │ │
+│ │ ●  ·  ●  ·  ●  ●  ·           │ │
+│ │ Mon: Push  Wed: Pull           │ │
+│ │ Fri: Legs  Sat: Arms           │ │
 │ └────────────────────────────────┘ │
 ├────────────────────────────────────┤
-│  ┌────────────────────────────────┐│
-│  │     📈 Interactive Chart      ││
-│  │     Line + Area + Points      ││
-│  │     Tap for tooltip           ││
-│  │     (value + date)            ││
-│  └────────────────────────────────┘│
+│ Insights                           │
+│ ┌────────────────────────────────┐ │
+│ │ ↗ Volume up 12% from last wk  │ │
+│ │ 🏆 New PR on Bench Press!     │ │
+│ └────────────────────────────────┘ │
 ├────────────────────────────────────┤
-│  [1RM ▾]  [3M ▾]                   │
-│  (metric)  (time range)            │
+│ Achievements             See All > │
+│  ● ● ● ○ ○ ○ ○  (3/7 earned)     │
+│  Next: Consistent ████░░ 42/50     │
 └────────────────────────────────────┘
-
-Metrics: Est. 1RM, Best Set, Volume
-Time Ranges: 1M, 3M, 6M, All
 ```
+
+**Exercise Progress Detail View** (drill-down from exercise list or PR card tap):
+- Exercise picker header with workout count
+- Interactive line + area chart with tooltips
+- Stats row: Current, Change, Best, Max
+- Filter menus: Max Weight / Best Set / Volume × 1M / 3M / 6M / All
+- Recent workouts list for selected exercise
+
+**Insights Engine** auto-generates 1-2 contextual messages:
+- Volume trend (week-over-week comparison)
+- PR momentum (recent PRs or progressive overload suggestion)
+- Consistency (adherence percentage callout)
+- Streak milestone (longest streak ever notification)
 
 ### Social Feed Screen (Activity Tab)
 

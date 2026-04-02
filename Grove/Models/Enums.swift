@@ -246,4 +246,16 @@ enum AchievementType: String, Codable, CaseIterable {
         case .ironWill: return "mountain.2.fill"
         }
     }
+
+    var shortLabel: String {
+        switch self {
+        case .firstRep: return "1st"
+        case .weekWarrior: return "7day"
+        case .consistent: return "50"
+        case .prCrusher: return "PR"
+        case .planner: return "Plan"
+        case .centuryClub: return "100"
+        case .ironWill: return "30d"
+        }
+    }
 }

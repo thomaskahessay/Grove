@@ -55,7 +55,8 @@ Grove/
 │   ├── WorkoutSessionManager.swift # @MainActor @Observable - active workout + streak moment state + shared createAndStartWorkout helper
 │   ├── CloudKitSocialService.swift # @MainActor @Observable - social feed, interactions, friends, invite codes
 │   ├── InviteCodeGenerator.swift  # Generates unique invite codes
-│   └── SeedMessages.swift         # Preset seed message options
+│   ├── SeedMessages.swift         # Preset seed message options
+│   └── ProgressInsightsEngine.swift # Auto-generated progress insights (volume trends, PR momentum, consistency)
 ├── Views/
 │   ├── Onboarding/
 │   │   ├── OnboardingContainerView.swift  # 7-step onboarding flow container
@@ -94,7 +95,8 @@ Grove/
 │   │   ├── HealthKitConnectView.swift     # Post-workout Apple Watch data connect sheet
 │   │   └── ExercisePickerView.swift       # Exercise browser for adding to workouts
 │   ├── Progress/
-│   │   └── ProgressView.swift
+│   │   ├── ProgressView.swift                 # Dashboard: weekly summary, PRs, exercises, consistency, program, insights, achievements
+│   │   └── ExerciseProgressDetailView.swift   # Drill-down: exercise chart, stats, filters, recent workouts
 │   ├── Social/
 │   │   ├── SocialFeedView.swift           # Main activity feed (Canopy/Soil filter)
 │   │   ├── FeedItemCard.swift             # Feed card with evolving plant background
@@ -299,20 +301,31 @@ class Workout {
   - WorkoutSessionManager.discardWorkout() handles cleanup
   - Done button correctly appears when last exercise is skipped
 
-**Phase 3c: Progress Charts**
-- [x] Progress charts (ProgressView.swift)
-  - Exercise picker modal with search (sorted alphabetically)
-  - Large exercise name header with workout count, full-card tap to open picker
-  - Three metrics via dropdown menu: Estimated 1RM (Brzycki/Epley), Best Set, Total Volume
-  - Time range picker via dropdown: 1M / 3M / 6M / All
+**Phase 3c: Progress Dashboard**
+- [x] Progress dashboard (ProgressView.swift) — single scrollable page with 7 sections:
+  1. **Weekly Summary**: day-by-day indicators (completed/planned/rest/missed), workout count, total volume
+  2. **Personal Records showcase**: horizontal scroll of PR cards with "NEW" badge, tap → exercise chart, "See All" → PersonalRecordsView
+  3. **Exercise Progress**: top 5 exercises by workout count with mini sparklines, tap → ExerciseProgressDetailView, "View All Exercises" picker
+  4. **Consistency**: plan adherence ring (last 4 weeks), weekly frequency bar chart (8 weeks) with goal line, current/longest streak row
+  5. **Your Program**: split name, days/week, rep range, weekday training slot indicators, template-to-day mapping
+  6. **Insights**: 1-2 auto-generated contextual messages via ProgressInsightsEngine (volume trends, PR momentum, consistency, streak milestones)
+  7. **Achievements**: compact icon row (7 types), "X/7 earned", closest-to-unlock "Next up" card, "See All" → AchievementsGalleryView
+- [x] ExerciseProgressDetailView (drill-down from exercise list or PR card tap)
+  - Exercise picker header with workout count
+  - Three metrics via dropdown: Max Weight, Best Set, Total Volume
+  - Time range picker: 1M / 3M / 6M / All
   - Swift Charts with line + area + point marks
   - Interactive tooltips on tap/drag showing value and date
-  - Stats card: Current, Change, Best, Max (highest weight ever)
-  - Full-width filter buttons with glass styling (replaces pill-style)
+  - Stats row: Current, Change, Best, Max
   - Recent workouts section for selected exercise
-  - Floating segmented picker (Exercises / Achievements): no background by default; ultraThinMaterial fades in smoothly when content scrolls behind it; resets on tab switch
   - glassEffect applied to exercise header, stats card, recent workouts section, and tooltip
-  - Empty states for no data
+- [x] ProgressInsightsEngine (Services/ProgressInsightsEngine.swift)
+  - Static computation of contextual insights from workout data
+  - Volume trend (week-over-week), PR momentum, consistency, streak milestones
+  - Returns top 2 most relevant insights
+- [x] PRs moved from Profile to Progress tab (PR showcase section)
+  - ProfileView quick access cards simplified to Achievements only (full-width card)
+  - PR count still shown in Profile stats card for quick reference
 
 **Phase 3d: Personal Records**
 - [x] PersonalRecord model (simplified: highest weight only)

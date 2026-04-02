@@ -299,55 +299,37 @@ struct ProfileView: View {
     // MARK: - Quick Access Cards
 
     private var quickAccessCards: some View {
-        HStack(spacing: 12) {
-            NavigationLink {
-                AchievementsGalleryView()
-            } label: {
-                VStack(spacing: 10) {
-                    Image(systemName: "trophy.fill")
-                        .font(.title2)
-                        .foregroundStyle(Color.groveTerracotta)
+        NavigationLink {
+            AchievementsGalleryView()
+        } label: {
+            HStack(spacing: 14) {
+                Image(systemName: "trophy.fill")
+                    .font(.title2)
+                    .foregroundStyle(Color.groveTerracotta)
+                    .frame(width: 36)
 
+                VStack(alignment: .leading, spacing: 4) {
                     Text("Achievements")
-                        .font(.subheadline)
-                        .fontWeight(.medium)
+                        .font(.headline)
                         .foregroundStyle(Color.groveText)
 
-                    Text("\(user?.achievements.count ?? 0) / \(AchievementType.allCases.count)")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 20)
-                .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 12))
-                .shadow(color: .black.opacity(0.07), radius: 10, y: 3)
-            }
-            .buttonStyle(.plain)
-
-            NavigationLink {
-                PersonalRecordsView()
-            } label: {
-                VStack(spacing: 10) {
-                    Image(systemName: "chart.line.uptrend.xyaxis")
-                        .font(.title2)
-                        .foregroundStyle(Color.groveSage)
-
-                    Text("Personal Records")
+                    Text("\(user?.achievements.count ?? 0) / \(AchievementType.allCases.count) earned")
                         .font(.subheadline)
-                        .fontWeight(.medium)
-                        .foregroundStyle(Color.groveText)
-
-                    Text("\(prExerciseCount) PRs")
-                        .font(.caption)
                         .foregroundStyle(.secondary)
                 }
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 20)
-                .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 12))
-                .shadow(color: .black.opacity(0.07), radius: 10, y: 3)
+
+                Spacer()
+
+                Image(systemName: "chevron.right")
+                    .font(.caption)
+                    .foregroundStyle(.tertiary)
             }
-            .buttonStyle(.plain)
+            .padding(16)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 12))
+            .shadow(color: .black.opacity(0.07), radius: 10, y: 3)
         }
+        .buttonStyle(.plain)
     }
 
     // MARK: - Current Program Card
