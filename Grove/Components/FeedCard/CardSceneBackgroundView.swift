@@ -5,6 +5,7 @@ import SwiftUI
 struct CardSceneBackgroundView: View {
     let interactions: InteractionSummary?
     let hasPRs: Bool
+    var soilPosition: CGFloat = 0.85
 
     private var growth: CardGrowthState {
         CardGrowthState(from: interactions)
@@ -30,7 +31,8 @@ struct CardSceneBackgroundView: View {
                             context: &context,
                             size: canvasSize,
                             growth: growth,
-                            swayOffset: swayOffset
+                            swayOffset: swayOffset,
+                            soilPosition: soilPosition
                         )
                     }
                     .opacity(0.35)
@@ -47,6 +49,25 @@ struct CardSceneBackgroundView: View {
                     startPoint: .top,
                     endPoint: .bottom
                 )
+            }
+
+            // Sunlight rays rendered at full opacity (not dimmed by scene opacity)
+            if growth.bloomProgress > 0 {
+                TimelineView(.animation(minimumInterval: 1.0 / 20, paused: false)) { timeline in
+                    let elapsed = timeline.date.timeIntervalSinceReferenceDate
+                    let swayOffset = CGFloat(sin(elapsed * 1.2) * 0.3) * 8
+
+                    Canvas { context, canvasSize in
+                        CardSceneRenderer.drawSunlightRays(
+                            context: &context,
+                            size: canvasSize,
+                            bloomProgress: growth.bloomProgress,
+                            swayOffset: swayOffset
+                        )
+                    }
+                }
+                .drawingGroup()
+                .allowsHitTesting(false)
             }
         }
     }

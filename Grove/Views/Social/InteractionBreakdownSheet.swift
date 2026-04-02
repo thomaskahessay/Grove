@@ -138,11 +138,9 @@ struct InteractionBreakdownSheet: View {
     }
 
     private func initials(for name: String) -> String {
+        if name.isEmpty { return "G" }
         let parts = name.split(separator: " ")
-        if parts.count >= 2 {
-            return "\(parts[0].prefix(1))\(parts[1].prefix(1))"
-        }
-        return String(name.prefix(2)).uppercased()
+        return parts.prefix(2).compactMap { $0.first.map(String.init) }.joined().uppercased()
     }
 }
 

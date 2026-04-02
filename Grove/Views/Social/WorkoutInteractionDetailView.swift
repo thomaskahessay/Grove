@@ -1,24 +1,30 @@
 import SwiftUI
+import SwiftData
 
 struct WorkoutInteractionDetailView: View {
     let item: SharedWorkoutItem
 
     @Environment(CloudKitSocialService.self) private var socialService
+    @Query private var users: [User]
     @State private var detailedInteractions: InteractionSummary?
     @State private var isLoading = true
     @State private var selectedSeedItem: SharedWorkoutItem?
 
+    private var currentUser: User? { users.first }
+    private var myName: String { currentUser?.displayName ?? "You" }
+    private var myProfileImageData: Data? { currentUser?.profileImageData }
     private var exercises: [SharedExercise] { item.parsedExercises }
     private var isOwnPost: Bool { item.userID == socialService.currentUserID }
+
+    private var heroInteractions: InteractionSummary? {
+        detailedInteractions ?? socialService.interactionsByWorkout[item.id]
+    }
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
-                // Header
-                headerSection
-
-                // Stats
-                statsSection
+                // Hero: plant scene behind header + stats
+                heroSection
 
                 // Exercises
                 if !exercises.isEmpty {
@@ -28,7 +34,6 @@ struct WorkoutInteractionDetailView: View {
                 // Garden section (interactions)
                 gardenSection
             }
-            .padding(.horizontal)
             .padding(.bottom, 32)
         }
         .background(Color.groveBackground)
@@ -36,14 +41,27 @@ struct WorkoutInteractionDetailView: View {
         .navigationBarTitleDisplayMode(.inline)
         .task {
             if let interactions = await socialService.fetchDetailedInteractions(for: item.id) {
-                detailedInteractions = interactions
-            } else {
-                detailedInteractions = socialService.interactionsByWorkout[item.id]
+                detailedInteractions = patchMyProfile(in: interactions)
+            } else if let cached = socialService.interactionsByWorkout[item.id] {
+                detailedInteractions = patchMyProfile(in: cached)
             }
             isLoading = false
         }
         .sheet(item: $selectedSeedItem) { seedItem in
             SeedPickerSheet(item: seedItem) { message, isCustom in
+                // Optimistic local update
+                var summary = detailedInteractions ?? .empty(for: item.id)
+                summary.seeds.append(SeedMessage(
+                    id: UUID().uuidString,
+                    senderID: socialService.currentUserID ?? "",
+                    senderName: myName,
+                    senderProfileImageData: myProfileImageData,
+                    message: String(message.prefix(60)),
+                    isCustom: isCustom,
+                    createdAt: Date()
+                ))
+                detailedInteractions = summary
+
                 Task {
                     await socialService.sendSeed(
                         to: seedItem.id,
@@ -51,24 +69,55 @@ struct WorkoutInteractionDetailView: View {
                         message: message,
                         isCustom: isCustom
                     )
-                    // Refresh
-                    if let updated = await socialService.fetchDetailedInteractions(for: item.id) {
-                        detailedInteractions = updated
-                    }
                 }
             }
             .presentationDetents([.medium])
         }
 
-        // Bottom action bar — hidden on own posts
-        .safeAreaInset(edge: .bottom) {
-            if !isOwnPost {
-                actionBar
-                    .padding(.horizontal)
-                    .padding(.vertical, 8)
-                    .background(.ultraThinMaterial)
+    }
+
+    // MARK: - Hero
+
+    private var heroSection: some View {
+        ZStack {
+            CardSceneBackgroundView(interactions: heroInteractions, hasPRs: item.hasPRs, soilPosition: 0.55)
+
+            VStack(alignment: .leading, spacing: 0) {
+                // Name + date at the top
+                headerSection
+                    .padding(.horizontal, 16)
+                    .padding(.top, 16)
+
+                Spacer(minLength: 16)
+
+                // Stats card sits at the bottom, plants sprout from behind it
+                statsSection
+                    .padding(.horizontal, 16)
+                    .padding(.bottom, 16)
             }
         }
+        .frame(minHeight: 220)
+        .clipShape(RoundedRectangle(cornerRadius: 16))
+        .overlay(
+            RoundedRectangle(cornerRadius: 16)
+                .strokeBorder(
+                    LinearGradient(
+                        colors: [Color.groveTerracotta.opacity(0.4), Color.groveTerracotta.opacity(0.15)],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    ),
+                    lineWidth: 1.5
+                )
+                .opacity(item.hasPRs ? 1 : 0)
+        )
+        .waterShimmer(active: heroInteractions?.isWaterShimmerActive ?? false)
+        .sunlightGlow(active: heroInteractions?.isSunlightGlowActive ?? false)
+        .shadow(
+            color: item.hasPRs ? Color.groveTerracotta.opacity(0.15) : .black.opacity(0.05),
+            radius: item.hasPRs ? 10 : 6,
+            y: 2
+        )
+        .padding(.horizontal)
     }
 
     // MARK: - Header
@@ -87,7 +136,6 @@ struct WorkoutInteractionDetailView: View {
                 }
                 Spacer()
             }
-            .padding(.top, 8)
         }
     }
 
@@ -110,7 +158,7 @@ struct WorkoutInteractionDetailView: View {
         }
         .padding(.vertical, 14)
         .frame(maxWidth: .infinity)
-        .background(Color.groveCardBackground)
+        .background(.ultraThinMaterial)
         .clipShape(RoundedRectangle(cornerRadius: 12))
     }
 
@@ -175,16 +223,41 @@ struct WorkoutInteractionDetailView: View {
         .padding(14)
         .background(Color.groveCardBackground)
         .clipShape(RoundedRectangle(cornerRadius: 12))
+        .padding(.horizontal)
     }
 
     // MARK: - Garden Section
 
     private var gardenSection: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Label("Garden", systemImage: "leaf.fill")
-                .font(.subheadline)
-                .fontWeight(.semibold)
-                .foregroundStyle(Color.groveSage)
+            HStack(spacing: 8) {
+                Label("Garden", systemImage: "leaf.fill")
+                    .font(.subheadline)
+                    .fontWeight(.semibold)
+                    .foregroundStyle(Color.groveSage)
+
+                // Interaction counts
+                if let interactions = detailedInteractions {
+                    let waterCount = interactions.waterCount
+                    let seedCount = interactions.seeds.count
+                    let sunlightCount = interactions.sunlightCount
+                    if waterCount > 0 || seedCount > 0 || sunlightCount > 0 {
+                        HStack(spacing: 10) {
+                            if waterCount > 0 {
+                                interactionCount(icon: "drop.fill", count: waterCount, color: .blue)
+                            }
+                            if sunlightCount > 0 {
+                                interactionCount(icon: "sun.max.fill", count: sunlightCount, color: .orange)
+                            }
+                            if seedCount > 0 {
+                                interactionCount(icon: "leaf.fill", count: seedCount, color: .groveSage)
+                            }
+                        }
+                    }
+                }
+
+                Spacer()
+            }
 
             if isLoading {
                 SwiftUI.ProgressView()
@@ -288,58 +361,162 @@ struct WorkoutInteractionDetailView: View {
                         .frame(maxWidth: .infinity)
                         .padding()
                 }
+
+                // Action buttons (hidden on own posts)
+                if !isOwnPost {
+                    Divider()
+                        .padding(.vertical, 4)
+
+                    gardenActions
+                }
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(14)
         .background(Color.groveCardBackground)
         .clipShape(RoundedRectangle(cornerRadius: 12))
+        .padding(.horizontal)
     }
 
-    // MARK: - Action Bar
+    // MARK: - Profile Patching
 
-    private var actionBar: some View {
-        InteractionBar(
-            summary: detailedInteractions ?? socialService.interactionsByWorkout[item.id],
-            showSunlight: socialService.availableSunlightCount > 0,
-            onWater: {
-                Task {
+    /// Replace "You" placeholders from the server with the real user profile data
+    private func patchMyProfile(in summary: InteractionSummary) -> InteractionSummary {
+        guard let myID = socialService.currentUserID else { return summary }
+        var patched = summary
+
+        patched.waterers = summary.waterers.map { info in
+            guard info.userID == myID else { return info }
+            return InteractorInfo(userID: myID, displayName: myName, profileImageData: myProfileImageData)
+        }
+
+        patched.sunlighters = summary.sunlighters.map { info in
+            guard info.senderID == myID else { return info }
+            return SunlightInfo(senderID: myID, senderName: myName, senderProfileImageData: myProfileImageData, earnedFromWorkoutName: info.earnedFromWorkoutName)
+        }
+
+        patched.seeds = summary.seeds.map { seed in
+            guard seed.senderID == myID else { return seed }
+            return SeedMessage(id: seed.id, senderID: myID, senderName: myName, senderProfileImageData: myProfileImageData, message: seed.message, isCustom: seed.isCustom, createdAt: seed.createdAt)
+        }
+
+        return patched
+    }
+
+    // MARK: - Garden Actions
+
+    private var iWatered: Bool { detailedInteractions?.iWatered ?? socialService.interactionsByWorkout[item.id]?.iWatered ?? false }
+    private var iSunlit: Bool { detailedInteractions?.iSunlit ?? socialService.interactionsByWorkout[item.id]?.iSunlit ?? false }
+
+    private func applyOptimisticWater() {
+        var summary = detailedInteractions ?? .empty(for: item.id)
+        summary.waterCount += 1
+        summary.iWatered = true
+        summary.latestWaterDate = Date()
+        summary.waterers.append(InteractorInfo(userID: socialService.currentUserID ?? "", displayName: myName, profileImageData: myProfileImageData))
+        detailedInteractions = summary
+    }
+
+    private func applyOptimisticSunlight() {
+        var summary = detailedInteractions ?? .empty(for: item.id)
+        summary.sunlightCount += 1
+        summary.iSunlit = true
+        summary.latestSunlightDate = Date()
+        summary.sunlighters.append(SunlightInfo(senderID: socialService.currentUserID ?? "", senderName: myName, senderProfileImageData: myProfileImageData, earnedFromWorkoutName: nil))
+        detailedInteractions = summary
+    }
+
+    private var gardenActions: some View {
+        HStack(spacing: 0) {
+            if !iWatered {
+                Button {
                     let generator = UIImpactFeedbackGenerator(style: .light)
                     generator.impactOccurred()
-                    let success = await socialService.sendWater(to: item.id, recipientID: item.userID)
-                    if success {
-                        if let updated = await socialService.fetchDetailedInteractions(for: item.id) {
-                            detailedInteractions = updated
-                        }
-                    }
-                }
-            },
-            onSeed: {
-                selectedSeedItem = item
-            },
-            onSunlight: {
-                Task {
-                    let generator = UIImpactFeedbackGenerator(style: .medium)
-                    generator.impactOccurred()
-                    if let myWorkout = await socialService.myLatestSharedWorkoutRecordName() {
-                        let success = await socialService.sendSunlight(
-                            to: item.id,
-                            recipientID: item.userID,
-                            fromWorkoutRecordName: myWorkout
-                        )
-                        if success {
+                    applyOptimisticWater()
+                    Task {
+                        let success = await socialService.sendWater(to: item.id, recipientID: item.userID)
+                        if !success {
+                            // Revert on failure — re-fetch from server
                             if let updated = await socialService.fetchDetailedInteractions(for: item.id) {
                                 detailedInteractions = updated
                             }
                         }
                     }
+                } label: {
+                    HStack(spacing: 4) {
+                        Image(systemName: "drop")
+                            .font(.caption)
+                        Text("Water")
+                            .font(.caption)
+                    }
+                    .foregroundStyle(.blue.opacity(0.8))
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 8)
                 }
-            },
-            showCounts: true
-        )
+            }
+
+            Button {
+                selectedSeedItem = item
+            } label: {
+                HStack(spacing: 4) {
+                    Image(systemName: "leaf")
+                        .font(.caption)
+                    Text("Seed")
+                        .font(.caption)
+                }
+                .foregroundStyle(Color.groveSage)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 8)
+            }
+
+            if socialService.availableSunlightCount > 0 && !iSunlit {
+                Button {
+                    let generator = UIImpactFeedbackGenerator(style: .medium)
+                    generator.impactOccurred()
+                    applyOptimisticSunlight()
+                    Task {
+                        if let myWorkout = await socialService.myLatestSharedWorkoutRecordName() {
+                            let success = await socialService.sendSunlight(
+                                to: item.id,
+                                recipientID: item.userID,
+                                fromWorkoutRecordName: myWorkout
+                            )
+                            if !success {
+                                if let updated = await socialService.fetchDetailedInteractions(for: item.id) {
+                                    detailedInteractions = updated
+                                }
+                            }
+                        }
+                    }
+                } label: {
+                    HStack(spacing: 4) {
+                        Image(systemName: "sun.max.fill")
+                            .font(.caption)
+                        Text("Sunlight")
+                            .font(.caption)
+                    }
+                    .foregroundStyle(.orange)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 8)
+                }
+            }
+        }
+        .buttonStyle(.plain)
     }
 
     // MARK: - Helpers
+
+    private func interactionCount(icon: String, count: Int, color: Color) -> some View {
+        HStack(spacing: 3) {
+            Image(systemName: icon)
+                .font(.system(size: 10))
+                .foregroundStyle(color.opacity(0.7))
+            Text("\(count)")
+                .font(.caption2)
+                .fontWeight(.medium)
+                .foregroundStyle(Color.groveTextSecondary)
+        }
+    }
 
     private func avatarView(size: CGFloat) -> some View {
         Circle()
@@ -382,11 +559,9 @@ struct WorkoutInteractionDetailView: View {
     }
 
     private func initials(for name: String) -> String {
+        if name.isEmpty { return "G" }
         let parts = name.split(separator: " ")
-        if parts.count >= 2 {
-            return "\(parts[0].prefix(1))\(parts[1].prefix(1))"
-        }
-        return String(name.prefix(2)).uppercased()
+        return parts.prefix(2).compactMap { $0.first.map(String.init) }.joined().uppercased()
     }
 
     private var formattedDate: String {
@@ -401,6 +576,7 @@ struct WorkoutInteractionDetailView: View {
         WorkoutInteractionDetailView(item: SocialPreviewData.feedItems[2])
     }
     .environment(SocialPreviewData.socialService)
+    .modelContainer(for: User.self, inMemory: true)
 }
 
 #Preview("Regular Workout — Light Garden") {
@@ -408,6 +584,7 @@ struct WorkoutInteractionDetailView: View {
         WorkoutInteractionDetailView(item: SocialPreviewData.feedItems[1])
     }
     .environment(SocialPreviewData.socialService)
+    .modelContainer(for: User.self, inMemory: true)
 }
 
 #Preview("No Interactions") {
@@ -415,4 +592,5 @@ struct WorkoutInteractionDetailView: View {
         WorkoutInteractionDetailView(item: SocialPreviewData.feedItems[5])
     }
     .environment(SocialPreviewData.socialService)
+    .modelContainer(for: User.self, inMemory: true)
 }

@@ -51,15 +51,16 @@ struct CardGrowthState: Equatable {
         grassDensity = min(water, 6)
 
         // Seeds → plant growth stage (continuous)
+        var seedPlantStage: CGFloat
         switch seeds {
-        case 0: plantStage = 0
-        case 1: plantStage = 1.0
-        case 2: plantStage = 2.0
-        case 3: plantStage = 2.5
-        case 4: plantStage = 3.0
-        case 5: plantStage = 3.3
-        case 6: plantStage = 3.5
-        default: plantStage = 4.0
+        case 0: seedPlantStage = 0
+        case 1: seedPlantStage = 1.0
+        case 2: seedPlantStage = 2.0
+        case 3: seedPlantStage = 2.5
+        case 4: seedPlantStage = 3.0
+        case 5: seedPlantStage = 3.3
+        case 6: seedPlantStage = 3.5
+        default: seedPlantStage = 4.0
         }
 
         // Sunlight → bloom progress
@@ -67,6 +68,13 @@ struct CardGrowthState: Equatable {
         case 0: bloomProgress = 0
         case 1: bloomProgress = 0.5
         default: bloomProgress = 1.0
+        }
+
+        // Sunlight guarantees a minimum bush so flowers have branches to grow on
+        if bloomProgress > 0 && seedPlantStage < 3.0 {
+            plantStage = 3.0
+        } else {
+            plantStage = seedPlantStage
         }
 
         // Combined lushness

@@ -15,11 +15,9 @@ struct CKFriendProfile: Identifiable, Sendable {
     let recordID: CKRecord.ID
 
     var initials: String {
+        if displayName.isEmpty { return "G" }
         let parts = displayName.split(separator: " ")
-        if parts.count >= 2 {
-            return "\(parts[0].prefix(1))\(parts[1].prefix(1))"
-        }
-        return String(displayName.prefix(2)).uppercased()
+        return parts.prefix(2).compactMap { $0.first.map(String.init) }.joined().uppercased()
     }
 }
 
@@ -535,7 +533,7 @@ class CloudKitSocialService {
                 }
             case "sunlight":
                 summary.sunlightCount += 1
-                summary.sunlighters.append(SunlightInfo(senderID: senderID, senderName: senderName, senderProfileImageData: senderImage, earnedFromWorkoutName: record["fromWorkoutName"] as? String))
+                summary.sunlighters.append(SunlightInfo(senderID: senderID, senderName: senderName, senderProfileImageData: senderImage, earnedFromWorkoutName: nil))
                 if senderID == myAppleUserID { summary.iSunlit = true }
                 if let createdAt, summary.latestSunlightDate == nil || createdAt > summary.latestSunlightDate! {
                     summary.latestSunlightDate = createdAt
@@ -723,12 +721,11 @@ class CloudKitSocialService {
 
             case "sunlight":
                 summary.sunlightCount += 1
-                let earnedFrom = record["senderWorkoutRecordName"] as? String
                 summary.sunlighters.append(SunlightInfo(
                     senderID: senderID,
                     senderName: senderName,
                     senderProfileImageData: senderImage,
-                    earnedFromWorkoutName: earnedFrom
+                    earnedFromWorkoutName: nil
                 ))
                 if senderID == myAppleUserID { summary.iSunlit = true }
                 if summary.latestSunlightDate == nil || createdAt > summary.latestSunlightDate! {
@@ -776,6 +773,24 @@ class CloudKitSocialService {
         let friendLookup = Dictionary(uniqueKeysWithValues: friends.map { ($0.id, $0) })
         var summary = InteractionSummary.empty(for: workoutRecordName)
 
+        // Collect sunlight sender workout record names to resolve display names
+        var sunlightWorkoutRecordNames = Set<String>()
+        for (_, result) in results {
+            guard let record = try? result.get(),
+                  record["type"] as? String == "sunlight",
+                  let senderWorkoutRN = record["senderWorkoutRecordName"] as? String else { continue }
+            sunlightWorkoutRecordNames.insert(senderWorkoutRN)
+        }
+
+        // Batch-fetch workout names for sunlight sources
+        var workoutNameLookup = [String: String]()
+        for recordName in sunlightWorkoutRecordNames {
+            let recordID = CKRecord.ID(recordName: recordName)
+            if let workoutRecord = try? await publicDB.record(for: recordID) {
+                workoutNameLookup[recordName] = workoutRecord["workoutName"] as? String
+            }
+        }
+
         for (_, result) in results {
             guard let record = try? result.get() else { continue }
             let typeStr = record["type"] as? String ?? ""
@@ -795,12 +810,13 @@ class CloudKitSocialService {
                 }
             case "sunlight":
                 summary.sunlightCount += 1
-                let earnedFrom = record["senderWorkoutRecordName"] as? String
+                let senderWorkoutRN = record["senderWorkoutRecordName"] as? String
+                let resolvedName = senderWorkoutRN.flatMap { workoutNameLookup[$0] }
                 summary.sunlighters.append(SunlightInfo(
                     senderID: senderID,
                     senderName: senderName,
                     senderProfileImageData: senderImage,
-                    earnedFromWorkoutName: earnedFrom
+                    earnedFromWorkoutName: resolvedName
                 ))
                 if senderID == myAppleUserID { summary.iSunlit = true }
                 if summary.latestSunlightDate == nil || createdAt > summary.latestSunlightDate! {

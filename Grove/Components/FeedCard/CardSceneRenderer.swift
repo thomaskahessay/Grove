@@ -33,9 +33,10 @@ struct CardSceneRenderer {
         context: inout GraphicsContext,
         size: CGSize,
         growth: CardGrowthState,
-        swayOffset: CGFloat
+        swayOffset: CGFloat,
+        soilPosition: CGFloat = 0.85
     ) {
-        let soilTop = size.height * 0.85
+        let soilTop = size.height * soilPosition
         let plantX = size.width * 0.72
 
         // 1. Subtle sky warmth (only when lush)
@@ -61,6 +62,7 @@ struct CardSceneRenderer {
                 swayOffset: swayOffset
             )
         }
+
     }
 
     // MARK: - Sky
@@ -526,6 +528,64 @@ struct CardSceneRenderer {
             let cr = radius * 0.3
             let centerRect = CGRect(x: pos.x - cr, y: pos.y - cr, width: cr * 2, height: cr * 2)
             context.fill(Path(ellipseIn: centerRect), with: .color(flowerCenter))
+        }
+    }
+
+    // MARK: - Sunlight Rays
+
+    static func drawSunlightRays(
+        context: inout GraphicsContext,
+        size: CGSize,
+        bloomProgress: CGFloat,
+        swayOffset: CGFloat
+    ) {
+        let sourceX = size.width + 10   // just beyond top-right corner
+        let sourceY: CGFloat = -10
+        let rayCount = 5
+        let rayLength = max(size.width, size.height) * 1.3
+        let baseColor = Color(red: 1.0, green: 0.84, blue: 0.0)
+
+        // Rays fan downward-left from the top-right corner
+        let startAngle: CGFloat = .pi * 0.55   // slightly past straight down
+        let endAngle: CGFloat = .pi * 0.85      // toward bottom-left
+
+        for i in 0..<rayCount {
+            let t = CGFloat(i) / CGFloat(rayCount - 1) // 0 to 1
+            let angle = startAngle + (endAngle - startAngle) * t
+
+            // Gentle wobble synced to sway
+            let wobble = swayOffset * 0.003 * (t - 0.5)
+            let effectiveAngle = angle + wobble
+
+            let tipX = sourceX + cos(effectiveAngle) * rayLength
+            let tipY = sourceY + sin(effectiveAngle) * rayLength
+
+            // Tapered triangle: wider at base, pointed at tip
+            let halfWidth: CGFloat = 6 + bloomProgress * 4
+            let perpAngle = effectiveAngle + .pi / 2
+
+            let leftBase = CGPoint(
+                x: sourceX + cos(perpAngle) * halfWidth,
+                y: sourceY + sin(perpAngle) * halfWidth
+            )
+            let rightBase = CGPoint(
+                x: sourceX - cos(perpAngle) * halfWidth,
+                y: sourceY - sin(perpAngle) * halfWidth
+            )
+            let tip = CGPoint(x: tipX, y: tipY)
+
+            var rayPath = Path()
+            rayPath.move(to: leftBase)
+            rayPath.addLine(to: tip)
+            rayPath.addLine(to: rightBase)
+            rayPath.closeSubpath()
+
+            let opacity = 0.06 + bloomProgress * 0.06 // 6-12% opacity
+            context.fill(rayPath, with: .linearGradient(
+                Gradient(colors: [baseColor.opacity(opacity), Color.clear]),
+                startPoint: CGPoint(x: sourceX, y: sourceY),
+                endPoint: tip
+            ))
         }
     }
 

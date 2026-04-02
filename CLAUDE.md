@@ -449,8 +449,11 @@ class Workout {
   - GroveNetworkView: visual root connection graph between friends
   - FeedItemCard with evolving plant background (Canvas API)
     - Background grows based on interactions: soil (water) → grass → plant (seeds) → flowers (sunlight)
+    - Sunlight guarantees a minimum bush (plantStage 3.0) so flowers always have a plant to bloom on
+    - Permanent golden light rays from top-right corner when sunlight is given (rendered in separate Canvas at full opacity)
     - Seed growth uses unique senders (not total count) to reflect community engagement
     - CardSceneRenderer draws landscape scene at 35% opacity with gradient scrim for text readability
+    - CardSceneRenderer.draw() accepts soilPosition parameter (default 0.85) to control soil line placement
     - CardSceneBackgroundView uses TimelineView at 20fps with drawingGroup() for scroll performance
   - Three Canvas-based tap animations replacing placeholder overlays:
     - Water: particle droplets fall with gravity, splash ripples on soil, soil darkens at impact
@@ -466,6 +469,9 @@ class Workout {
   - Invite code system: generate/copy code, add friend via code
   - Root connections with 4 levels (Scattered → Growing → Intertwined → Deep Roots)
   - WorkoutInteractionDetailView: full interaction breakdown (waterers, sunlighters, seeds with messages)
+    - Hero section with CardSceneBackgroundView (soilPosition 0.55) behind header + stats
+    - Header (avatar, name, date) at top; stats card at bottom with plants sprouting between them
+    - PR border, waterShimmer, sunlightGlow modifiers match feed card styling
   - Profile: "Shared Workouts" section shows own posts with mini plant preview + interaction icons
   - SeedPickerSheet for choosing/writing seed messages
   - InteractionBreakdownSheet for bidirectional interaction stats between two users
