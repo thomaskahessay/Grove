@@ -8,6 +8,7 @@ struct ProfileSetupView: View {
 
     @State private var displayName: String
     @State private var selectedUnits: UnitSystem
+    @State private var trackCreatine: Bool
     @State private var selectedImage: UIImage? = nil
     @State private var photoItem: PhotosPickerItem? = nil
     @State private var showingImageSource = false
@@ -20,6 +21,7 @@ struct ProfileSetupView: View {
     @State private var showNameBubble = false
     @State private var showPhoto = false
     @State private var showUnits = false
+    @State private var showCreatine = false
     @State private var showButton = false
     @State private var photoRingPulse = false
     @State private var typedText = ""
@@ -32,6 +34,7 @@ struct ProfileSetupView: View {
         self.onContinue = onContinue
         _displayName = State(initialValue: user.displayName ?? "")
         _selectedUnits = State(initialValue: user.preferredUnits)
+        _trackCreatine = State(initialValue: user.trackCreatine)
     }
 
     private var initials: String {
@@ -199,6 +202,52 @@ struct ProfileSetupView: View {
                     .transition(.move(edge: .bottom).combined(with: .opacity))
                 }
 
+                // Creatine tracking opt-in
+                if showCreatine {
+                    VStack(spacing: 10) {
+                        Button {
+                            withAnimation(.spring(duration: 0.3, bounce: 0.2)) {
+                                trackCreatine.toggle()
+                            }
+                        } label: {
+                            HStack(spacing: 12) {
+                                Image(systemName: trackCreatine ? "checkmark.circle.fill" : "circle")
+                                    .font(.title3)
+                                    .foregroundStyle(trackCreatine ? Color.groveSage : Color.groveTextSecondary.opacity(0.5))
+                                    .contentTransition(.symbolEffect(.replace))
+
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text("I take creatine daily")
+                                        .font(.subheadline)
+                                        .fontWeight(.medium)
+                                        .foregroundStyle(Color.groveText)
+                                    Text("We'll add a daily check-in to your home screen")
+                                        .font(.caption)
+                                        .foregroundStyle(Color.groveTextSecondary)
+                                }
+
+                                Spacer()
+                            }
+                            .padding(14)
+                            .background(
+                                trackCreatine
+                                    ? Color.groveSage.opacity(0.08)
+                                    : Color.groveCardBackground
+                            )
+                            .clipShape(RoundedRectangle(cornerRadius: 12))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 12)
+                                    .stroke(
+                                        trackCreatine ? Color.groveSage.opacity(0.3) : Color.groveSage.opacity(0.15),
+                                        lineWidth: 1
+                                    )
+                            )
+                        }
+                        .buttonStyle(.plain)
+                    }
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                }
+
                 // Continue button
                 if showButton {
                     Button(action: handleContinue) {
@@ -339,6 +388,12 @@ struct ProfileSetupView: View {
 
                     DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
                         withAnimation(.spring(duration: 0.4, bounce: 0.15)) {
+                            showCreatine = true
+                        }
+                    }
+
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+                        withAnimation(.spring(duration: 0.4, bounce: 0.15)) {
                             showButton = true
                         }
                     }
@@ -355,6 +410,7 @@ struct ProfileSetupView: View {
             user.displayName = trimmed
         }
         user.preferredUnits = selectedUnits
+        user.trackCreatine = trackCreatine
 
         if let image = selectedImage {
             user.profileImageData = processImage(image)

@@ -196,6 +196,11 @@ struct SettingsView: View {
                     Text("kg (Metric)").tag(UnitSystem.metric)
                 }
 
+                Toggle("Track Creatine", isOn: Binding(
+                    get: { user.trackCreatine },
+                    set: { user.trackCreatine = $0 }
+                ))
+
                 Toggle("Pause Streak", isOn: Binding(
                     get: { user.streakPaused },
                     set: { user.streakPaused = $0 }

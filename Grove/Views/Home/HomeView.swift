@@ -19,8 +19,10 @@ struct HomeView: View {
     ) private var completedWorkouts: [Workout]
 
     @Query(sort: \Exercise.name) private var allExercises: [Exercise]
+    @Query private var creatineLogs: [CreatineLog]
 
     @State private var showingWeeklyPlan = false
+    @State private var creatineCheckAnimation = false
 
     private var recentWorkouts: [Workout] {
         Array(completedWorkouts.prefix(5))
@@ -89,6 +91,29 @@ struct HomeView: View {
         }
     }
 
+    private var todaysCreatineLog: CreatineLog? {
+        let calendar = Calendar.current
+        return creatineLogs.first { calendar.isDateInToday($0.date) }
+    }
+
+    private var creatineStreak: Int {
+        let calendar = Calendar.current
+        let sortedLogs = creatineLogs.sorted { $0.date > $1.date }
+        var streak = 0
+        var checkDate = calendar.startOfDay(for: Date())
+
+        for log in sortedLogs {
+            let logDate = calendar.startOfDay(for: log.date)
+            if logDate == checkDate {
+                streak += 1
+                checkDate = calendar.date(byAdding: .day, value: -1, to: checkDate)!
+            } else if logDate < checkDate {
+                break
+            }
+        }
+        return streak
+    }
+
     private var todaysCompletedWorkout: Workout? {
         let calendar = Calendar.current
         return completedWorkouts.first { workout in
@@ -155,6 +180,16 @@ struct HomeView: View {
                             .frame(maxWidth: .infinity)
                         }
                         .buttonStyle(.plain)
+                    }
+
+                    // Creatine Check-in
+                    if currentUser?.trackCreatine == true {
+                        CreatinePillView(
+                            isLogged: todaysCreatineLog != nil,
+                            streak: creatineStreak,
+                            animating: $creatineCheckAnimation,
+                            onTap: { toggleCreatine() }
+                        )
                     }
 
                     // Calendar Strip
@@ -227,12 +262,34 @@ struct HomeView: View {
                         existingPlans: workoutPlans,
                         context: modelContext
                     )
+
+                    // Schedule creatine reminder if tracking
+                    if user.trackCreatine {
+                        NotificationService.shared.scheduleCreatineReminder(
+                            hasLoggedToday: todaysCreatineLog != nil,
+                            user: user
+                        )
+                    }
                 }
             }
         }
     }
 
     // MARK: - Start Today's Workout
+
+    private func toggleCreatine() {
+        if let existing = todaysCreatineLog {
+            modelContext.delete(existing)
+        } else {
+            let log = CreatineLog()
+            log.user = currentUser
+            modelContext.insert(log)
+            creatineCheckAnimation = true
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
+                creatineCheckAnimation = false
+            }
+        }
+    }
 
     private func startTodaysWorkout(plan: WorkoutPlan) {
         guard let template = plan.template else { return }
@@ -692,6 +749,52 @@ struct AllWorkoutsView: View {
     }
 }
 
+
+// MARK: - Creatine Pill
+
+struct CreatinePillView: View {
+    let isLogged: Bool
+    let streak: Int
+    @Binding var animating: Bool
+    var onTap: () -> Void
+
+    var body: some View {
+        Button(action: onTap) {
+            HStack(spacing: 10) {
+                Image(systemName: isLogged ? "checkmark.circle.fill" : "drop.fill")
+                    .font(.body)
+                    .foregroundStyle(isLogged ? Color.groveSage : Color.groveSage.opacity(0.5))
+                    .contentTransition(.symbolEffect(.replace))
+                    .scaleEffect(animating ? 1.3 : 1.0)
+                    .animation(.spring(duration: 0.3, bounce: 0.4), value: animating)
+
+                Text(isLogged ? "Creatine taken" : "Creatine")
+                    .font(.subheadline)
+                    .fontWeight(.medium)
+                    .foregroundStyle(isLogged ? Color.groveTextSecondary : Color.groveText)
+
+                Spacer()
+
+                if streak > 1 && isLogged {
+                    Text("\(streak) days")
+                        .font(.caption)
+                        .fontWeight(.semibold)
+                        .foregroundStyle(Color.groveSage)
+                        .transition(.scale.combined(with: .opacity))
+                }
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
+            .glassEffect(
+                .regular.tint(isLogged ? Color.groveSage.opacity(0.06) : .clear),
+                in: RoundedRectangle(cornerRadius: 10)
+            )
+            .shadow(color: .black.opacity(0.07), radius: 10, y: 3)
+        }
+        .buttonStyle(.plain)
+        .animation(.easeInOut(duration: 0.25), value: isLogged)
+    }
+}
 
 #Preview {
     HomeView()

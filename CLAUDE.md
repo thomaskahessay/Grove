@@ -40,6 +40,7 @@ Grove/
 │   ├── WorkoutTemplate.swift      # @Model - reusable workout templates
 │   ├── WorkoutPlan.swift          # @Model - scheduled workouts on calendar
 │   ├── PersonalRecord.swift       # @Model - PR tracking (max weight, est. 1RM)
+│   ├── CreatineLog.swift          # @Model - daily creatine intake log
 │   ├── PlantStage.swift           # Enum: 10 growth stages with streak thresholds
 │   ├── Enums.swift                # All enums (MuscleGroup, FitnessGoal, etc.)
 │   └── InteractionTypes.swift     # InteractionType, InteractionSummary, SeedMessage, RootConnection, etc.
@@ -488,6 +489,16 @@ class Workout {
   - Profile: "Shared Workouts" section shows own posts with mini plant preview + interaction icons
   - SeedPickerSheet for choosing/writing seed messages
   - InteractionBreakdownSheet for bidirectional interaction stats between two users
+- [x] Creatine tracking (opt-in)
+  - `CreatineLog` model with date + user relationship
+  - User model: `trackCreatine: Bool`, `notifyCreatineReminder: Bool`
+  - ProfileSetupView: opt-in toggle during onboarding (between units and continue)
+  - SettingsView: toggle in Preferences section
+  - HomeView: compact tappable pill (one tap to log, shows streak counter)
+  - ProgressView: monthly consistency card with progress bar + daily dot grid
+  - NotificationService: daily 9 AM reminder if not logged yet
+  - NotificationSettingsView: toggle (only visible when tracking enabled)
+  - Zero footprint when disabled — no UI shown anywhere
 - [ ] Sharing preferences
 
 ### 📋 Remaining
@@ -511,12 +522,14 @@ class Workout {
   - Only fills days from today onward that don't already have a plan (respects manual edits)
   - Template-to-slot mapping preserved via ordered UUID array on User model
 - [x] Notification system (NotificationService.swift + NotificationOnboardingView.swift)
-  - Daily workout reminders (8 AM when today has planned workout)
-  - Weekly planning nudges (Sunday 6 PM if next week unplanned, Monday 8 AM follow-up)
+  - Daily workout reminders (user-preferred morning time, default 8 AM)
+  - Weekly planning nudges (user-preferred evening/morning times)
   - Abandoned workout reminders (15 min after starting)
   - Quiet hours support (custom time ranges)
   - Smart rescheduling respects user preference toggles
-  - NotificationOnboardingView: hero bell icon with floating animations, benefits list, enable/skip
+  - User-configurable reminder times: `preferredReminderHour/Minute`, `preferredCreatineReminderHour/Minute`, `preferredEveningReminderHour/Minute`
+  - NotificationOnboardingView: hero bell icon, benefits list, enable/skip → time pickers after granting permission
+  - NotificationSettingsView: "Reminder Times" section with morning/evening DatePickers
   - Inserted as step 5 in OnboardingContainerView (between HealthKit and Ready)
 - [x] Profile/Settings screen
   - Profile header with photo, name, streak, workout count
@@ -588,7 +601,8 @@ User
  ├── workouts: [Workout]
  ├── plans: [WorkoutPlan]
  ├── personalRecords: [PersonalRecord]
- └── customExercises: [Exercise]
+ ├── customExercises: [Exercise]
+ └── creatineLogs: [CreatineLog]
 
 Workout
  ├── user: User

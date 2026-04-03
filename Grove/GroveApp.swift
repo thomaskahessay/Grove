@@ -16,7 +16,8 @@ struct GroveApp: App {
                 WorkoutTemplate.self,
                 WorkoutPlan.self,
                 Achievement.self,
-                PersonalRecord.self
+                PersonalRecord.self,
+                CreatineLog.self
             ])
             let modelConfiguration = ModelConfiguration(schema: schema, cloudKitDatabase: .none)
             modelContainer = try ModelContainer(for: schema, configurations: [modelConfiguration])

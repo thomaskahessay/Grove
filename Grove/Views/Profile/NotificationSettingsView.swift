@@ -47,6 +47,36 @@ struct NotificationSettingsView: View {
 
             Section {
                 if let user = user {
+                    DatePicker("Morning", selection: Binding(
+                        get: { morningDate(for: user) },
+                        set: { newDate in
+                            let cal = Calendar.current
+                            user.preferredReminderHour = cal.component(.hour, from: newDate)
+                            user.preferredReminderMinute = cal.component(.minute, from: newDate)
+                            user.preferredCreatineReminderHour = cal.component(.hour, from: newDate)
+                            user.preferredCreatineReminderMinute = cal.component(.minute, from: newDate)
+                            reschedule()
+                        }
+                    ), displayedComponents: .hourAndMinute)
+
+                    DatePicker("Evening", selection: Binding(
+                        get: { eveningDate(for: user) },
+                        set: { newDate in
+                            let cal = Calendar.current
+                            user.preferredEveningReminderHour = cal.component(.hour, from: newDate)
+                            user.preferredEveningReminderMinute = cal.component(.minute, from: newDate)
+                            reschedule()
+                        }
+                    ), displayedComponents: .hourAndMinute)
+                }
+            } header: {
+                Text("Reminder Times")
+            } footer: {
+                Text("Morning: workout reminders\(user?.trackCreatine == true ? ", creatine" : ""), weekly planning follow-ups. Evening: social nudges, weekly planning.")
+            }
+
+            Section {
+                if let user = user {
                     Toggle("Workout Reminders", isOn: Binding(
                         get: { user.notifyWorkoutReminder },
                         set: {
@@ -73,11 +103,19 @@ struct NotificationSettingsView: View {
                             reschedule()
                         }
                     ))
+
+                    if user.trackCreatine {
+                        Toggle("Creatine Reminder", isOn: Binding(
+                            get: { user.notifyCreatineReminder },
+                            set: {
+                                user.notifyCreatineReminder = $0
+                                reschedule()
+                            }
+                        ))
+                    }
                 }
             } header: {
                 Text("Notification Types")
-            } footer: {
-                Text("Workout Reminders sends a daily 8 AM reminder when you have a planned workout. Weekly Summary sends nudges to plan your week.")
             }
 
             Section {
@@ -149,6 +187,20 @@ struct NotificationSettingsView: View {
         .task {
             await notificationService.checkAuthorizationStatus()
         }
+    }
+
+    private func morningDate(for user: User) -> Date {
+        var components = Calendar.current.dateComponents([.year, .month, .day], from: Date())
+        components.hour = user.preferredReminderHour
+        components.minute = user.preferredReminderMinute
+        return Calendar.current.date(from: components) ?? Date()
+    }
+
+    private func eveningDate(for user: User) -> Date {
+        var components = Calendar.current.dateComponents([.year, .month, .day], from: Date())
+        components.hour = user.preferredEveningReminderHour
+        components.minute = user.preferredEveningReminderMinute
+        return Calendar.current.date(from: components) ?? Date()
     }
 
     private func reschedule() {

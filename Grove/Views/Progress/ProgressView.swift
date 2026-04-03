@@ -12,6 +12,7 @@ struct ProgressView: View {
     @Query private var users: [User]
     @Query(sort: \PersonalRecord.achievedAt, order: .reverse) private var allRecords: [PersonalRecord]
     @Query(sort: \WorkoutPlan.date) private var allPlans: [WorkoutPlan]
+    @Query private var creatineLogs: [CreatineLog]
 
     @State private var showingExercisePicker = false
     @State private var searchText = ""
@@ -77,6 +78,9 @@ struct ProgressView: View {
                         prShowcase
                         exerciseProgressSection
                         consistencySection
+                        if currentUser?.trackCreatine == true {
+                            creatineConsistencyCard
+                        }
                         programSection
                         insightsCard
                         achievementsSection
@@ -508,6 +512,77 @@ struct ProgressView: View {
             .padding(.vertical, 16)
             .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 16))
             .shadow(color: .black.opacity(0.07), radius: 10, y: 3)
+        }
+    }
+
+    // MARK: - Creatine Consistency
+
+    private var creatineConsistencyCard: some View {
+        let calendar = Calendar.current
+        let today = calendar.startOfDay(for: Date())
+        let startOfMonth = calendar.date(from: calendar.dateComponents([.year, .month], from: today))!
+        let daysInMonth = calendar.range(of: .day, in: .month, for: today)!.count
+        let dayOfMonth = calendar.component(.day, from: today)
+
+        let logsThisMonth = creatineLogs.filter {
+            calendar.startOfDay(for: $0.date) >= startOfMonth
+        }
+        let loggedCount = logsThisMonth.count
+        let progress = Double(loggedCount) / Double(dayOfMonth)
+
+        let monthFormatter: DateFormatter = {
+            let f = DateFormatter()
+            f.dateFormat = "MMMM"
+            return f
+        }()
+        let monthName = monthFormatter.string(from: today)
+
+        return VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Image(systemName: "drop.fill")
+                    .foregroundStyle(Color.groveSage)
+                Text("Creatine")
+                    .font(.headline)
+                    .foregroundStyle(Color.groveText)
+                Spacer()
+                Text("\(loggedCount)/\(daysInMonth) in \(monthName)")
+                    .font(.caption)
+                    .foregroundStyle(Color.groveTextSecondary)
+            }
+
+            // Progress bar
+            GeometryReader { geo in
+                ZStack(alignment: .leading) {
+                    RoundedRectangle(cornerRadius: 4)
+                        .fill(Color.groveSage.opacity(0.15))
+                        .frame(height: 8)
+                    RoundedRectangle(cornerRadius: 4)
+                        .fill(Color.groveSage)
+                        .frame(width: geo.size.width * min(progress, 1.0), height: 8)
+                }
+            }
+            .frame(height: 8)
+
+            // Weekly dots for current month
+            let weeks = creatineWeeklyDots(calendar: calendar, today: today, startOfMonth: startOfMonth, dayOfMonth: dayOfMonth)
+            HStack(spacing: 3) {
+                ForEach(Array(weeks.enumerated()), id: \.offset) { _, logged in
+                    Circle()
+                        .fill(logged ? Color.groveSage : Color.groveSage.opacity(0.15))
+                        .frame(width: 6, height: 6)
+                }
+            }
+        }
+        .padding(16)
+        .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 12))
+        .shadow(color: .black.opacity(0.07), radius: 10, y: 3)
+    }
+
+    private func creatineWeeklyDots(calendar: Calendar, today: Date, startOfMonth: Date, dayOfMonth: Int) -> [Bool] {
+        let logDates = Set(creatineLogs.map { calendar.startOfDay(for: $0.date) })
+        return (0..<dayOfMonth).map { offset in
+            let day = calendar.date(byAdding: .day, value: offset, to: startOfMonth)!
+            return logDates.contains(day)
         }
     }
 

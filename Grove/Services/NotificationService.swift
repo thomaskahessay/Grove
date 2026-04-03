@@ -13,6 +13,7 @@ class NotificationService {
     private static let weeklyPlanSundayID = "grove.weekly.plan.sunday"
     private static let weeklyPlanMondayID = "grove.weekly.plan.monday"
     private static let abandonedWorkoutID = "grove.abandoned.workout"
+    private static let creatineReminderID = "grove.creatine.reminder"
     private static let wateringReminderID = "grove.social.watering"
     private static let seedReceivedID = "grove.social.seed"
     private static let connectionMilestoneID = "grove.social.milestone"
@@ -59,15 +60,15 @@ class NotificationService {
 
         let templateName = todaysPlan.template?.name ?? "Workout"
 
-        // Check if 8 AM today is in quiet hours
+        // Check if preferred time today is in quiet hours
         var triggerComponents = calendar.dateComponents([.year, .month, .day], from: today)
-        triggerComponents.hour = 8
-        triggerComponents.minute = 0
+        triggerComponents.hour = user.preferredReminderHour
+        triggerComponents.minute = user.preferredReminderMinute
         guard let triggerDate = calendar.date(from: triggerComponents) else { return }
 
         if isInQuietHours(triggerDate, user: user) { return }
 
-        // If 8 AM already passed today, skip
+        // If preferred time already passed today, skip
         if triggerDate < Date() { return }
 
         let content = UNMutableNotificationContent()
@@ -76,7 +77,7 @@ class NotificationService {
         content.sound = .default
 
         let trigger = UNCalendarNotificationTrigger(
-            dateMatching: DateComponents(hour: 8, minute: 0),
+            dateMatching: DateComponents(hour: user.preferredReminderHour, minute: user.preferredReminderMinute),
             repeats: false
         )
 
@@ -120,8 +121,8 @@ class NotificationService {
 
         if hasPlansNextWeek { return }
 
-        // Schedule Sunday 6 PM nudge
-        let sundayComponents = DateComponents(hour: 18, minute: 0, weekday: 1) // Sunday = 1
+        // Schedule Sunday evening nudge
+        let sundayComponents = DateComponents(hour: user.preferredEveningReminderHour, minute: user.preferredEveningReminderMinute, weekday: 1) // Sunday = 1
         if let sundayDate = calendar.nextDate(after: Date(), matching: sundayComponents, matchingPolicy: .nextTime) {
             if !isInQuietHours(sundayDate, user: user) {
                 let content = UNMutableNotificationContent()
@@ -144,8 +145,8 @@ class NotificationService {
             }
         }
 
-        // Schedule Monday 8 AM follow-up
-        let mondayComponents = DateComponents(hour: 8, minute: 0, weekday: 2) // Monday = 2
+        // Schedule Monday morning follow-up
+        let mondayComponents = DateComponents(hour: user.preferredReminderHour, minute: user.preferredReminderMinute, weekday: 2) // Monday = 2
         if let mondayDate = calendar.nextDate(after: Date(), matching: mondayComponents, matchingPolicy: .nextTime) {
             if !isInQuietHours(mondayDate, user: user) {
                 let content = UNMutableNotificationContent()
@@ -201,6 +202,45 @@ class NotificationService {
             .removePendingNotificationRequests(withIdentifiers: [Self.abandonedWorkoutID])
     }
 
+    // MARK: - Creatine Reminder (9 AM)
+
+    func scheduleCreatineReminder(hasLoggedToday: Bool, user: User) {
+        let center = UNUserNotificationCenter.current()
+        center.removePendingNotificationRequests(withIdentifiers: [Self.creatineReminderID])
+
+        guard authorizationStatus == .authorized,
+              user.trackCreatine,
+              user.notifyCreatineReminder,
+              !hasLoggedToday else { return }
+
+        let calendar = Calendar.current
+        var components = calendar.dateComponents([.year, .month, .day], from: Date())
+        components.hour = user.preferredCreatineReminderHour
+        components.minute = user.preferredCreatineReminderMinute
+
+        guard let triggerDate = calendar.date(from: components),
+              triggerDate > Date(),
+              !isInQuietHours(triggerDate, user: user) else { return }
+
+        let content = UNMutableNotificationContent()
+        content.title = "Grove"
+        content.body = "Don't forget your creatine today!"
+        content.sound = .default
+
+        let trigger = UNCalendarNotificationTrigger(
+            dateMatching: DateComponents(hour: user.preferredCreatineReminderHour, minute: user.preferredCreatineReminderMinute),
+            repeats: false
+        )
+
+        let request = UNNotificationRequest(
+            identifier: Self.creatineReminderID,
+            content: content,
+            trigger: trigger
+        )
+
+        center.add(request)
+    }
+
     // MARK: - Watering Reminder (7 PM)
 
     func scheduleWateringReminder(hasUnwateredPosts: Bool, user: User) {
@@ -213,8 +253,8 @@ class NotificationService {
 
         let calendar = Calendar.current
         var components = calendar.dateComponents([.year, .month, .day], from: Date())
-        components.hour = 19
-        components.minute = 0
+        components.hour = user.preferredEveningReminderHour
+        components.minute = user.preferredEveningReminderMinute
 
         guard let triggerDate = calendar.date(from: components),
               triggerDate > Date(),
@@ -226,7 +266,7 @@ class NotificationService {
         content.sound = .default
 
         let trigger = UNCalendarNotificationTrigger(
-            dateMatching: DateComponents(hour: 19, minute: 0),
+            dateMatching: DateComponents(hour: user.preferredEveningReminderHour, minute: user.preferredEveningReminderMinute),
             repeats: false
         )
 
@@ -286,9 +326,10 @@ class NotificationService {
 
     // MARK: - Reschedule All (called from settings toggle changes)
 
-    func rescheduleAll(plans: [WorkoutPlan], user: User) {
+    func rescheduleAll(plans: [WorkoutPlan], user: User, hasLoggedCreatineToday: Bool = false) {
         scheduleDailyWorkoutReminder(plans: plans, user: user)
         scheduleWeeklyPlanningNudge(plans: plans, user: user)
+        scheduleCreatineReminder(hasLoggedToday: hasLoggedCreatineToday, user: user)
     }
 
     // MARK: - Quiet Hours

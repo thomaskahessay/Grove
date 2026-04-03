@@ -19,6 +19,10 @@ class User {
     var customDayNames: [String] = []              // Custom split: day names
     var customDayMuscleGroups: [[String]] = []     // Custom split: MuscleGroup rawValues per day
 
+    // Creatine tracking
+    var trackCreatine: Bool = false
+    var notifyCreatineReminder: Bool = true
+
     // Streak pause
     var streakPaused: Bool = false
 
@@ -41,6 +45,12 @@ class User {
     var notifySeedReceived: Bool = true
     var notifyConnectionMilestone: Bool = true
     var notifyWateringReminder: Bool = true
+    var preferredReminderHour: Int = 8      // 0-23, default 8 AM
+    var preferredReminderMinute: Int = 0
+    var preferredCreatineReminderHour: Int = 9   // default 9 AM
+    var preferredCreatineReminderMinute: Int = 0
+    var preferredEveningReminderHour: Int = 19   // default 7 PM (watering)
+    var preferredEveningReminderMinute: Int = 0
     var quietHoursStart: Date?
     var quietHoursEnd: Date?
 
@@ -74,6 +84,9 @@ class User {
 
     @Relationship(deleteRule: .cascade, inverse: \Achievement.user)
     var achievements: [Achievement] = []
+
+    @Relationship(deleteRule: .cascade, inverse: \CreatineLog.user)
+    var creatineLogs: [CreatineLog] = []
 
     var onboardingCompletedAt: Date?
     var profileImageData: Data?

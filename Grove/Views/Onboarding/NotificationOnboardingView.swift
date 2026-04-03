@@ -1,13 +1,19 @@
 import SwiftUI
+import SwiftData
 
 struct NotificationOnboardingView: View {
     let onContinue: () -> Void
 
+    @Query private var users: [User]
     @State private var isRequesting = false
     @State private var isGranted = false
     @State private var appeared = false
     @State private var benefitsAppeared = false
+    @State private var showTimePickers = false
+    @State private var morningTime = Calendar.current.date(from: DateComponents(hour: 8, minute: 0)) ?? Date()
+    @State private var eveningTime = Calendar.current.date(from: DateComponents(hour: 19, minute: 0)) ?? Date()
 
+    private var user: User? { users.first }
     private let notificationService = NotificationService.shared
 
     var body: some View {
@@ -95,7 +101,77 @@ struct NotificationOnboardingView: View {
 
             // Bottom action area
             VStack(spacing: 14) {
-                if isGranted {
+                if showTimePickers {
+                    // Time preference pickers
+                    VStack(spacing: 16) {
+                        Text("When should we remind you?")
+                            .font(.subheadline)
+                            .fontWeight(.medium)
+                            .foregroundStyle(Color.groveText)
+
+                        VStack(spacing: 12) {
+                            HStack {
+                                Label("Morning", systemImage: "sun.rise.fill")
+                                    .font(.subheadline)
+                                    .foregroundStyle(Color.groveText)
+                                Spacer()
+                                DatePicker("", selection: $morningTime, displayedComponents: .hourAndMinute)
+                                    .labelsHidden()
+                            }
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 10)
+                            .background(Color.groveCardBackground)
+                            .clipShape(RoundedRectangle(cornerRadius: 10))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 10)
+                                    .stroke(Color.groveSage.opacity(0.15), lineWidth: 1)
+                            )
+
+                            HStack {
+                                Label("Evening", systemImage: "moon.fill")
+                                    .font(.subheadline)
+                                    .foregroundStyle(Color.groveText)
+                                Spacer()
+                                DatePicker("", selection: $eveningTime, displayedComponents: .hourAndMinute)
+                                    .labelsHidden()
+                            }
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 10)
+                            .background(Color.groveCardBackground)
+                            .clipShape(RoundedRectangle(cornerRadius: 10))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 10)
+                                    .stroke(Color.groveSage.opacity(0.15), lineWidth: 1)
+                            )
+                        }
+                        .padding(.horizontal, 24)
+
+                        Text("Workouts & creatine at morning time, social nudges in the evening.")
+                            .font(.caption)
+                            .foregroundStyle(Color.groveTextSecondary)
+                            .multilineTextAlignment(.center)
+                            .padding(.horizontal, 32)
+
+                        Button(action: saveTimesAndContinue) {
+                            Text("Continue")
+                                .font(.headline)
+                                .foregroundStyle(.white)
+                                .frame(maxWidth: .infinity)
+                                .frame(height: 54)
+                                .background(
+                                    LinearGradient(
+                                        colors: [Color.groveSage, Color.groveSage.opacity(0.85)],
+                                        startPoint: .leading,
+                                        endPoint: .trailing
+                                    )
+                                )
+                                .clipShape(RoundedRectangle(cornerRadius: 16))
+                                .shadow(color: Color.groveSage.opacity(0.3), radius: 8, y: 4)
+                        }
+                        .padding(.horizontal, 24)
+                    }
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                } else if isGranted {
                     HStack(spacing: 8) {
                         Image(systemName: "checkmark.circle.fill")
                             .foregroundStyle(Color.groveSage)
@@ -185,12 +261,37 @@ struct NotificationOnboardingView: View {
                 withAnimation {
                     isGranted = true
                 }
-                try? await Task.sleep(for: .seconds(1))
-                onContinue()
+                // Brief pause to show checkmark, then reveal time pickers
+                try? await Task.sleep(for: .seconds(0.8))
+                withAnimation(.spring(duration: 0.4, bounce: 0.15)) {
+                    showTimePickers = true
+                }
             } else {
                 onContinue()
             }
         }
+    }
+
+    private func saveTimesAndContinue() {
+        guard let user = user else {
+            onContinue()
+            return
+        }
+
+        let calendar = Calendar.current
+        let morningHour = calendar.component(.hour, from: morningTime)
+        let morningMinute = calendar.component(.minute, from: morningTime)
+        let eveningHour = calendar.component(.hour, from: eveningTime)
+        let eveningMinute = calendar.component(.minute, from: eveningTime)
+
+        user.preferredReminderHour = morningHour
+        user.preferredReminderMinute = morningMinute
+        user.preferredCreatineReminderHour = morningHour
+        user.preferredCreatineReminderMinute = morningMinute
+        user.preferredEveningReminderHour = eveningHour
+        user.preferredEveningReminderMinute = eveningMinute
+
+        onContinue()
     }
 }
 
