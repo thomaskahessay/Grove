@@ -238,6 +238,10 @@ struct SettingsView: View {
     private var sharingSection: some View {
         Section {
             if let user = user {
+                Toggle("Auto-Share Workouts", isOn: Binding(
+                    get: { user.autoShareWorkouts },
+                    set: { user.autoShareWorkouts = $0 }
+                ))
                 Toggle("Share Workout Name", isOn: Binding(
                     get: { user.shareWorkoutName },
                     set: { user.shareWorkoutName = $0 }
@@ -262,7 +266,9 @@ struct SettingsView: View {
         } header: {
             Text("Sharing Defaults")
         } footer: {
-            Text("These defaults apply when sharing workouts to the social feed.")
+            Text(user?.autoShareWorkouts == true
+                 ? "Workouts are automatically shared when completed using your defaults below."
+                 : "These defaults apply when sharing workouts to the social feed.")
         }
     }
 

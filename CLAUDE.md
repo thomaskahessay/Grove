@@ -499,7 +499,7 @@ class Workout {
   - NotificationService: daily 9 AM reminder if not logged yet
   - NotificationSettingsView: toggle (only visible when tracking enabled)
   - Zero footprint when disabled — no UI shown anywhere
-- [ ] Sharing preferences
+- [x] Sharing preferences
 
 ### 📋 Remaining
 
@@ -546,7 +546,6 @@ class Workout {
   - When paused: streak value is frozen (recalculation returns current value unchanged)
   - When paused: `extendPlansIfNeeded()` skips plan generation
   - User model property: `streakPaused: Bool`
-- [ ] Data export (CSV/PDF)
 
 ### Known Issues & Fixes
 - [x] Streak badge — now wired to StreakManager with recalculation on app launch

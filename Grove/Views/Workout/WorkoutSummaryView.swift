@@ -124,6 +124,14 @@ struct WorkoutSummaryView: View {
             }
             .onAppear {
                 showConfetti = true
+                if let user, user.autoShareWorkouts, !workout.isShared {
+                    workout.isShared = true
+                    workout.shareWorkoutName = user.shareWorkoutName
+                    workout.shareDuration = user.shareDuration
+                    workout.shareExercises = user.shareExercises
+                    workout.shareWeights = user.shareWeights
+                    workout.sharePRs = user.sharePRs
+                }
             }
         }
     }
@@ -316,6 +324,7 @@ struct WorkoutSummaryView: View {
                             workout.shareDuration = user.shareDuration
                             workout.shareExercises = user.shareExercises
                             workout.shareWeights = user.shareWeights
+                            workout.sharePRs = user.sharePRs
                         }
                     }
                 ))

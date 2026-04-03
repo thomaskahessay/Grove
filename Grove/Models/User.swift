@@ -30,6 +30,7 @@ class User {
     var inviteCode: String?
 
     // Sharing preferences (defaults)
+    var autoShareWorkouts: Bool = false
     var shareWorkoutName: Bool = true
     var shareDuration: Bool = true
     var shareExercises: Bool = false
