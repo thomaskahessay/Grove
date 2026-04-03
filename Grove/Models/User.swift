@@ -29,6 +29,9 @@ class User {
     // Social
     var inviteCode: String?
 
+    // Feed check
+    var lastFeedCheckDate: Date?
+
     // Sharing preferences (defaults)
     var autoShareWorkouts: Bool = false
     var shareWorkoutName: Bool = true

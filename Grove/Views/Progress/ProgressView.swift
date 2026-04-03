@@ -453,7 +453,7 @@ struct ProgressView: View {
                                 RuleMark(y: .value("Goal", goal))
                                     .foregroundStyle(Color.groveTerracotta.opacity(0.6))
                                     .lineStyle(StrokeStyle(lineWidth: 1.5, dash: [6, 4]))
-                                    .annotation(position: .trailing, alignment: .trailing) {
+                                    .annotation(position: .top, alignment: .trailing) {
                                         Text("Goal")
                                             .font(.system(size: 9))
                                             .foregroundStyle(Color.groveTerracotta)

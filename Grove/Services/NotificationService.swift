@@ -324,6 +324,35 @@ class NotificationService {
         center.add(request)
     }
 
+    // MARK: - Friend Activity Notification
+
+    private static let friendActivityID = "grove.social.friendActivity"
+
+    func scheduleFriendActivityNotification(friendName: String, workoutName: String, duration: TimeInterval, user: User) {
+        let center = UNUserNotificationCenter.current()
+
+        guard authorizationStatus == .authorized,
+              user.notifyFriendActivity else { return }
+
+        if isInQuietHours(Date(), user: user) { return }
+
+        let content = UNMutableNotificationContent()
+        content.title = "Grove"
+        let minutes = Int(duration / 60)
+        if minutes > 0 {
+            content.body = "\(friendName) just crushed \(workoutName) — \(minutes) min"
+        } else {
+            content.body = "\(friendName) just crushed \(workoutName)"
+        }
+        content.sound = .default
+
+        let trigger = UNTimeIntervalNotificationTrigger(timeInterval: 1, repeats: false)
+
+        let id = "\(Self.friendActivityID).\(UUID().uuidString.prefix(8))"
+        let request = UNNotificationRequest(identifier: id, content: content, trigger: trigger)
+        center.add(request)
+    }
+
     // MARK: - Reschedule All (called from settings toggle changes)
 
     func rescheduleAll(plans: [WorkoutPlan], user: User, hasLoggedCreatineToday: Bool = false) {

@@ -170,6 +170,18 @@ class CloudKitSocialService {
         FileManager.default.ubiquityIdentityToken != nil
     }
 
+    // MARK: - Bootstrap (for background tasks)
+
+    func bootstrapIfNeeded(appleUserID: String) async {
+        if myAppleUserID == nil {
+            myAppleUserID = appleUserID
+            myUserRecordID = CKRecord.ID(recordName: appleUserID)
+        }
+        if friends.isEmpty {
+            await fetchFriends()
+        }
+    }
+
     // MARK: - User Profile
 
     func ensureUserProfile(user: User) async {
@@ -1305,6 +1317,51 @@ class CloudKitSocialService {
             return []
         }
         return array
+    }
+
+    // MARK: - Background Feed Check
+
+    func checkForNewFriendWorkouts(since lastCheck: Date, user: User) async -> [SharedWorkoutItem] {
+        guard let myAppleUserID else { return [] }
+
+        let friendIDs = friends.map { $0.id }
+        guard !friendIDs.isEmpty else { return [] }
+
+        let pred = NSPredicate(format: "userID IN %@ AND completedAt > %@", friendIDs, lastCheck as NSDate)
+        let query = CKQuery(recordType: RecordType.sharedWorkout, predicate: pred)
+        query.sortDescriptors = [NSSortDescriptor(key: "completedAt", ascending: false)]
+
+        guard let (results, _) = try? await publicDB.records(matching: query, resultsLimit: 10) else {
+            return []
+        }
+
+        let friendLookup = Dictionary(uniqueKeysWithValues: friends.map { ($0.id, $0) })
+
+        var items: [SharedWorkoutItem] = []
+        for (_, result) in results {
+            if let record = try? result.get() {
+                let userID = record["userID"] as? String ?? ""
+                guard userID != myAppleUserID else { continue }
+                let friend = friendLookup[userID]
+
+                items.append(SharedWorkoutItem(
+                    id: record.recordID.recordName,
+                    userID: userID,
+                    friendName: friend?.displayName ?? "Friend",
+                    friendProfileImageData: friend?.profileImageData,
+                    workoutName: record["workoutName"] as? String ?? "Workout",
+                    duration: record["duration"] as? TimeInterval ?? 0,
+                    exerciseCount: Int(record["exerciseCount"] as? Int64 ?? 0),
+                    totalSets: Int(record["totalSets"] as? Int64 ?? 0),
+                    completedAt: record["completedAt"] as? Date ?? Date(),
+                    exercisesJSON: record["exercisesJSON"] as? String,
+                    prCount: Int(record["prCount"] as? Int64 ?? 0),
+                    prExerciseNames: Self.parsePRExerciseNames(record["prExerciseNamesJSON"] as? String)
+                ))
+            }
+        }
+
+        return items
     }
 
     private func profileFromRecord(_ record: CKRecord) -> CKFriendProfile {
