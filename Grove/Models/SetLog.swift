@@ -13,6 +13,8 @@ class SetLog {
     var lastSessionWeight: Double?
     var lastSessionReps: Int?
     var bodyweightModifier: BodyweightModifier = .none
+    var suggestedWeight: Double?
+    var suggestedReps: Int?
 
     init(setNumber: Int, weight: Double? = nil, reps: Int? = nil, bodyweightModifier: BodyweightModifier = .none) {
         self.setNumber = setNumber
