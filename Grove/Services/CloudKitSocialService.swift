@@ -704,6 +704,11 @@ class CloudKitSocialService {
                 }
             }
 
+            // Ensure viewer's shared workouts are loaded for common exercise comparison
+            if mySharedWorkouts.isEmpty {
+                await fetchMySharedWorkouts()
+            }
+
             // Compute common exercises between viewer's and friend's shared workouts
             let friendExerciseNames = Self.extractExerciseNames(from: workouts)
             let myExerciseNames = Self.extractExerciseNames(from: mySharedWorkouts)
