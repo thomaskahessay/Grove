@@ -529,7 +529,9 @@ struct ExerciseFullScreenCard: View {
                                     focusedSetID = setLog.id
                                 },
                                 lastSessionWeight: setLog.lastSessionWeight,
-                                lastSessionReps: setLog.lastSessionReps
+                                lastSessionReps: setLog.lastSessionReps,
+                                suggestedWeight: setLog.suggestedWeight,
+                                suggestedReps: setLog.suggestedReps
                             )
                             .id(setLog.id)
 
@@ -701,6 +703,8 @@ struct SetRowView: View {
     var onFocused: (() -> Void)? = nil
     var lastSessionWeight: Double? = nil
     var lastSessionReps: Int? = nil
+    var suggestedWeight: Double? = nil
+    var suggestedReps: Int? = nil
 
     @State private var weightText: String = ""
     @State private var repsText: String = ""
@@ -740,6 +744,20 @@ struct SetRowView: View {
             parts.append("\(r) reps")
         }
         return "Last: " + parts.joined(separator: " x ")
+    }
+
+    private var hasNudge: Bool {
+        suggestedWeight != nil || suggestedReps != nil
+    }
+
+    private var nudgeHint: String {
+        if let w = suggestedWeight {
+            let weightStr = w.truncatingRemainder(dividingBy: 1) == 0 ? String(Int(w)) : String(format: "%.1f", w)
+            return "try \(weightStr)?"
+        } else if let r = suggestedReps {
+            return "try \(r)?"
+        }
+        return ""
     }
 
     var body: some View {
@@ -948,12 +966,22 @@ struct SetRowView: View {
                 }
                 Spacer()
             }
-        } else if valuesChangedFromLastSession {
+        } else if valuesChangedFromLastSession || hasNudge {
             HStack {
                 Spacer().frame(width: 36)
-                Text(lastSessionHint)
-                    .font(.caption2)
-                    .foregroundStyle(.secondary.opacity(0.7))
+                if valuesChangedFromLastSession {
+                    Text(lastSessionHint)
+                        .font(.caption2)
+                        .foregroundStyle(.secondary.opacity(0.7))
+                }
+                if hasNudge {
+                    Text(valuesChangedFromLastSession ? " — " : "")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary.opacity(0.7))
+                    + Text(nudgeHint)
+                        .font(.caption2)
+                        .foregroundStyle(Color.groveSage)
+                }
                 Spacer()
             }
         }
