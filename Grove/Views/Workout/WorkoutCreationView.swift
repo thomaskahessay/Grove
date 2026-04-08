@@ -364,12 +364,20 @@ struct WorkoutCreationView: View {
             modelContext.insert(exerciseLog)
 
             // Create SetLogs for each set, pre-filled with last values if available
+            let isBodyweight = exercise.isBodyweight
             for setNumber in 1...numberOfSets {
                 let lastSetData = lastSets.indices.contains(setNumber - 1) ? lastSets[setNumber - 1] : nil
+                // For bodyweight exercises: use last session's modifier if available, otherwise default to .bodyweight
+                let modifier: BodyweightModifier = {
+                    if !isBodyweight { return .none }
+                    if let lastMod = lastSetData?.modifier, lastMod != .none { return lastMod }
+                    return .bodyweight
+                }()
                 let setLog = SetLog(
                     setNumber: setNumber,
-                    weight: lastSetData?.weight,
-                    reps: lastSetData?.reps
+                    weight: modifier == .bodyweight ? nil : lastSetData?.weight,
+                    reps: lastSetData?.reps,
+                    bodyweightModifier: modifier
                 )
                 setLog.exerciseLog = exerciseLog
                 exerciseLog.sets.append(setLog)
@@ -383,7 +391,7 @@ struct WorkoutCreationView: View {
     }
 
     /// Gets the most recent completed sets for an exercise (fetches on-demand to avoid memory bloat)
-    private func getLastSetsForExercise(_ exercise: Exercise) -> [(weight: Double?, reps: Int?)] {
+    private func getLastSetsForExercise(_ exercise: Exercise) -> [(weight: Double?, reps: Int?, modifier: BodyweightModifier)] {
         let exerciseID = exercise.id
         let descriptor = FetchDescriptor<ExerciseLog>(
             predicate: #Predicate<ExerciseLog> { log in
@@ -398,7 +406,7 @@ struct WorkoutCreationView: View {
         return lastLog.sets
             .filter { $0.isCompleted }
             .sorted { $0.setNumber < $1.setNumber }
-            .map { (weight: $0.weight, reps: $0.reps) }
+            .map { (weight: $0.weight, reps: $0.reps, modifier: $0.bodyweightModifier) }
     }
 
     private func selectTemplate(_ template: WorkoutTemplate) {

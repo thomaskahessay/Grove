@@ -137,7 +137,7 @@ struct ProgressView: View {
         let totalVolume: Double = weekWorkouts.reduce(0) { total, workout in
             total + workout.exercises.reduce(0) { exTotal, log in
                 guard log.status == .completed else { return exTotal }
-                return exTotal + log.sets.filter { $0.isCompleted }.reduce(0) { setTotal, set in
+                return exTotal + log.sets.filter { $0.isCompleted && $0.bodyweightModifier != .assisted }.reduce(0) { setTotal, set in
                     setTotal + (set.weight ?? 0) * Double(set.reps ?? 0)
                 }
             }
@@ -157,7 +157,7 @@ struct ProgressView: View {
         }.reduce(0) { total, workout in
             total + workout.exercises.reduce(0) { exTotal, log in
                 guard log.status == .completed else { return exTotal }
-                return exTotal + log.sets.filter { $0.isCompleted }.reduce(0) { setTotal, set in
+                return exTotal + log.sets.filter { $0.isCompleted && $0.bodyweightModifier != .assisted }.reduce(0) { setTotal, set in
                     setTotal + (set.weight ?? 0) * Double(set.reps ?? 0)
                 }
             }
@@ -1085,6 +1085,24 @@ enum ProgressMetric: String, CaseIterable {
         case .maxWeight: return "Max Weight"
         case .bestSet: return "Best Set (Weight × Reps)"
         case .totalVolume: return "Total Volume"
+        }
+    }
+
+    func fullName(isBodyweight: Bool) -> String {
+        guard isBodyweight else { return fullName }
+        switch self {
+        case .maxWeight: return "Max Reps"
+        case .bestSet: return "Total Reps"
+        case .totalVolume: return "Total Reps"
+        }
+    }
+
+    func shortName(isBodyweight: Bool) -> String {
+        guard isBodyweight else { return shortName }
+        switch self {
+        case .maxWeight: return "Reps"
+        case .bestSet: return "Total"
+        case .totalVolume: return "Volume"
         }
     }
 

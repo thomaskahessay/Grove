@@ -264,12 +264,19 @@ class WorkoutSessionManager {
             exerciseLog.workout = workout
             context.insert(exerciseLog)
 
+            let isBodyweight = exercise.isBodyweight
             for setNumber in 1...numberOfSets {
                 let lastSetData = lastSets.indices.contains(setNumber - 1) ? lastSets[setNumber - 1] : nil
+                let modifier: BodyweightModifier = {
+                    if !isBodyweight { return .none }
+                    if let lastMod = lastSetData?.modifier, lastMod != .none { return lastMod }
+                    return .bodyweight
+                }()
                 let setLog = SetLog(
                     setNumber: setNumber,
-                    weight: lastSetData?.weight,
-                    reps: lastSetData?.reps
+                    weight: modifier == .bodyweight ? nil : lastSetData?.weight,
+                    reps: lastSetData?.reps,
+                    bodyweightModifier: modifier
                 )
                 setLog.lastSessionWeight = lastSetData?.weight
                 setLog.lastSessionReps = lastSetData?.reps
@@ -286,7 +293,7 @@ class WorkoutSessionManager {
     }
 
     /// Gets the most recent completed sets for an exercise from prior workouts.
-    private static func getLastSetsForExercise(_ exercise: Exercise, context: ModelContext) -> [(weight: Double?, reps: Int?)] {
+    private static func getLastSetsForExercise(_ exercise: Exercise, context: ModelContext) -> [(weight: Double?, reps: Int?, modifier: BodyweightModifier)] {
         let exerciseID = exercise.id
         let descriptor = FetchDescriptor<ExerciseLog>(
             predicate: #Predicate<ExerciseLog> { log in
@@ -301,7 +308,7 @@ class WorkoutSessionManager {
         return lastLog.sets
             .filter { $0.isCompleted }
             .sorted { $0.setNumber < $1.setNumber }
-            .map { (weight: $0.weight, reps: $0.reps) }
+            .map { (weight: $0.weight, reps: $0.reps, modifier: $0.bodyweightModifier) }
     }
 
     func discardWorkout(context: ModelContext) {

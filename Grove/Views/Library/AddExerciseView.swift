@@ -8,6 +8,7 @@ struct AddExerciseView: View {
     @State private var name = ""
     @State private var muscleGroup: MuscleGroup = .chest
     @State private var muscleSubgroup = ""
+    @State private var isBodyweight = false
 
     private var isValid: Bool {
         !name.trimmingCharacters(in: .whitespaces).isEmpty
@@ -26,10 +27,12 @@ struct AddExerciseView: View {
                     }
 
                     TextField("Subgroup (optional)", text: $muscleSubgroup)
+
+                    Toggle("Bodyweight exercise", isOn: $isBodyweight)
                 } header: {
                     Text("Exercise Details")
                 } footer: {
-                    Text("Custom exercises are private to your account.")
+                    Text("Bodyweight exercises track reps only by default, with options for weighted or assisted variants.")
                 }
 
                 Section {
@@ -66,7 +69,8 @@ struct AddExerciseView: View {
             name: name.trimmingCharacters(in: .whitespaces),
             muscleGroup: muscleGroup,
             muscleSubgroup: muscleSubgroup.isEmpty ? nil : muscleSubgroup.trimmingCharacters(in: .whitespaces),
-            isBuiltIn: false
+            isBuiltIn: false,
+            isBodyweight: isBodyweight
         )
         modelContext.insert(exercise)
         dismiss()
