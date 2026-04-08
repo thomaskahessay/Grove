@@ -8,13 +8,13 @@ enum SocialPreviewData {
     // MARK: - Friends
 
     static let friends: [CKFriendProfile] = [
-        CKFriendProfile(id: "user_sarah", displayName: "Sarah", profileImageData: nil, inviteCode: "GROVE-AB12", workoutCount: 47, currentStreak: 12, memberSince: date(daysAgo: 120), recordID: .init(recordName: "user_sarah")),
-        CKFriendProfile(id: "user_mike", displayName: "Mike", profileImageData: nil, inviteCode: "GROVE-CD34", workoutCount: 82, currentStreak: 5, memberSince: date(daysAgo: 200), recordID: .init(recordName: "user_mike")),
-        CKFriendProfile(id: "user_alex", displayName: "Alex", profileImageData: nil, inviteCode: "GROVE-EF56", workoutCount: 31, currentStreak: 22, memberSince: date(daysAgo: 90), recordID: .init(recordName: "user_alex")),
-        CKFriendProfile(id: "user_jordan", displayName: "Jordan", profileImageData: nil, inviteCode: "GROVE-GH78", workoutCount: 63, currentStreak: 0, memberSince: date(daysAgo: 180), recordID: .init(recordName: "user_jordan")),
-        CKFriendProfile(id: "user_riley", displayName: "Riley", profileImageData: nil, inviteCode: "GROVE-IJ90", workoutCount: 19, currentStreak: 3, memberSince: date(daysAgo: 45), recordID: .init(recordName: "user_riley")),
-        CKFriendProfile(id: "user_casey", displayName: "Casey", profileImageData: nil, inviteCode: "GROVE-KL23", workoutCount: 55, currentStreak: 8, memberSince: date(daysAgo: 150), recordID: .init(recordName: "user_casey")),
-        CKFriendProfile(id: "user_taylor", displayName: "Taylor", profileImageData: nil, inviteCode: "GROVE-MN45", workoutCount: 28, currentStreak: 15, memberSince: date(daysAgo: 75), recordID: .init(recordName: "user_taylor")),
+        CKFriendProfile(id: "user_sarah", displayName: "Sarah", profileImageData: nil, inviteCode: "GROVE-AB12", workoutCount: 47, currentStreak: 12, memberSince: date(daysAgo: 120), recordID: .init(recordName: "user_sarah"), splitName: "Push / Pull / Legs", daysPerWeek: 6, repRange: "Hypertrophy", sessionMinutes: 60),
+        CKFriendProfile(id: "user_mike", displayName: "Mike", profileImageData: nil, inviteCode: "GROVE-CD34", workoutCount: 82, currentStreak: 5, memberSince: date(daysAgo: 200), recordID: .init(recordName: "user_mike"), splitName: "Upper / Lower", daysPerWeek: 4, repRange: "Strength", sessionMinutes: 75),
+        CKFriendProfile(id: "user_alex", displayName: "Alex", profileImageData: nil, inviteCode: "GROVE-EF56", workoutCount: 31, currentStreak: 22, memberSince: date(daysAgo: 90), recordID: .init(recordName: "user_alex"), splitName: "Push / Pull / Legs", daysPerWeek: 5, repRange: "Hypertrophy", sessionMinutes: 60),
+        CKFriendProfile(id: "user_jordan", displayName: "Jordan", profileImageData: nil, inviteCode: "GROVE-GH78", workoutCount: 63, currentStreak: 0, memberSince: date(daysAgo: 180), recordID: .init(recordName: "user_jordan"), splitName: nil, daysPerWeek: nil, repRange: nil, sessionMinutes: nil),
+        CKFriendProfile(id: "user_riley", displayName: "Riley", profileImageData: nil, inviteCode: "GROVE-IJ90", workoutCount: 19, currentStreak: 3, memberSince: date(daysAgo: 45), recordID: .init(recordName: "user_riley"), splitName: "Full Body", daysPerWeek: 3, repRange: "Hypertrophy", sessionMinutes: 45),
+        CKFriendProfile(id: "user_casey", displayName: "Casey", profileImageData: nil, inviteCode: "GROVE-KL23", workoutCount: 55, currentStreak: 8, memberSince: date(daysAgo: 150), recordID: .init(recordName: "user_casey"), splitName: "Bro Split", daysPerWeek: 5, repRange: "Hypertrophy", sessionMinutes: 60),
+        CKFriendProfile(id: "user_taylor", displayName: "Taylor", profileImageData: nil, inviteCode: "GROVE-MN45", workoutCount: 28, currentStreak: 15, memberSince: date(daysAgo: 75), recordID: .init(recordName: "user_taylor"), splitName: "Arnold Split", daysPerWeek: 6, repRange: "Strength", sessionMinutes: 90),
     ]
 
     // MARK: - Feed Items
