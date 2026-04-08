@@ -17,13 +17,17 @@ class Exercise {
     var isCompound: Bool = false
     var sortPriority: Int = 50  // lower = earlier in workout (compounds 10-20, isolations 50-80)
 
+    // Bodyweight exercises show a mode picker (Bodyweight / Weighted / Assisted) instead of always requiring weight
+    var isBodyweight: Bool = false
+
     init(
         name: String,
         muscleGroup: MuscleGroup,
         muscleSubgroup: String? = nil,
         isBuiltIn: Bool = true,
         isCompound: Bool = false,
-        sortPriority: Int = 50
+        sortPriority: Int = 50,
+        isBodyweight: Bool = false
     ) {
         self.name = name
         self.muscleGroup = muscleGroup
@@ -31,5 +35,6 @@ class Exercise {
         self.isBuiltIn = isBuiltIn
         self.isCompound = isCompound
         self.sortPriority = sortPriority
+        self.isBodyweight = isBodyweight
     }
 }

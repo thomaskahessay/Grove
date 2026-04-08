@@ -21,6 +21,7 @@ struct WorkoutSummaryView: View {
         workout.exercises.reduce(0) { exerciseTotal, exerciseLog in
             exerciseTotal + exerciseLog.sets.reduce(0) { setTotal, setLog in
                 guard setLog.isCompleted,
+                      setLog.bodyweightModifier != .assisted,
                       let weight = setLog.weight,
                       let reps = setLog.reps else { return setTotal }
                 return setTotal + (weight * Double(reps))
@@ -46,6 +47,7 @@ struct WorkoutSummaryView: View {
         return prev.exercises.reduce(0) { exerciseTotal, exerciseLog in
             exerciseTotal + exerciseLog.sets.reduce(0) { setTotal, setLog in
                 guard setLog.isCompleted,
+                      setLog.bodyweightModifier != .assisted,
                       let weight = setLog.weight,
                       let reps = setLog.reps else { return setTotal }
                 return setTotal + (weight * Double(reps))
@@ -286,14 +288,23 @@ struct WorkoutSummaryView: View {
     private var prCards: [PRCardData] {
         sessionManager.newPRs.map { result -> PRCardData in
             let pr = result.newPR
-            let w = pr.weight == floor(pr.weight) ? "\(Int(pr.weight))" : String(format: "%.1f", pr.weight)
-            let units = workout.user?.preferredUnits == .metric ? "kg" : "lbs"
-            return PRCardData(
-                id: "\(result.exercise.id)-pr",
-                exerciseName: result.exercise.name,
-                typeLabel: "New PR",
-                displayValue: "\(w) \(units) x \(pr.reps)"
-            )
+            if pr.type == .maxReps {
+                return PRCardData(
+                    id: "\(result.exercise.id)-pr",
+                    exerciseName: result.exercise.name,
+                    typeLabel: "New PR",
+                    displayValue: "\(pr.reps) reps"
+                )
+            } else {
+                let w = pr.weight == floor(pr.weight) ? "\(Int(pr.weight))" : String(format: "%.1f", pr.weight)
+                let units = workout.user?.preferredUnits == .metric ? "kg" : "lbs"
+                return PRCardData(
+                    id: "\(result.exercise.id)-pr",
+                    exerciseName: result.exercise.name,
+                    typeLabel: "New PR",
+                    displayValue: "\(w) \(units) x \(pr.reps)"
+                )
+            }
         }
     }
 
@@ -554,13 +565,22 @@ struct ExerciseSummaryRow: View {
     let exerciseLog: ExerciseLog
     let previousExerciseLog: ExerciseLog?
 
+    private var isBodyweightExercise: Bool {
+        exerciseLog.exercise?.isBodyweight ?? false
+    }
+
     private var completedSets: [SetLog] {
         exerciseLog.sets.filter { $0.isCompleted }.sorted { $0.setNumber < $1.setNumber }
     }
 
+    private var totalReps: Int {
+        completedSets.compactMap(\.reps).reduce(0, +)
+    }
+
     private var exerciseVolume: Double {
         completedSets.reduce(0) { total, set in
-            guard let weight = set.weight, let reps = set.reps else { return total }
+            guard set.bodyweightModifier != .assisted,
+                  let weight = set.weight, let reps = set.reps else { return total }
             return total + (weight * Double(reps))
         }
     }
@@ -669,12 +689,19 @@ struct ExerciseSummaryRow: View {
 
             Spacer()
 
-            // Volume
+            // Volume or total reps
             if exerciseLog.status != .skipped {
-                Text(formatVolume(exerciseVolume))
-                    .font(.subheadline)
-                    .fontWeight(.medium)
-                    .foregroundStyle(Color.groveText)
+                if isBodyweightExercise && exerciseVolume == 0 {
+                    Text("\(totalReps) reps")
+                        .font(.subheadline)
+                        .fontWeight(.medium)
+                        .foregroundStyle(Color.groveText)
+                } else {
+                    Text(formatVolume(exerciseVolume))
+                        .font(.subheadline)
+                        .fontWeight(.medium)
+                        .foregroundStyle(Color.groveText)
+                }
             }
         }
         .padding()
@@ -731,11 +758,15 @@ struct ExerciseSummaryRow: View {
     }
 
     private func formatSetDescription(_ set: SetLog) -> String {
-        guard let weight = set.weight, let reps = set.reps else { return "—" }
-        if weight.truncatingRemainder(dividingBy: 1) == 0 {
-            return "\(Int(weight))×\(reps)"
+        guard let reps = set.reps else { return "—" }
+        if let weight = set.weight, set.bodyweightModifier != .bodyweight {
+            let prefix = set.bodyweightModifier == .weighted ? "+" : (set.bodyweightModifier == .assisted ? "-" : "")
+            if weight.truncatingRemainder(dividingBy: 1) == 0 {
+                return "\(prefix)\(Int(weight))×\(reps)"
+            }
+            return String(format: "%@%.1f×%d", prefix, weight, reps)
         }
-        return String(format: "%.1f×%d", weight, reps)
+        return "\(reps) reps"
     }
 
     private func formatVolume(_ volume: Double) -> String {

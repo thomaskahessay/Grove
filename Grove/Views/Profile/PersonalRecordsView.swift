@@ -11,23 +11,25 @@ struct PersonalRecordsView: View {
         currentUser?.preferredUnits == .metric ? "kg" : "lbs"
     }
 
-    /// Current max-weight PR per exercise, sorted by most recently achieved
+    /// Current best PR per exercise (maxWeight or maxReps), sorted by most recently achieved
     private var currentPRs: [PersonalRecord] {
-        let maxWeightRecords = allRecords.filter { $0.type == .maxWeight }
+        let relevantRecords = allRecords.filter { $0.type == .maxWeight || $0.type == .maxReps }
 
-        var bestByExercise: [UUID: PersonalRecord] = [:]
-        for record in maxWeightRecords {
+        // Group by exercise + type so we keep both maxWeight and maxReps PRs separately
+        var bestByKey: [String: PersonalRecord] = [:]
+        for record in relevantRecords {
             guard let exerciseID = record.exercise?.id else { continue }
-            if let existing = bestByExercise[exerciseID] {
+            let key = "\(exerciseID)-\(record.type.rawValue)"
+            if let existing = bestByKey[key] {
                 if record.value > existing.value || (record.value == existing.value && record.reps > existing.reps) {
-                    bestByExercise[exerciseID] = record
+                    bestByKey[key] = record
                 }
             } else {
-                bestByExercise[exerciseID] = record
+                bestByKey[key] = record
             }
         }
 
-        return bestByExercise.values.sorted { $0.achievedAt > $1.achievedAt }
+        return bestByKey.values.sorted { $0.achievedAt > $1.achievedAt }
     }
 
     var body: some View {
@@ -110,14 +112,25 @@ private struct PRGalleryRow: View {
             Spacer()
 
             VStack(alignment: .trailing, spacing: 2) {
-                Text("\(record.weight.formatted()) \(unitLabel)")
-                    .font(.title3)
-                    .fontWeight(.bold)
-                    .foregroundStyle(Color.groveTerracotta)
+                if record.type == .maxReps {
+                    Text("\(record.reps) reps")
+                        .font(.title3)
+                        .fontWeight(.bold)
+                        .foregroundStyle(Color.groveTerracotta)
 
-                Text("\(record.reps) reps")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                    Text("Bodyweight")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                } else {
+                    Text("\(record.weight.formatted()) \(unitLabel)")
+                        .font(.title3)
+                        .fontWeight(.bold)
+                        .foregroundStyle(Color.groveTerracotta)
+
+                    Text("\(record.reps) reps")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
             }
         }
         .padding()

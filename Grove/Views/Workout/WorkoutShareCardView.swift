@@ -36,6 +36,7 @@ struct WorkoutShareCardView: View {
         workout.exercises.reduce(0) { exerciseTotal, exerciseLog in
             exerciseTotal + exerciseLog.sets.reduce(0) { setTotal, setLog in
                 guard setLog.isCompleted,
+                      setLog.bodyweightModifier != .assisted,
                       let weight = setLog.weight,
                       let reps = setLog.reps else { return setTotal }
                 return setTotal + (weight * Double(reps))

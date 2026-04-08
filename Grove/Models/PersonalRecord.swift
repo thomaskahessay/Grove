@@ -4,6 +4,7 @@ import SwiftData
 enum PRType: String, Codable {
     case maxWeight = "Max Weight"
     case estimatedOneRM = "Estimated 1RM" // Legacy — no longer created
+    case maxReps = "Max Reps" // Bodyweight exercises — highest reps in a single set
 }
 
 @Model

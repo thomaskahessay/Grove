@@ -149,7 +149,7 @@ struct ExerciseProgressDetailView: View {
 
                 FloatingStat(value: formatValue(bestValue), label: "Best", color: Color.groveTerracotta)
 
-                if let weight = highestWeight {
+                if !activeExercise.isBodyweight, let weight = highestWeight {
                     FloatingStat(value: formatWeight(weight), label: "Max", color: Color.groveText)
                 }
             }
@@ -174,7 +174,7 @@ struct ExerciseProgressDetailView: View {
                         selectedMetric = metric
                     } label: {
                         HStack {
-                            Text(metric.fullName)
+                            Text(metric.fullName(isBodyweight: activeExercise.isBodyweight))
                             if selectedMetric == metric {
                                 Image(systemName: "checkmark")
                             }
@@ -183,7 +183,7 @@ struct ExerciseProgressDetailView: View {
                 }
             } label: {
                 HStack(spacing: 6) {
-                    Text(selectedMetric.shortName)
+                    Text(selectedMetric.shortName(isBodyweight: activeExercise.isBodyweight))
                         .font(.subheadline)
                         .fontWeight(.semibold)
                     Spacer()
@@ -324,6 +324,7 @@ struct ExerciseProgressDetailView: View {
     private func getDataPoints(for exercise: Exercise) -> [ProgressDataPoint] {
         let cutoffDate = selectedTimeRange.cutoffDate
         var dataPoints: [ProgressDataPoint] = []
+        let isBW = exercise.isBodyweight
 
         for workout in completedWorkouts {
             guard let completedAt = workout.completedAt,
@@ -333,17 +334,42 @@ struct ExerciseProgressDetailView: View {
                 guard log.exercise?.id == exercise.id,
                       log.status == .completed else { continue }
 
-                let completedSets = log.sets.filter { $0.isCompleted && $0.weight != nil && $0.reps != nil }
+                let completedSets = log.sets.filter { $0.isCompleted && $0.reps != nil }
                 guard !completedSets.isEmpty else { continue }
 
                 let value: Double
-                switch selectedMetric {
-                case .maxWeight:
-                    value = completedSets.compactMap { $0.weight }.max() ?? 0
-                case .bestSet:
-                    value = completedSets.compactMap { ($0.weight ?? 0) * Double($0.reps ?? 0) }.max() ?? 0
-                case .totalVolume:
-                    value = completedSets.reduce(0) { $0 + ($1.weight ?? 0) * Double($1.reps ?? 0) }
+                if isBW {
+                    // Bodyweight metrics: reps-based
+                    switch selectedMetric {
+                    case .maxWeight:
+                        // "Max Reps" — highest reps in a single set
+                        value = Double(completedSets.compactMap { $0.reps }.max() ?? 0)
+                    case .bestSet:
+                        // "Total Reps" — sum of all reps
+                        value = Double(completedSets.compactMap { $0.reps }.reduce(0, +))
+                    case .totalVolume:
+                        // For weighted bodyweight sets, show volume; for pure bodyweight, show total reps
+                        let weightedVolume = completedSets.filter { $0.bodyweightModifier == .weighted && $0.weight != nil }
+                            .reduce(0.0) { $0 + ($1.weight! * Double($1.reps ?? 0)) }
+                        if weightedVolume > 0 {
+                            value = weightedVolume
+                        } else {
+                            value = Double(completedSets.compactMap { $0.reps }.reduce(0, +))
+                        }
+                    }
+                } else {
+                    // Standard weighted metrics
+                    let weightedSets = completedSets.filter { $0.weight != nil }
+                    guard !weightedSets.isEmpty else { continue }
+
+                    switch selectedMetric {
+                    case .maxWeight:
+                        value = weightedSets.compactMap { $0.weight }.max() ?? 0
+                    case .bestSet:
+                        value = weightedSets.compactMap { ($0.weight ?? 0) * Double($0.reps ?? 0) }.max() ?? 0
+                    case .totalVolume:
+                        value = weightedSets.reduce(0) { $0 + ($1.weight ?? 0) * Double($1.reps ?? 0) }
+                    }
                 }
 
                 if value > 0 {

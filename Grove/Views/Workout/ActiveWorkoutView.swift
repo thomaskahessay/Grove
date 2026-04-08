@@ -437,6 +437,11 @@ struct ExerciseFullScreenCard: View {
 
     @State private var focusedSetID: UUID?
     @State private var exercisePR: PersonalRecord?
+    @State private var bodyweightMode: BodyweightModifier = .bodyweight
+
+    private var isBodyweightExercise: Bool {
+        exerciseLog.exercise?.isBodyweight ?? false
+    }
 
     private var sortedSets: [SetLog] {
         exerciseLog.sets.sorted { $0.setNumber < $1.setNumber }
@@ -469,9 +474,15 @@ struct ExerciseFullScreenCard: View {
                             HStack(spacing: 4) {
                                 Image(systemName: "trophy.fill")
                                     .font(.caption)
-                                Text("PR: \(pr.weight.truncatingRemainder(dividingBy: 1) == 0 ? String(Int(pr.weight)) : String(format: "%.1f", pr.weight)) lbs x \(pr.reps)")
-                                    .font(.caption)
-                                    .fontWeight(.medium)
+                                if pr.type == .maxReps {
+                                    Text("PR: \(pr.reps) reps")
+                                        .font(.caption)
+                                        .fontWeight(.medium)
+                                } else {
+                                    Text("PR: \(pr.weight.truncatingRemainder(dividingBy: 1) == 0 ? String(Int(pr.weight)) : String(format: "%.1f", pr.weight)) lbs x \(pr.reps)")
+                                        .font(.caption)
+                                        .fontWeight(.medium)
+                                }
                             }
                             .foregroundStyle(Color.groveTerracotta)
                         }
@@ -500,6 +511,26 @@ struct ExerciseFullScreenCard: View {
                         .padding(.top, 4)
                     }
                     .padding(.top, 20)
+
+                    // Bodyweight mode picker
+                    if isBodyweightExercise {
+                        Picker("Mode", selection: $bodyweightMode) {
+                            Text("Bodyweight").tag(BodyweightModifier.bodyweight)
+                            Text("Weighted").tag(BodyweightModifier.weighted)
+                            Text("Assisted").tag(BodyweightModifier.assisted)
+                        }
+                        .pickerStyle(.segmented)
+                        .padding(.horizontal)
+                        .onChange(of: bodyweightMode) { _, newMode in
+                            // Update all incomplete sets to the new mode
+                            for set in sortedSets where !set.isCompleted {
+                                set.bodyweightModifier = newMode
+                                if newMode == .bodyweight {
+                                    set.weight = nil
+                                }
+                            }
+                        }
+                    }
 
                     // Sets
                     VStack(spacing: 12) {
@@ -530,6 +561,7 @@ struct ExerciseFullScreenCard: View {
                                 },
                                 lastSessionWeight: setLog.lastSessionWeight,
                                 lastSessionReps: setLog.lastSessionReps,
+                                isBodyweightExercise: isBodyweightExercise,
                                 suggestedWeight: setLog.suggestedWeight,
                                 suggestedReps: setLog.suggestedReps
                             )
@@ -627,10 +659,18 @@ struct ExerciseFullScreenCard: View {
             let descriptor = FetchDescriptor<PersonalRecord>(
                 predicate: #Predicate<PersonalRecord> { $0.exercise?.id == exerciseID }
             )
-            let records = ((try? modelContext.fetch(descriptor)) ?? []).filter { $0.type == .maxWeight }
+            let prType: PRType = isBodyweightExercise ? .maxReps : .maxWeight
+            let records = ((try? modelContext.fetch(descriptor)) ?? []).filter { $0.type == prType }
             exercisePR = records.max { a, b in
                 if a.value != b.value { return a.value < b.value }
                 return a.reps < b.reps
+            }
+
+            // Initialize bodyweight mode from existing sets
+            if isBodyweightExercise {
+                if let existingMode = sortedSets.first(where: { $0.bodyweightModifier != .none })?.bodyweightModifier {
+                    bodyweightMode = existingMode
+                }
             }
         }
     }
@@ -638,10 +678,12 @@ struct ExerciseFullScreenCard: View {
     private func addSet() {
         let newSetNumber = exerciseLog.sets.count + 1
         let lastSet = exerciseLog.sets.last
+        let modifier = isBodyweightExercise ? bodyweightMode : .none
         let newSet = SetLog(
             setNumber: newSetNumber,
-            weight: lastSet?.weight,
-            reps: lastSet?.reps
+            weight: modifier == .bodyweight ? nil : lastSet?.weight,
+            reps: lastSet?.reps,
+            bodyweightModifier: modifier
         )
         newSet.exerciseLog = exerciseLog
         exerciseLog.sets.append(newSet)
@@ -703,6 +745,7 @@ struct SetRowView: View {
     var onFocused: (() -> Void)? = nil
     var lastSessionWeight: Double? = nil
     var lastSessionReps: Int? = nil
+    var isBodyweightExercise: Bool = false
     var suggestedWeight: Double? = nil
     var suggestedReps: Int? = nil
 
@@ -713,6 +756,18 @@ struct SetRowView: View {
 
     private var isEditing: Bool {
         weightFocused || repsFocused
+    }
+
+    private var showBodyweightOnly: Bool {
+        isBodyweightExercise && setLog.bodyweightModifier == .bodyweight
+    }
+
+    private var weightLabel: String {
+        switch setLog.bodyweightModifier {
+        case .weighted: return "+Weight"
+        case .assisted: return "Assist"
+        default: return "Weight"
+        }
     }
 
     private var valuesChangedFromLastSession: Bool {
@@ -736,7 +791,7 @@ struct SetRowView: View {
 
     private var lastSessionHint: String {
         var parts: [String] = []
-        if let w = lastSessionWeight {
+        if !showBodyweightOnly, let w = lastSessionWeight {
             let weightStr = w.truncatingRemainder(dividingBy: 1) == 0 ? String(Int(w)) : String(format: "%.1f", w)
             parts.append("\(weightStr) lbs")
         }
@@ -769,78 +824,80 @@ struct SetRowView: View {
                 .foregroundStyle(setLog.isCompleted ? Color.groveSage : .secondary)
                 .frame(width: 24)
 
-            // Weight input
-            VStack(spacing: 4) {
-                Text("Weight")
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
+            // Weight input — hidden for pure bodyweight sets
+            if !showBodyweightOnly {
+                VStack(spacing: 4) {
+                    Text(weightLabel)
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
 
-                HStack(spacing: 4) {
-                    if weightFocused {
-                        Button {
-                            decrementWeight()
-                        } label: {
-                            Text("-5")
-                                .font(.caption2)
-                                .fontWeight(.semibold)
-                                .foregroundStyle(Color.groveText)
+                    HStack(spacing: 4) {
+                        if weightFocused {
+                            Button {
+                                decrementWeight()
+                            } label: {
+                                Text("-5")
+                                    .font(.caption2)
+                                    .fontWeight(.semibold)
+                                    .foregroundStyle(Color.groveText)
+                            }
+                            .buttonStyle(.plain)
+                            .transition(.opacity.combined(with: .scale(scale: 0.5)))
                         }
-                        .buttonStyle(.plain)
-                        .transition(.opacity.combined(with: .scale(scale: 0.5)))
-                    }
 
-                    TextField("0", text: $weightText)
-                        .font(.headline)
-                        .multilineTextAlignment(.center)
-                        .keyboardType(.decimalPad)
-                        .focused($weightFocused)
-                        .onSubmit { syncWeightFromText() }
-                        .onChange(of: weightText) { _, newValue in
-                            // Only allow whole numbers or .5 increments
-                            if let dotIndex = newValue.firstIndex(of: ".") {
-                                let decimals = newValue[newValue.index(after: dotIndex)...]
-                                if decimals.count > 1 {
-                                    weightText = String(newValue.prefix(through: newValue.index(dotIndex, offsetBy: 1)))
-                                } else if decimals.count == 1 {
-                                    if decimals == "0" {
-                                        // Strip ".0" — show as whole number
-                                        weightText = String(newValue.prefix(upTo: dotIndex))
-                                    } else if decimals != "5" {
-                                        // Only .5 allowed as decimal
-                                        weightText = String(newValue.prefix(upTo: dotIndex))
+                        TextField("0", text: $weightText)
+                            .font(.headline)
+                            .multilineTextAlignment(.center)
+                            .keyboardType(.decimalPad)
+                            .focused($weightFocused)
+                            .onSubmit { syncWeightFromText() }
+                            .onChange(of: weightText) { _, newValue in
+                                // Only allow whole numbers or .5 increments
+                                if let dotIndex = newValue.firstIndex(of: ".") {
+                                    let decimals = newValue[newValue.index(after: dotIndex)...]
+                                    if decimals.count > 1 {
+                                        weightText = String(newValue.prefix(through: newValue.index(dotIndex, offsetBy: 1)))
+                                    } else if decimals.count == 1 {
+                                        if decimals == "0" {
+                                            // Strip ".0" — show as whole number
+                                            weightText = String(newValue.prefix(upTo: dotIndex))
+                                        } else if decimals != "5" {
+                                            // Only .5 allowed as decimal
+                                            weightText = String(newValue.prefix(upTo: dotIndex))
+                                        }
                                     }
                                 }
                             }
-                        }
-                        .onChange(of: weightFocused) { _, focused in
-                            if focused { onFocused?() }
-                            else { syncWeightFromText() }
-                        }
+                            .onChange(of: weightFocused) { _, focused in
+                                if focused { onFocused?() }
+                                else { syncWeightFromText() }
+                            }
 
-                    if weightFocused {
-                        Button {
-                            incrementWeight()
-                        } label: {
-                            Text("+5")
-                                .font(.caption2)
-                                .fontWeight(.semibold)
-                                .foregroundStyle(Color.groveText)
+                        if weightFocused {
+                            Button {
+                                incrementWeight()
+                            } label: {
+                                Text("+5")
+                                    .font(.caption2)
+                                    .fontWeight(.semibold)
+                                    .foregroundStyle(Color.groveText)
+                            }
+                            .buttonStyle(.plain)
+                            .transition(.opacity.combined(with: .scale(scale: 0.5)))
                         }
-                        .buttonStyle(.plain)
-                        .transition(.opacity.combined(with: .scale(scale: 0.5)))
                     }
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 6)
+                    .frame(height: 34)
+                    .background(Color.groveWarmSand.opacity(weightFocused ? 0.25 : 0.15))
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 8)
+                            .stroke(weightFocused ? Color.groveSage.opacity(0.5) : Color.groveWarmSand.opacity(0.4), lineWidth: 1)
+                    )
                 }
-                .padding(.horizontal, 8)
-                .padding(.vertical, 6)
-                .frame(height: 34)
-                .background(Color.groveWarmSand.opacity(weightFocused ? 0.25 : 0.15))
-                .clipShape(RoundedRectangle(cornerRadius: 8))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 8)
-                        .stroke(weightFocused ? Color.groveSage.opacity(0.5) : Color.groveWarmSand.opacity(0.4), lineWidth: 1)
-                )
+                .frame(maxWidth: .infinity)
             }
-            .frame(maxWidth: .infinity)
 
             // Reps input
             VStack(spacing: 4) {

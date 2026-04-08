@@ -65,6 +65,13 @@ enum ExerciseStatus: String, Codable {
     case skipped
 }
 
+enum BodyweightModifier: String, Codable {
+    case none       // Standard weighted exercise (bench press, curls, etc.)
+    case bodyweight // Pure bodyweight — reps only (push-ups, unweighted pull-ups)
+    case weighted   // Bodyweight + added weight (weighted pull-ups, weighted dips)
+    case assisted   // Bodyweight - assistance (band-assisted pull-ups, machine-assisted dips)
+}
+
 enum PlanStatus: String, Codable {
     case planned
     case completed
