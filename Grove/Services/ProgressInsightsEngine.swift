@@ -63,11 +63,37 @@ struct ProgressInsightsEngine {
                 color: "terracotta"
             ))
         } else if recentPRs.allSatisfy({ $0.achievedAt < thirtyDaysAgo }) && !recentPRs.isEmpty {
-            insights.append(ProgressInsight(
-                icon: "chart.line.uptrend.xyaxis",
-                message: "No PRs in the last 30 days — try adding weight to your strongest lifts.",
-                color: "rust"
-            ))
+            // Per-exercise plateau detection (60+ days without PR)
+            let sixtyDaysAgo = calendar.date(byAdding: .day, value: -60, to: today) ?? today
+            var latestPRByExercise: [UUID: (name: String, date: Date)] = [:]
+            for pr in recentPRs {
+                guard let exerciseID = pr.exercise?.id, let name = pr.exercise?.name else { continue }
+                if let existing = latestPRByExercise[exerciseID] {
+                    if pr.achievedAt > existing.date {
+                        latestPRByExercise[exerciseID] = (name, pr.achievedAt)
+                    }
+                } else {
+                    latestPRByExercise[exerciseID] = (name, pr.achievedAt)
+                }
+            }
+
+            if let stalest = latestPRByExercise.values
+                .filter({ $0.date < sixtyDaysAgo })
+                .sorted(by: { $0.date < $1.date })
+                .first {
+                let daysSincePR = calendar.dateComponents([.day], from: stalest.date, to: today).day ?? 0
+                insights.append(ProgressInsight(
+                    icon: "chart.line.flattrend.xyaxis",
+                    message: "No PR on \(stalest.name) in \(daysSincePR) days — consider a deload or variation.",
+                    color: "rust"
+                ))
+            } else {
+                insights.append(ProgressInsight(
+                    icon: "chart.line.uptrend.xyaxis",
+                    message: "No PRs in the last 30 days — try adding weight to your strongest lifts.",
+                    color: "rust"
+                ))
+            }
         }
 
         // Consistency / adherence

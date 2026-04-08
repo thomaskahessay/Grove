@@ -716,6 +716,20 @@ struct SetRowView: View {
         return setLog.weight != lastSessionWeight || setLog.reps != lastSessionReps
     }
 
+    private var deltaWeight: Double {
+        guard let current = setLog.weight, let last = lastSessionWeight else { return 0 }
+        return current - last
+    }
+
+    private var deltaReps: Int {
+        guard let current = setLog.reps, let last = lastSessionReps else { return 0 }
+        return current - last
+    }
+
+    private var overallImproved: Bool {
+        deltaWeight > 0 || (deltaWeight == 0 && deltaReps > 0)
+    }
+
     private var lastSessionHint: String {
         var parts: [String] = []
         if let w = lastSessionWeight {
@@ -887,7 +901,54 @@ struct SetRowView: View {
             }
         }
 
-        if valuesChangedFromLastSession {
+        if setLog.isCompleted, lastSessionWeight != nil || lastSessionReps != nil {
+            // Session-over-session comparison badge
+            HStack(spacing: 4) {
+                Spacer().frame(width: 36)
+                let weightDelta = deltaWeight
+                let repsDelta = deltaReps
+                let hasChange = weightDelta != 0 || repsDelta != 0
+
+                if hasChange {
+                    Image(systemName: overallImproved ? "arrow.up.right" : "arrow.down.right")
+                        .font(.caption2)
+                        .foregroundStyle(overallImproved ? Color.groveSage : Color.groveMutedRust)
+
+                    if weightDelta != 0 {
+                        let sign = weightDelta > 0 ? "+" : ""
+                        let weightStr = weightDelta.truncatingRemainder(dividingBy: 1) == 0
+                            ? "\(sign)\(Int(weightDelta))"
+                            : "\(sign)\(String(format: "%.1f", weightDelta))"
+                        Text("\(weightStr) lbs")
+                            .font(.caption2)
+                            .fontWeight(.medium)
+                            .foregroundStyle(weightDelta > 0 ? Color.groveSage : Color.groveMutedRust)
+                    }
+
+                    if weightDelta != 0 && repsDelta != 0 {
+                        Text("·")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    }
+
+                    if repsDelta != 0 {
+                        let sign = repsDelta > 0 ? "+" : ""
+                        Text("\(sign)\(repsDelta) reps")
+                            .font(.caption2)
+                            .fontWeight(.medium)
+                            .foregroundStyle(repsDelta > 0 ? Color.groveSage : Color.groveMutedRust)
+                    }
+                } else {
+                    Image(systemName: "equal")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                    Text("Matched last session")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+            }
+        } else if valuesChangedFromLastSession {
             HStack {
                 Spacer().frame(width: 36)
                 Text(lastSessionHint)

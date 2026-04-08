@@ -87,6 +87,22 @@ struct WorkoutDetailView: View {
                 // Header Stats
                 headerSection
 
+                // Notes (if any)
+                if let notes = workout.notes, !notes.isEmpty {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Label("Notes", systemImage: "note.text")
+                            .font(.headline)
+                            .foregroundStyle(Color.groveText)
+                        Text(notes)
+                            .font(.subheadline)
+                            .foregroundStyle(Color.groveText)
+                            .padding(12)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .background(Color.groveCardBackground)
+                            .clipShape(RoundedRectangle(cornerRadius: 12))
+                    }
+                }
+
                 // Personal Records (if any)
                 if !workoutPRs.isEmpty {
                     prSection
