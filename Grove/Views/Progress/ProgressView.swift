@@ -697,6 +697,7 @@ struct ProgressView: View {
                                 }
                             }
                         }
+                        .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(16)
                         .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 12))
                         .shadow(color: .black.opacity(0.07), radius: 10, y: 3)
