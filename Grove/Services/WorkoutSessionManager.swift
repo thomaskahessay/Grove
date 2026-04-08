@@ -252,7 +252,8 @@ class WorkoutSessionManager {
         context.insert(workout)
 
         for (index, exercise) in exercises.enumerated() {
-            let lastSets = getLastSetsForExercise(exercise, context: context)
+            let history = getExerciseHistory(exercise, context: context, sessionCount: 2)
+            let lastSets = history.first ?? []
             let numberOfSets = lastSets.isEmpty ? defaultSets : lastSets.count
 
             let exerciseLog = ExerciseLog(
@@ -273,6 +274,13 @@ class WorkoutSessionManager {
                 )
                 setLog.lastSessionWeight = lastSetData?.weight
                 setLog.lastSessionReps = lastSetData?.reps
+                let nudge = computeNudge(
+                    forSetPosition: setNumber - 1,
+                    history: history,
+                    isCompound: exercise.isCompound
+                )
+                setLog.suggestedWeight = nudge.weight
+                setLog.suggestedReps = nudge.reps
                 setLog.exerciseLog = exerciseLog
                 exerciseLog.sets.append(setLog)
                 context.insert(setLog)
@@ -287,6 +295,16 @@ class WorkoutSessionManager {
 
     /// Gets the most recent completed sets for an exercise from prior workouts.
     private static func getLastSetsForExercise(_ exercise: Exercise, context: ModelContext) -> [(weight: Double?, reps: Int?)] {
+        let history = getExerciseHistory(exercise, context: context, sessionCount: 1)
+        return history.first ?? []
+    }
+
+    /// Gets completed sets from the last N sessions for an exercise, most recent first.
+    private static func getExerciseHistory(
+        _ exercise: Exercise,
+        context: ModelContext,
+        sessionCount: Int = 2
+    ) -> [[(weight: Double?, reps: Int?)]] {
         let exerciseID = exercise.id
         let descriptor = FetchDescriptor<ExerciseLog>(
             predicate: #Predicate<ExerciseLog> { log in
@@ -296,12 +314,57 @@ class WorkoutSessionManager {
         )
 
         guard let logs = try? context.fetch(descriptor) else { return [] }
-        guard let lastLog = logs.first(where: { $0.workout?.completedAt != nil }) else { return [] }
 
-        return lastLog.sets
-            .filter { $0.isCompleted }
-            .sorted { $0.setNumber < $1.setNumber }
-            .map { (weight: $0.weight, reps: $0.reps) }
+        let completedLogs = logs.filter { $0.workout?.completedAt != nil }
+        let sessionsToUse = completedLogs.prefix(sessionCount)
+
+        return sessionsToUse.map { log in
+            log.sets
+                .filter { $0.isCompleted }
+                .sorted { $0.setNumber < $1.setNumber }
+                .map { (weight: $0.weight, reps: $0.reps) }
+        }
+    }
+
+    /// Computes a progressive nudge suggestion for a specific set position.
+    /// Returns a suggested weight increase (for weighted exercises) or rep increase (for bodyweight).
+    private static func computeNudge(
+        forSetPosition index: Int,
+        history: [[(weight: Double?, reps: Int?)]],
+        isCompound: Bool
+    ) -> (weight: Double?, reps: Int?) {
+        guard history.count >= 2 else { return (nil, nil) }
+
+        let session1 = history[0] // most recent
+        let session2 = history[1] // second most recent
+
+        guard index < session1.count, index < session2.count else { return (nil, nil) }
+
+        let set1 = session1[index]
+        let set2 = session2[index]
+
+        let weight1 = set1.weight
+        let weight2 = set2.weight
+        let reps1 = set1.reps
+        let reps2 = set2.reps
+
+        let isBodyweight1 = weight1 == nil || weight1 == 0
+        let isBodyweight2 = weight2 == nil || weight2 == 0
+
+        if isBodyweight1 && isBodyweight2 {
+            // Bodyweight exercise: nudge +1 rep if reps were consistent
+            if let r1 = reps1, let r2 = reps2, r1 == r2 {
+                return (nil, r1 + 1)
+            }
+        } else if let w1 = weight1, let w2 = weight2, w1 > 0, w2 > 0, w1 == w2 {
+            // Weighted exercise: nudge weight up if both sessions used the same weight
+            if reps1 != nil && reps2 != nil {
+                let increment = isCompound ? 5.0 : 2.5
+                return (w1 + increment, nil)
+            }
+        }
+
+        return (nil, nil)
     }
 
     func discardWorkout(context: ModelContext) {
