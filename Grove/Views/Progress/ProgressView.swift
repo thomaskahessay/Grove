@@ -143,6 +143,40 @@ struct ProgressView: View {
             }
         }
 
+        // Average workout duration
+        let avgMinutes: Int = weekWorkouts.isEmpty ? 0 : {
+            let totalDuration = weekWorkouts.reduce(0.0) { $0 + $1.duration }
+            return Int(totalDuration / Double(weekWorkouts.count) / 60)
+        }()
+
+        // Last week volume for trend badge
+        let lastMonday = calendar.date(byAdding: .day, value: -7, to: monday)!
+        let lastWeekVolume: Double = completedWorkouts.filter { workout in
+            guard let date = workout.completedAt else { return false }
+            return date >= lastMonday && date < monday
+        }.reduce(0) { total, workout in
+            total + workout.exercises.reduce(0) { exTotal, log in
+                guard log.status == .completed else { return exTotal }
+                return exTotal + log.sets.filter { $0.isCompleted }.reduce(0) { setTotal, set in
+                    setTotal + (set.weight ?? 0) * Double(set.reps ?? 0)
+                }
+            }
+        }
+        let volumeTrendIcon: String = {
+            guard lastWeekVolume > 0, totalVolume > 0 else { return "" }
+            let change = ((totalVolume - lastWeekVolume) / lastWeekVolume) * 100
+            if change > 5 { return "arrow.up.right" }
+            else if change < -5 { return "arrow.down.right" }
+            else { return "arrow.right" }
+        }()
+        let volumeTrendColor: Color = {
+            guard lastWeekVolume > 0, totalVolume > 0 else { return .secondary }
+            let change = ((totalVolume - lastWeekVolume) / lastWeekVolume) * 100
+            if change > 5 { return Color.groveSage }
+            else if change < -5 { return Color.groveMutedRust }
+            else { return .secondary }
+        }()
+
         return VStack(spacing: 14) {
             HStack {
                 Text("This Week")
@@ -218,12 +252,12 @@ struct ProgressView: View {
             }
 
             // Stats pills
-            HStack(spacing: 12) {
-                HStack(spacing: 6) {
+            HStack(spacing: 8) {
+                HStack(spacing: 4) {
                     Image(systemName: "dumbbell.fill")
                         .font(.caption2)
                         .foregroundStyle(Color.groveSage)
-                    Text(plannedCount > 0 ? "\(completedCount) / \(plannedCount) workouts" : "\(completedCount) workouts")
+                    Text(plannedCount > 0 ? "\(completedCount)/\(plannedCount)" : "\(completedCount)")
                         .font(.subheadline)
                         .fontWeight(.medium)
                         .foregroundStyle(Color.groveText)
@@ -232,11 +266,29 @@ struct ProgressView: View {
                 .padding(.vertical, 8)
                 .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 8))
 
-                HStack(spacing: 6) {
+                HStack(spacing: 4) {
                     Image(systemName: "scalemass.fill")
                         .font(.caption2)
                         .foregroundStyle(Color.groveTerracotta)
                     Text("\(formatVolume(totalVolume)) \(unitLabel)")
+                        .font(.caption)
+                        .fontWeight(.medium)
+                        .foregroundStyle(Color.groveText)
+                    if !volumeTrendIcon.isEmpty {
+                        Image(systemName: volumeTrendIcon)
+                            .font(.caption2)
+                            .foregroundStyle(volumeTrendColor)
+                    }
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 8)
+                .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 8))
+
+                HStack(spacing: 4) {
+                    Image(systemName: "clock.fill")
+                        .font(.caption2)
+                        .foregroundStyle(Color.groveWarmSand)
+                    Text(avgMinutes > 0 ? "\(avgMinutes) min" : "--")
                         .font(.subheadline)
                         .fontWeight(.medium)
                         .foregroundStyle(Color.groveText)

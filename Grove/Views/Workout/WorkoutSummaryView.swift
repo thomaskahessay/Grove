@@ -101,6 +101,9 @@ struct WorkoutSummaryView: View {
                     // Exercise breakdown
                     exerciseBreakdownSection
 
+                    // Workout notes
+                    notesSection
+
                     // Social sharing
                     sharingSection
 
@@ -433,6 +436,36 @@ struct WorkoutSummaryView: View {
         }
     }
 
+    private var notesSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Label("Notes", systemImage: "note.text")
+                .font(.headline)
+                .foregroundStyle(Color.groveText)
+
+            TextEditor(text: Binding(
+                get: { workout.notes ?? "" },
+                set: { workout.notes = $0.isEmpty ? nil : $0 }
+            ))
+            .font(.subheadline)
+            .foregroundStyle(Color.groveText)
+            .frame(minHeight: 60, maxHeight: 120)
+            .scrollContentBackground(.hidden)
+            .padding(12)
+            .background(Color.groveCardBackground)
+            .clipShape(RoundedRectangle(cornerRadius: 12))
+            .overlay(alignment: .topLeading) {
+                if (workout.notes ?? "").isEmpty {
+                    Text("How did this workout feel?")
+                        .font(.subheadline)
+                        .foregroundStyle(.tertiary)
+                        .padding(.leading, 16)
+                        .padding(.top, 20)
+                        .allowsHitTesting(false)
+                }
+            }
+        }
+    }
+
     // MARK: - Helpers
 
     private func formatVolume(_ volume: Double) -> String {
@@ -567,6 +600,36 @@ struct ExerciseSummaryRow: View {
         return set.setNumber == best.setNumber
     }
 
+    private var targetComparison: String? {
+        let completedSetCount = completedSets.count
+        guard completedSetCount > 0 else { return nil }
+        let targetSetCount = exerciseLog.targetSets
+        let targetRepCount = exerciseLog.targetReps
+        guard targetSetCount != nil || targetRepCount != nil else { return nil }
+
+        var parts: [String] = []
+        if let target = targetSetCount, target > 0 {
+            parts.append("\(completedSetCount)/\(target) target sets")
+        }
+        if let targetReps = targetRepCount, targetReps > 0 {
+            let actualTotalReps = completedSets.compactMap(\.reps).reduce(0, +)
+            let expectedTotalReps = targetReps * (targetSetCount ?? completedSetCount)
+            if expectedTotalReps > 0 {
+                let pct = Int((Double(actualTotalReps) / Double(expectedTotalReps)) * 100)
+                parts.append("\(pct)% of target reps")
+            }
+        }
+        return parts.isEmpty ? nil : parts.joined(separator: " · ")
+    }
+
+    private var targetMet: Bool {
+        let completedSetCount = completedSets.count
+        if let target = exerciseLog.targetSets, target > 0 {
+            return completedSetCount >= target
+        }
+        return true
+    }
+
     var body: some View {
         HStack(spacing: 12) {
             // Status icon
@@ -595,6 +658,12 @@ struct ExerciseSummaryRow: View {
 
                 if exerciseLog.status != .skipped {
                     setsSummaryLine
+
+                    if let targetComparison = targetComparison {
+                        Text(targetComparison)
+                            .font(.caption2)
+                            .foregroundStyle(targetMet ? Color.groveSage : .secondary)
+                    }
                 }
             }
 

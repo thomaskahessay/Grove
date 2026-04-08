@@ -120,6 +120,23 @@ struct StreakDetailView: View {
                 .clipShape(RoundedRectangle(cornerRadius: 12))
                 .padding(.horizontal)
 
+                // Previous streak motivation
+                if user.previousStreak > 0 && user.currentStreak > 0 && user.currentStreak < user.previousStreak {
+                    HStack(spacing: 8) {
+                        Image(systemName: "arrow.up.heart.fill")
+                            .font(.caption)
+                            .foregroundStyle(Color.groveTerracotta)
+                        Text("Previous best: \(user.previousStreak) days — let's beat it!")
+                            .font(.subheadline)
+                            .foregroundStyle(Color.groveText)
+                    }
+                    .padding(12)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(Color.groveTerracotta.opacity(0.08))
+                    .clipShape(RoundedRectangle(cornerRadius: 10))
+                    .padding(.horizontal)
+                }
+
                 // Evolution timeline
                 VStack(alignment: .leading, spacing: 12) {
                     Text("Evolution")

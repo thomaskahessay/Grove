@@ -57,6 +57,17 @@ struct StreakManager {
         if streak > user.longestStreak {
             user.longestStreak = streak
         }
+
+        // Compute consecutive rest days (walk backwards from today)
+        var restDays = 0
+        var checkDate = today
+        while !workoutDates.contains(checkDate) {
+            restDays += 1
+            guard let prev = calendar.date(byAdding: .day, value: -1, to: checkDate) else { break }
+            checkDate = prev
+            if restDays > 30 { break }
+        }
+        user.consecutiveRestDays = restDays
     }
 
     // MARK: - Plan-Aware Streak (Week Chunks)

@@ -23,6 +23,7 @@ struct HomeView: View {
 
     @State private var showingWeeklyPlan = false
     @State private var creatineCheckAnimation = false
+    @State private var restNudgeDismissed = false
 
     private var recentWorkouts: [Workout] {
         Array(completedWorkouts.prefix(5))
@@ -180,6 +181,39 @@ struct HomeView: View {
                             .frame(maxWidth: .infinity)
                         }
                         .buttonStyle(.plain)
+
+                        // Rest day nudge
+                        if user.consecutiveRestDays >= 3, !restNudgeDismissed {
+                            HStack(spacing: 12) {
+                                Image(systemName: "sun.max.fill")
+                                    .font(.title3)
+                                    .foregroundStyle(Color.groveWarmSand)
+
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text("Your plant could use some sunlight")
+                                        .font(.subheadline)
+                                        .fontWeight(.medium)
+                                        .foregroundStyle(Color.groveText)
+                                    Text("\(user.consecutiveRestDays) rest days — your grove misses you")
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                }
+
+                                Spacer()
+
+                                Button {
+                                    withAnimation { restNudgeDismissed = true }
+                                } label: {
+                                    Image(systemName: "xmark")
+                                        .font(.caption)
+                                        .foregroundStyle(.tertiary)
+                                }
+                            }
+                            .padding(14)
+                            .background(Color.groveWarmSand.opacity(0.08))
+                            .clipShape(RoundedRectangle(cornerRadius: 12))
+                            .transition(.move(edge: .top).combined(with: .opacity))
+                        }
                     }
 
                     // Creatine Check-in
