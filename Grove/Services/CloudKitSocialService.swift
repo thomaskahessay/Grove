@@ -14,6 +14,14 @@ struct CKFriendProfile: Identifiable, Sendable {
     let memberSince: Date
     let recordID: CKRecord.ID
 
+    // Program info (nil when friend hasn't shared)
+    let splitName: String?
+    let daysPerWeek: Int?
+    let repRange: String?
+    let sessionMinutes: Int?
+
+    var hasProgram: Bool { splitName != nil }
+
     var initials: String {
         if displayName.isEmpty { return "G" }
         let parts = displayName.split(separator: " ")
@@ -124,6 +132,9 @@ struct SharedWorkoutItem: Identifiable, Sendable, Hashable {
 struct FriendProfileData: Sendable {
     let profile: CKFriendProfile
     let recentWorkouts: [SharedWorkoutItem]
+    let interactionBreakdown: InteractionBreakdown?
+    let recentPRExerciseNames: [String]  // unique exercise names with PRs from recent workouts
+    let commonExerciseCount: Int         // exercises in common with viewer
 }
 
 // MARK: - CloudKit Social Service
@@ -205,6 +216,8 @@ class CloudKitSocialService {
                     existing["profileImage"] = CKAsset(fileURL: tempURL)
                 }
 
+                Self.writeProgramFields(to: existing, user: user)
+
                 try await publicDB.save(existing)
                 self.myInviteCode = existing["inviteCode"] as? String
                 user.inviteCode = self.myInviteCode
@@ -223,6 +236,8 @@ class CloudKitSocialService {
                     try? imageData.write(to: tempURL)
                     record["profileImage"] = CKAsset(fileURL: tempURL)
                 }
+
+                Self.writeProgramFields(to: record, user: user)
 
                 try await publicDB.save(record)
             }
@@ -677,11 +692,49 @@ class CloudKitSocialService {
                 }
             }
 
-            return FriendProfileData(profile: profile, recentWorkouts: workouts)
+            // Fetch interaction breakdown with this friend
+            let breakdown = await fetchInteractionBreakdown(with: userID)
+
+            // Collect unique PR exercise names from their recent workouts
+            var prNames: [String] = []
+            var seenPR: Set<String> = []
+            for workout in workouts {
+                for name in workout.prExerciseNames where seenPR.insert(name).inserted {
+                    prNames.append(name)
+                }
+            }
+
+            // Ensure viewer's shared workouts are loaded for common exercise comparison
+            if mySharedWorkouts.isEmpty {
+                await fetchMySharedWorkouts()
+            }
+
+            // Compute common exercises between viewer's and friend's shared workouts
+            let friendExerciseNames = Self.extractExerciseNames(from: workouts)
+            let myExerciseNames = Self.extractExerciseNames(from: mySharedWorkouts)
+            let commonCount = friendExerciseNames.intersection(myExerciseNames).count
+
+            return FriendProfileData(
+                profile: profile,
+                recentWorkouts: workouts,
+                interactionBreakdown: breakdown,
+                recentPRExerciseNames: prNames,
+                commonExerciseCount: commonCount
+            )
         } catch {
             self.error = "Could not load profile: \(error.localizedDescription)"
             return nil
         }
+    }
+
+    private static func extractExerciseNames(from workouts: [SharedWorkoutItem]) -> Set<String> {
+        var names: Set<String> = []
+        for workout in workouts {
+            for exercise in workout.parsedExercises {
+                names.insert(exercise.name)
+            }
+        }
+        return names
     }
 
     // MARK: - Interactions
@@ -767,6 +820,79 @@ class CloudKitSocialService {
         }
 
         self.interactionsByWorkout = grouped
+    }
+
+    /// Batch fetch interactions for specific workout IDs and merge into interactionsByWorkout
+    func fetchInteractions(for workoutIDs: [String]) async {
+        guard let myAppleUserID, !workoutIDs.isEmpty else { return }
+
+        let pred = NSPredicate(format: "workoutRecordName IN %@", workoutIDs)
+        let query = CKQuery(recordType: RecordType.interaction, predicate: pred)
+
+        guard let (results, _) = try? await publicDB.records(matching: query, resultsLimit: 500) else { return }
+
+        let friendLookup = Dictionary(uniqueKeysWithValues: friends.map { ($0.id, $0) })
+
+        var grouped: [String: InteractionSummary] = [:]
+        for workoutID in workoutIDs {
+            grouped[workoutID] = .empty(for: workoutID)
+        }
+
+        for (_, result) in results {
+            guard let record = try? result.get() else { continue }
+            let workoutID = record["workoutRecordName"] as? String ?? ""
+            let typeStr = record["type"] as? String ?? ""
+            let senderID = record["senderID"] as? String ?? ""
+            let createdAt = record["createdAt"] as? Date ?? Date()
+
+            guard var summary = grouped[workoutID] else { continue }
+
+            let senderName = senderID == myAppleUserID ? "You" : (friendLookup[senderID]?.displayName ?? "Friend")
+            let senderImage = friendLookup[senderID]?.profileImageData
+
+            switch typeStr {
+            case "water":
+                summary.waterCount += 1
+                summary.waterers.append(InteractorInfo(userID: senderID, displayName: senderName, profileImageData: senderImage))
+                if senderID == myAppleUserID { summary.iWatered = true }
+                if summary.latestWaterDate == nil || createdAt > summary.latestWaterDate! {
+                    summary.latestWaterDate = createdAt
+                }
+            case "sunlight":
+                summary.sunlightCount += 1
+                summary.sunlighters.append(SunlightInfo(
+                    senderID: senderID,
+                    senderName: senderName,
+                    senderProfileImageData: senderImage,
+                    earnedFromWorkoutName: nil
+                ))
+                if senderID == myAppleUserID { summary.iSunlit = true }
+                if summary.latestSunlightDate == nil || createdAt > summary.latestSunlightDate! {
+                    summary.latestSunlightDate = createdAt
+                }
+            case "seed":
+                let message = record["message"] as? String ?? ""
+                let isCustom = (record["isCustomMessage"] as? Int64 ?? 0) == 1
+                summary.seeds.append(SeedMessage(
+                    id: record.recordID.recordName,
+                    senderID: senderID,
+                    senderName: senderName,
+                    senderProfileImageData: senderImage,
+                    message: message,
+                    isCustom: isCustom,
+                    createdAt: createdAt
+                ))
+            default:
+                break
+            }
+
+            grouped[workoutID] = summary
+        }
+
+        for (key, var summary) in grouped {
+            summary.seeds.sort { $0.createdAt < $1.createdAt }
+            self.interactionsByWorkout[key] = summary
+        }
     }
 
     /// Fetch detailed interactions for a single workout post
@@ -1364,6 +1490,22 @@ class CloudKitSocialService {
         return items
     }
 
+    // MARK: - Program Sync Helpers
+
+    private static func writeProgramFields(to record: CKRecord, user: User) {
+        if user.shareProgram {
+            record["splitName"] = user.preferredSplit.rawValue as CKRecordValue
+            record["daysPerWeek"] = Int64(user.preferredDaysPerWeek) as CKRecordValue
+            record["repRange"] = user.preferredRepRange.rawValue as CKRecordValue
+            record["sessionMinutes"] = Int64(user.preferredWorkoutMinutes) as CKRecordValue
+        } else {
+            record["splitName"] = nil
+            record["daysPerWeek"] = nil
+            record["repRange"] = nil
+            record["sessionMinutes"] = nil
+        }
+    }
+
     private func profileFromRecord(_ record: CKRecord) -> CKFriendProfile {
         var imageData: Data?
         if let asset = record["profileImage"] as? CKAsset,
@@ -1379,7 +1521,11 @@ class CloudKitSocialService {
             workoutCount: Int(record["workoutCount"] as? Int64 ?? 0),
             currentStreak: Int(record["currentStreak"] as? Int64 ?? 0),
             memberSince: record["memberSince"] as? Date ?? Date(),
-            recordID: record.recordID
+            recordID: record.recordID,
+            splitName: record["splitName"] as? String,
+            daysPerWeek: (record["daysPerWeek"] as? Int64).map { Int($0) },
+            repRange: record["repRange"] as? String,
+            sessionMinutes: (record["sessionMinutes"] as? Int64).map { Int($0) }
         )
     }
 }

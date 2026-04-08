@@ -262,13 +262,17 @@ struct SettingsView: View {
                     get: { user.sharePRs },
                     set: { user.sharePRs = $0 }
                 ))
+                Toggle("Share Training Program", isOn: Binding(
+                    get: { user.shareProgram },
+                    set: { user.shareProgram = $0 }
+                ))
             }
         } header: {
             Text("Sharing Defaults")
         } footer: {
             Text(user?.autoShareWorkouts == true
-                 ? "Workouts are automatically shared when completed using your defaults below."
-                 : "These defaults apply when sharing workouts to the social feed.")
+                 ? "Workouts are automatically shared when completed using your defaults below. Training program visibility is controlled separately."
+                 : "These defaults apply when sharing workouts to the social feed. Training program visibility is controlled separately.")
         }
     }
 

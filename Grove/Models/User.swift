@@ -39,6 +39,7 @@ class User {
     var shareExercises: Bool = false
     var shareWeights: Bool = false
     var sharePRs: Bool = true
+    var shareProgram: Bool = true
 
     // Notification preferences
     var notifyWorkoutReminder: Bool = true

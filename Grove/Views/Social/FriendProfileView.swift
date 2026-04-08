@@ -1,15 +1,22 @@
 import SwiftUI
+import SwiftData
 
 struct FriendProfileView: View {
     let userID: String
 
     @Environment(CloudKitSocialService.self) private var socialService
     @Environment(\.dismiss) private var dismiss
+    @Query private var users: [User]
 
     @State private var profileData: FriendProfileData?
     @State private var isLoading = true
     @State private var loadError: String?
     @State private var showingRemoveConfirmation = false
+    @State private var selectedDetailItem: SharedWorkoutItem?
+    @State private var selectedSeedItem: SharedWorkoutItem?
+    @State private var seedAnimationWorkoutID: String?
+
+    private var currentUser: User? { users.first }
 
     var body: some View {
         ScrollView {
@@ -20,9 +27,12 @@ struct FriendProfileView: View {
             } else if let data = profileData {
                 VStack(spacing: 24) {
                     heroSection(data.profile)
-                    connectionCard
+                    connectionCard(data)
                     statsCard(data.profile)
-                    recentWorkoutsSection(data.recentWorkouts)
+                    mutualIndicators(data)
+                    programCard(data.profile)
+                    recentPRsSection(data.recentPRExerciseNames)
+                    sharedWorkoutsSection(data)
                     removeFriendButton
                 }
                 .padding(.horizontal)
@@ -36,6 +46,22 @@ struct FriendProfileView: View {
         .navigationBarTitleDisplayMode(.inline)
         .task {
             await loadProfile()
+        }
+        .navigationDestination(item: $selectedDetailItem) { item in
+            WorkoutInteractionDetailView(item: item)
+        }
+        .sheet(item: $selectedSeedItem) { item in
+            SeedPickerSheet(item: item) { message, isCustom in
+                seedAnimationWorkoutID = item.id
+                Task {
+                    await socialService.sendSeed(
+                        to: item.id,
+                        recipientID: item.userID,
+                        message: message,
+                        isCustom: isCustom
+                    )
+                }
+            }
         }
         .alert("Remove Friend", isPresented: $showingRemoveConfirmation) {
             Button("Remove", role: .destructive) {
@@ -54,7 +80,6 @@ struct FriendProfileView: View {
 
     private func heroSection(_ profile: CKFriendProfile) -> some View {
         VStack(spacing: 12) {
-            // Avatar
             Circle()
                 .fill(Color.groveSage.opacity(0.15))
                 .frame(width: 80, height: 80)
@@ -78,7 +103,6 @@ struct FriendProfileView: View {
                 .fontWeight(.bold)
                 .foregroundStyle(Color.groveText)
 
-            // Their plant based on streak
             StreakPlantView(
                 streak: profile.currentStreak,
                 size: 140,
@@ -93,41 +117,98 @@ struct FriendProfileView: View {
         .padding(.top, 8)
     }
 
-    // MARK: - Connection Card
+    // MARK: - Connection Card (with interaction breakdown)
 
     @ViewBuilder
-    private var connectionCard: some View {
+    private func connectionCard(_ data: FriendProfileData) -> some View {
         if let connection = socialService.rootConnections.first(where: { $0.friendID == userID }) {
-            HStack(spacing: 12) {
-                Image(systemName: connection.level.icon)
-                    .font(.title3)
-                    .foregroundStyle(Color.groveSage)
-                    .frame(width: 36, height: 36)
-                    .background(Color.groveSage.opacity(0.15))
-                    .clipShape(Circle())
+            VStack(spacing: 12) {
+                HStack(spacing: 12) {
+                    Image(systemName: connection.level.icon)
+                        .font(.title3)
+                        .foregroundStyle(Color.groveSage)
+                        .frame(width: 36, height: 36)
+                        .background(Color.groveSage.opacity(0.15))
+                        .clipShape(Circle())
 
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(connection.level.rawValue)
-                        .font(.subheadline)
-                        .fontWeight(.semibold)
-                        .foregroundStyle(Color.groveText)
-                    Text("\(connection.score) connection points")
-                        .font(.caption)
-                        .foregroundStyle(Color.groveTextSecondary)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(connection.level.rawValue)
+                            .font(.subheadline)
+                            .fontWeight(.semibold)
+                            .foregroundStyle(Color.groveText)
+                        Text("\(connection.score) connection points")
+                            .font(.caption)
+                            .foregroundStyle(Color.groveTextSecondary)
+                    }
+
+                    Spacer()
+
+                    if connection.level.nextLevel != nil {
+                        CircularProgressView(progress: connection.progressToNextLevel)
+                            .frame(width: 32, height: 32)
+                    }
                 }
 
-                Spacer()
+                // Interaction breakdown
+                if let breakdown = data.interactionBreakdown {
+                    Divider()
 
-                // Progress to next level
-                if connection.level.nextLevel != nil {
-                    CircularProgressView(progress: connection.progressToNextLevel)
-                        .frame(width: 32, height: 32)
+                    HStack(spacing: 0) {
+                        interactionStat(
+                            icon: "drop.fill",
+                            color: Color(hex: "5B9BD5"),
+                            sent: breakdown.watersSent,
+                            received: breakdown.watersReceived,
+                            label: "Water"
+                        )
+                        interactionStat(
+                            icon: "leaf.fill",
+                            color: Color.groveSage,
+                            sent: breakdown.seedsSent,
+                            received: breakdown.seedsReceived,
+                            label: "Seeds"
+                        )
+                        interactionStat(
+                            icon: "sun.max.fill",
+                            color: Color(hex: "E8A838"),
+                            sent: breakdown.sunlightsSent,
+                            received: breakdown.sunlightsReceived,
+                            label: "Sunlight"
+                        )
+                    }
                 }
             }
             .padding(14)
             .background(Color.groveCardBackground)
             .clipShape(RoundedRectangle(cornerRadius: 12))
         }
+    }
+
+    private func interactionStat(icon: String, color: Color, sent: Int, received: Int, label: String) -> some View {
+        VStack(spacing: 4) {
+            Image(systemName: icon)
+                .font(.caption)
+                .foregroundStyle(color)
+            Text("\(sent + received)")
+                .font(.subheadline)
+                .fontWeight(.semibold)
+                .foregroundStyle(Color.groveText)
+            Text(label)
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+            HStack(spacing: 2) {
+                Image(systemName: "arrow.up.right")
+                    .font(.system(size: 7))
+                Text("\(sent)")
+                    .font(.system(size: 9))
+                Image(systemName: "arrow.down.left")
+                    .font(.system(size: 7))
+                Text("\(received)")
+                    .font(.system(size: 9))
+            }
+            .foregroundStyle(.tertiary)
+        }
+        .frame(maxWidth: .infinity)
     }
 
     // MARK: - Stats Card
@@ -184,49 +265,193 @@ struct FriendProfileView: View {
             .frame(width: 1, height: 40)
     }
 
-    // MARK: - Recent Workouts
+    // MARK: - Mutual Indicators
 
-    private func recentWorkoutsSection(_ workouts: [SharedWorkoutItem]) -> some View {
+    @ViewBuilder
+    private func mutualIndicators(_ data: FriendProfileData) -> some View {
+        let indicators = buildMutualIndicators(data)
+        if !indicators.isEmpty {
+            VStack(spacing: 8) {
+                ForEach(indicators, id: \.text) { indicator in
+                    HStack(spacing: 8) {
+                        Image(systemName: indicator.icon)
+                            .font(.caption)
+                            .foregroundStyle(Color.groveSage)
+                            .frame(width: 24)
+                        Text(indicator.text)
+                            .font(.subheadline)
+                            .foregroundStyle(Color.groveText)
+                        Spacer()
+                    }
+                }
+            }
+            .padding(14)
+            .background(Color.groveSage.opacity(0.08))
+            .clipShape(RoundedRectangle(cornerRadius: 12))
+        }
+    }
+
+    private struct MutualIndicator {
+        let icon: String
+        let text: String
+    }
+
+    private func buildMutualIndicators(_ data: FriendProfileData) -> [MutualIndicator] {
+        var indicators: [MutualIndicator] = []
+
+        // Shared split check
+        if let friendSplit = data.profile.splitName,
+           let myUser = currentUser {
+            let mySplit = myUser.preferredSplit.rawValue
+            if friendSplit == mySplit {
+                indicators.append(MutualIndicator(
+                    icon: "person.2.fill",
+                    text: "You both train \(friendSplit)"
+                ))
+            }
+        }
+
+        // Common exercises
+        if data.commonExerciseCount > 0 {
+            indicators.append(MutualIndicator(
+                icon: "dumbbell.fill",
+                text: "\(data.commonExerciseCount) exercises in common"
+            ))
+        }
+
+        return indicators
+    }
+
+    // MARK: - Program Card
+
+    @ViewBuilder
+    private func programCard(_ profile: CKFriendProfile) -> some View {
+        if let splitName = profile.splitName {
+            HStack(spacing: 14) {
+                Image(systemName: "calendar.badge.clock")
+                    .font(.title2)
+                    .foregroundStyle(Color.groveSage)
+                    .frame(width: 36)
+
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Training Program")
+                        .font(.headline)
+                        .foregroundStyle(Color.groveText)
+
+                    Text(splitName)
+                        .font(.subheadline)
+                        .foregroundStyle(Color.groveSage)
+
+                    if let days = profile.daysPerWeek, let rep = profile.repRange {
+                        Text("\(days) days/week \u{00B7} \(rep)")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+
+                    if let mins = profile.sessionMinutes {
+                        Text("\(mins) min sessions")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                Spacer()
+            }
+            .padding(16)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 12))
+            .shadow(color: .black.opacity(0.07), radius: 10, y: 3)
+        }
+    }
+
+    // MARK: - Recent PRs
+
+    @ViewBuilder
+    private func recentPRsSection(_ prNames: [String]) -> some View {
+        if !prNames.isEmpty {
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(spacing: 6) {
+                    Image(systemName: "trophy.fill")
+                        .font(.caption)
+                        .foregroundStyle(Color.groveTerracotta)
+                    Text("Recent PRs")
+                        .font(.headline)
+                        .foregroundStyle(Color.groveText)
+                }
+
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 8) {
+                        ForEach(prNames.prefix(6), id: \.self) { name in
+                            Text(name)
+                                .font(.caption)
+                                .fontWeight(.medium)
+                                .foregroundStyle(Color.groveTerracotta)
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, 6)
+                                .background(Color.groveTerracotta.opacity(0.1))
+                                .clipShape(Capsule())
+                        }
+                    }
+                }
+            }
+            .padding(14)
+            .background(Color.groveCardBackground)
+            .clipShape(RoundedRectangle(cornerRadius: 12))
+        }
+    }
+
+    // MARK: - Shared Workouts (Feed Cards)
+
+    private func sharedWorkoutsSection(_ data: FriendProfileData) -> some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Recent Workouts")
+            Text("Shared Workouts")
                 .font(.headline)
                 .foregroundStyle(Color.groveText)
 
-            if workouts.isEmpty {
+            if data.recentWorkouts.isEmpty {
                 Text("No shared workouts yet")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 20)
             } else {
-                ForEach(workouts) { workout in
-                    HStack {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(workout.workoutName)
-                                .font(.subheadline)
-                                .fontWeight(.medium)
-                                .foregroundStyle(Color.groveText)
-                            HStack(spacing: 8) {
-                                if workout.duration > 0 {
-                                    Text(workout.durationText)
-                                        .font(.caption)
-                                        .foregroundStyle(.secondary)
-                                }
-                                if workout.exerciseCount > 0 {
-                                    Text("\(workout.exerciseCount) exercises")
-                                        .font(.caption)
-                                        .foregroundStyle(.secondary)
+                ForEach(data.recentWorkouts) { workout in
+                    FeedItemCard(
+                        item: workout,
+                        interactions: socialService.interactionsByWorkout[workout.id],
+                        showSunlight: socialService.availableSunlightCount > 0,
+                        isOwnPost: false,
+                        triggerSeedAnimation: .init(
+                            get: { seedAnimationWorkoutID == workout.id },
+                            set: { if !$0 { seedAnimationWorkoutID = nil } }
+                        ),
+                        onProfileTap: { },
+                        onWater: {
+                            Task {
+                                let generator = UIImpactFeedbackGenerator(style: .light)
+                                generator.impactOccurred()
+                                _ = await socialService.sendWater(to: workout.id, recipientID: workout.userID)
+                            }
+                        },
+                        onSeed: {
+                            selectedSeedItem = workout
+                        },
+                        onSunlight: {
+                            Task {
+                                let generator = UIImpactFeedbackGenerator(style: .medium)
+                                generator.impactOccurred()
+                                if let myWorkout = await socialService.myLatestSharedWorkoutRecordName() {
+                                    _ = await socialService.sendSunlight(
+                                        to: workout.id,
+                                        recipientID: workout.userID,
+                                        fromWorkoutRecordName: myWorkout
+                                    )
                                 }
                             }
                         }
-                        Spacer()
-                        Text(workout.timeAgo)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
+                    )
+                    .onTapGesture {
+                        selectedDetailItem = workout
                     }
-                    .padding(12)
-                    .background(Color.groveCardBackground)
-                    .clipShape(RoundedRectangle(cornerRadius: 10))
                 }
             }
         }
@@ -273,6 +498,10 @@ struct FriendProfileView: View {
         loadError = nil
         if let data = await socialService.fetchFriendProfile(userID: userID) {
             profileData = data
+
+            // Fetch interactions for the friend's workouts so FeedItemCards can render them
+            let workoutIDs = data.recentWorkouts.map { $0.id }
+            await socialService.fetchInteractions(for: workoutIDs)
         } else {
             loadError = socialService.error ?? "Could not load profile"
         }
