@@ -237,13 +237,21 @@ struct DayPlanSheet: View {
 
                 Spacer()
 
-                if let shareURL = sharedTemplate(for: template).toURL() {
-                    ShareLink(item: shareURL) {
-                        Label("Share", systemImage: "square.and.arrow.up")
-                            .font(.caption)
-                            .fontWeight(.medium)
-                            .foregroundStyle(Color.groveSage)
+                Button {
+                    if let url = sharedTemplate(for: template).toURL() {
+                        let activityVC = UIActivityViewController(activityItems: [url], applicationActivities: nil)
+                        if let scene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+                           let root = scene.keyWindow?.rootViewController {
+                            let presenter = root.presentedViewController ?? root
+                            activityVC.popoverPresentationController?.sourceView = presenter.view
+                            presenter.present(activityVC, animated: true)
+                        }
                     }
+                } label: {
+                    Label("Share", systemImage: "square.and.arrow.up")
+                        .font(.caption)
+                        .fontWeight(.medium)
+                        .foregroundStyle(Color.groveSage)
                 }
 
                 Button {
