@@ -115,6 +115,18 @@ struct ProgressView: View {
         }
     }
 
+    private func totalVolume(for workouts: [Workout]) -> Double {
+        var volume: Double = 0
+        for workout in workouts {
+            for log in workout.exercises where log.status == .completed {
+                for set in log.sets where set.isCompleted && set.bodyweightModifier != .assisted {
+                    volume += (set.weight ?? 0) * Double(set.reps ?? 0)
+                }
+            }
+        }
+        return volume
+    }
+
     // MARK: - Section 1: Weekly Summary
 
     private var weeklySummaryCard: some View {
@@ -134,14 +146,7 @@ struct ProgressView: View {
         let plannedCount = weekPlans.filter { !$0.isRestDay }.count
         let completedCount = weekWorkouts.count
 
-        let totalVolume: Double = weekWorkouts.reduce(0) { total, workout in
-            total + workout.exercises.reduce(0) { exTotal, log in
-                guard log.status == .completed else { return exTotal }
-                return exTotal + log.sets.filter { $0.isCompleted && $0.bodyweightModifier != .assisted }.reduce(0) { setTotal, set in
-                    setTotal + (set.weight ?? 0) * Double(set.reps ?? 0)
-                }
-            }
-        }
+        let weekVolume: Double = totalVolume(for: weekWorkouts)
 
         // Average workout duration
         let avgMinutes: Int = weekWorkouts.isEmpty ? 0 : {
@@ -151,27 +156,21 @@ struct ProgressView: View {
 
         // Last week volume for trend badge
         let lastMonday = calendar.date(byAdding: .day, value: -7, to: monday)!
-        let lastWeekVolume: Double = completedWorkouts.filter { workout in
+        let lastWeekWorkouts = completedWorkouts.filter { workout in
             guard let date = workout.completedAt else { return false }
             return date >= lastMonday && date < monday
-        }.reduce(0) { total, workout in
-            total + workout.exercises.reduce(0) { exTotal, log in
-                guard log.status == .completed else { return exTotal }
-                return exTotal + log.sets.filter { $0.isCompleted && $0.bodyweightModifier != .assisted }.reduce(0) { setTotal, set in
-                    setTotal + (set.weight ?? 0) * Double(set.reps ?? 0)
-                }
-            }
         }
+        let lastWeekVolume: Double = totalVolume(for: lastWeekWorkouts)
         let volumeTrendIcon: String = {
-            guard lastWeekVolume > 0, totalVolume > 0 else { return "" }
-            let change = ((totalVolume - lastWeekVolume) / lastWeekVolume) * 100
+            guard lastWeekVolume > 0, weekVolume > 0 else { return "" }
+            let change = ((weekVolume - lastWeekVolume) / lastWeekVolume) * 100
             if change > 5 { return "arrow.up.right" }
             else if change < -5 { return "arrow.down.right" }
             else { return "arrow.right" }
         }()
         let volumeTrendColor: Color = {
-            guard lastWeekVolume > 0, totalVolume > 0 else { return .secondary }
-            let change = ((totalVolume - lastWeekVolume) / lastWeekVolume) * 100
+            guard lastWeekVolume > 0, weekVolume > 0 else { return .secondary }
+            let change = ((weekVolume - lastWeekVolume) / lastWeekVolume) * 100
             if change > 5 { return Color.groveSage }
             else if change < -5 { return Color.groveMutedRust }
             else { return .secondary }
@@ -270,7 +269,7 @@ struct ProgressView: View {
                     Image(systemName: "scalemass.fill")
                         .font(.caption2)
                         .foregroundStyle(Color.groveTerracotta)
-                    Text("\(formatVolume(totalVolume)) \(unitLabel)")
+                    Text("\(formatVolume(weekVolume)) \(unitLabel)")
                         .font(.caption)
                         .fontWeight(.medium)
                         .foregroundStyle(Color.groveText)

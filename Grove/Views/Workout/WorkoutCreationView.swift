@@ -419,7 +419,7 @@ struct WorkoutCreationView: View {
             log.sets
                 .filter { $0.isCompleted }
                 .sorted { $0.setNumber < $1.setNumber }
-                .map { (weight: $0.weight, reps: $0.reps, modifier: $0.bodyweightModifier) }
+                .map { (weight: $0.weight, reps: $0.reps, modifier: $0.bodyweightModifier ?? .none) }
         }
     }
 

@@ -20,7 +20,12 @@ struct StreakPlantView: View {
         VStack(spacing: 12) {
             TimelineView(.animation(minimumInterval: 1.0 / 30, paused: false)) { timeline in
                 let elapsed = timeline.date.timeIntervalSinceReferenceDate
-                let swayOffset = CGFloat(sin(elapsed * 1.5) * 0.3) * size * 0.05
+                let primaryDrift = sin(elapsed * 0.5)
+                let secondaryGust = sin(elapsed * 1.1 + 0.9) * 0.42
+                let leafRustle = sin(elapsed * 2.4 + 1.8) * 0.16
+                let swayOffset = CGFloat(primaryDrift + secondaryGust + leafRustle) * size * 0.009
+                let bloomPulse = CGFloat(0.5 + 0.5 * sin(elapsed * 1.35 + 0.7))
+                let lightPhase = CGFloat(0.5 + 0.5 * sin(elapsed * 0.22 + 0.4))
 
                 Canvas { context, canvasSize in
                     PlantCanvasRenderer.draw(
@@ -29,10 +34,14 @@ struct StreakPlantView: View {
                         stage: stage,
                         isWilted: isWilted,
                         swayOffset: swayOffset,
-                        growthProgress: 1.0
+                        growthProgress: 1.0,
+                        elapsedTime: elapsed,
+                        bloomPulse: bloomPulse,
+                        lightPhase: lightPhase
                     )
                 }
                 .frame(width: size, height: size)
+                .drawingGroup()
             }
             .scaleEffect(stageUpScale * celebrationScale)
 

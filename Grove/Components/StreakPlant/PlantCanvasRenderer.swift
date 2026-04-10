@@ -29,6 +29,9 @@ struct PlantCanvasRenderer {
     static let seedGlow = Color.groveWarmSand.opacity(0.2)
     static let groveGlow = Color(red: 0.95, green: 0.88, blue: 0.55)
     static let birdColor = Color(red: 0.35, green: 0.30, blue: 0.28)
+    static let atmosphereWarm = Color(red: 0.98, green: 0.88, blue: 0.62)
+    static let atmosphereCool = Color(red: 0.80, green: 0.93, blue: 0.82)
+    static let moteColor = Color(red: 1.0, green: 0.98, blue: 0.88)
 
     // MARK: - Sway Physics
 
@@ -58,13 +61,27 @@ struct PlantCanvasRenderer {
         stage: PlantStage,
         isWilted: Bool,
         swayOffset: CGFloat,
-        growthProgress: CGFloat
+        growthProgress: CGFloat,
+        elapsedTime: TimeInterval,
+        bloomPulse: CGFloat,
+        lightPhase: CGFloat
     ) {
         let groundY = size.height * 0.85
 
         if stage.showsSoil {
             drawSoil(context: &context, size: size, groundY: groundY)
         }
+
+        drawAtmosphere(
+            context: &context,
+            size: size,
+            groundY: groundY,
+            stage: stage,
+            isWilted: isWilted,
+            elapsedTime: elapsedTime,
+            bloomPulse: bloomPulse,
+            lightPhase: lightPhase
+        )
 
         switch stage {
         case .seed:
@@ -88,6 +105,17 @@ struct PlantCanvasRenderer {
         case .groveTree:
             drawGroveTree(context: &context, size: size, groundY: groundY, isWilted: isWilted, swayOffset: swayOffset)
         }
+
+        drawFloatingMotes(
+            context: &context,
+            size: size,
+            groundY: groundY,
+            stage: stage,
+            isWilted: isWilted,
+            elapsedTime: elapsedTime,
+            lightPhase: lightPhase,
+            foreground: true
+        )
     }
 
     // MARK: - Soil
@@ -138,6 +166,144 @@ struct PlantCanvasRenderer {
         drawGrassTuft(context: &context, baseX: cx - soilW * 0.75, baseY: groundY - size.height * 0.018, height: size.height * 0.028, lean: -0.3)
         drawGrassTuft(context: &context, baseX: cx + soilW * 0.7, baseY: groundY - size.height * 0.014, height: size.height * 0.024, lean: 0.4)
         drawGrassTuft(context: &context, baseX: cx - soilW * 0.3, baseY: groundY - size.height * 0.038, height: size.height * 0.018, lean: -0.1)
+    }
+
+    // MARK: - Atmosphere
+
+    static func drawAtmosphere(
+        context: inout GraphicsContext,
+        size: CGSize,
+        groundY: CGFloat,
+        stage: PlantStage,
+        isWilted: Bool,
+        elapsedTime: TimeInterval,
+        bloomPulse: CGFloat,
+        lightPhase: CGFloat
+    ) {
+        guard !isWilted else { return }
+
+        let stageFactor = CGFloat(stage.rawValue) / CGFloat(max(PlantStage.allCases.count - 1, 1))
+        guard stageFactor > 0 else { return }
+
+        let time = CGFloat(elapsedTime)
+        let driftX = sin(time * 0.26 + stageFactor * 1.6) * size.width * 0.03
+        let canopyCenter = CGPoint(
+            x: size.width * 0.5 + driftX,
+            y: groundY - size.height * (0.12 + stageFactor * 0.28)
+        )
+
+        let warmRect = CGRect(
+            x: canopyCenter.x - size.width * (0.12 + stageFactor * 0.16),
+            y: canopyCenter.y - size.height * (0.08 + stageFactor * 0.10),
+            width: size.width * (0.24 + stageFactor * 0.32),
+            height: size.height * (0.16 + stageFactor * 0.20)
+        )
+        context.fill(
+            Path(ellipseIn: warmRect),
+            with: .radialGradient(
+                Gradient(colors: [
+                    atmosphereWarm.opacity(0.04 + 0.04 * stageFactor + 0.03 * bloomPulse),
+                    Color.clear
+                ]),
+                center: canopyCenter,
+                startRadius: 0,
+                endRadius: warmRect.width * 0.5
+            )
+        )
+
+        let coolCenter = CGPoint(
+            x: canopyCenter.x - size.width * 0.04,
+            y: canopyCenter.y - size.height * 0.03
+        )
+        let coolRect = CGRect(
+            x: coolCenter.x - size.width * (0.10 + stageFactor * 0.12),
+            y: coolCenter.y - size.height * (0.06 + stageFactor * 0.08),
+            width: size.width * (0.20 + stageFactor * 0.24),
+            height: size.height * (0.12 + stageFactor * 0.16)
+        )
+        context.fill(
+            Path(ellipseIn: coolRect),
+            with: .radialGradient(
+                Gradient(colors: [
+                    atmosphereCool.opacity(0.03 + 0.03 * stageFactor + 0.02 * lightPhase),
+                    Color.clear
+                ]),
+                center: coolCenter,
+                startRadius: 0,
+                endRadius: coolRect.width * 0.5
+            )
+        )
+
+        if stage >= .floweringBush {
+            let beamWidth = size.width * (0.22 + stageFactor * 0.08)
+            let beamHeight = size.height * (0.30 + stageFactor * 0.10)
+            let beamRect = CGRect(
+                x: canopyCenter.x - beamWidth * 0.5 + driftX * 0.2,
+                y: canopyCenter.y - beamHeight * 0.75,
+                width: beamWidth,
+                height: beamHeight
+            )
+            context.fill(
+                Path(ellipseIn: beamRect),
+                with: .linearGradient(
+                    Gradient(colors: [
+                        atmosphereWarm.opacity(0.015 + lightPhase * 0.025),
+                        Color.clear
+                    ]),
+                    startPoint: CGPoint(x: beamRect.midX, y: beamRect.minY),
+                    endPoint: CGPoint(x: beamRect.midX, y: beamRect.maxY)
+                )
+            )
+        }
+
+        drawFloatingMotes(
+            context: &context,
+            size: size,
+            groundY: groundY,
+            stage: stage,
+            isWilted: false,
+            elapsedTime: elapsedTime,
+            lightPhase: lightPhase,
+            foreground: false
+        )
+    }
+
+    static func drawFloatingMotes(
+        context: inout GraphicsContext,
+        size: CGSize,
+        groundY: CGFloat,
+        stage: PlantStage,
+        isWilted: Bool,
+        elapsedTime: TimeInterval,
+        lightPhase: CGFloat,
+        foreground: Bool
+    ) {
+        guard !isWilted, stage >= .seedling else { return }
+
+        let stageFactor = CGFloat(stage.rawValue) / CGFloat(max(PlantStage.allCases.count - 1, 1))
+        let time = CGFloat(elapsedTime)
+        let count = (foreground ? 4 : 6) + Int(stageFactor * 4)
+        let baseY = groundY - size.height * (0.06 + stageFactor * 0.18)
+        let travel = size.height * (0.12 + stageFactor * (foreground ? 0.22 : 0.16))
+        let xSpread = size.width * (0.08 + stageFactor * 0.12)
+
+        for i in 0..<count {
+            let seed = CGFloat(i) * 0.91 + (foreground ? 0.37 : 0)
+            let speed = (foreground ? 11.0 : 8.5) + CGFloat(i) * 1.35
+            let rise = (time * speed + seed * 23).truncatingRemainder(dividingBy: travel)
+            let orbit = sin(time * (0.42 + CGFloat(i) * 0.05) + seed * 2.3)
+            let drift = cos(time * (0.30 + CGFloat(i) * 0.04) + seed * 2.9)
+            let sideBias: CGFloat = i.isMultiple(of: 2) ? -1 : 1
+
+            let x = size.width * 0.5 + orbit * xSpread + drift * size.width * 0.018 + sideBias * size.width * 0.03 * stageFactor
+            let y = baseY - rise + drift * size.height * 0.012
+            let radius = size.width * (foreground ? 0.005 : 0.004) * (0.9 + CGFloat(i % 3) * 0.22)
+            let opacity = (foreground ? 0.05 : 0.035) + stageFactor * 0.03 + lightPhase * 0.02
+
+            let moteRect = CGRect(x: x - radius, y: y - radius, width: radius * 2, height: radius * 2)
+            let color = (i % 3 == 0 ? atmosphereWarm : moteColor).opacity(opacity)
+            context.fill(Path(ellipseIn: moteRect), with: .color(color))
+        }
     }
 
     // MARK: - Seed
@@ -482,9 +648,13 @@ struct PlantCanvasRenderer {
 
         // Flower
         if !isWilted {
-            drawFlower(context: &context,
-                center: CGPoint(x: b1End.x - size.width * 0.025, y: b1End.y - size.height * 0.012),
-                radius: size.width * 0.016)
+            let flowerCenter = CGPoint(x: b1End.x - size.width * 0.025, y: b1End.y - size.height * 0.012)
+            drawFlower(
+                context: &context,
+                center: flowerCenter,
+                radius: size.width * 0.016,
+                bloomPhase: ornamentPhase(anchor: flowerCenter, swayOffset: swayOffset)
+            )
         }
     }
 
@@ -632,7 +802,12 @@ struct PlantCanvasRenderer {
                 (CGPoint(x: trunkTop.x - size.width * 0.02, y: trunkTop.y + size.height * 0.018), 0.010),
             ]
             for (pos, rf) in fruitSpots {
-                drawFruit(context: &context, center: pos, radius: size.width * rf)
+                drawFruit(
+                    context: &context,
+                    center: pos,
+                    radius: size.width * rf,
+                    shimmer: ornamentPhase(anchor: pos, swayOffset: swayOffset, frequency: 0.1)
+                )
             }
         }
     }
@@ -807,7 +982,12 @@ struct PlantCanvasRenderer {
                     x: domeCenter.x + domeW * spot.dx + swayForHeight(0.5, swayOffset, scale: 1.5) * 0.3,
                     y: domeCenter.y + domeH * spot.dy
                 )
-                drawFlower(context: &context, center: center, radius: size.width * spot.r)
+                drawFlower(
+                    context: &context,
+                    center: center,
+                    radius: size.width * spot.r,
+                    bloomPhase: ornamentPhase(anchor: center, swayOffset: swayOffset)
+                )
             }
         }
     }
@@ -1029,7 +1209,12 @@ struct PlantCanvasRenderer {
                 (CGPoint(x: trunkTop.x + size.width * 0.02, y: trunkTop.y + size.height * 0.01), 0.009),
             ]
             for (pos, rf) in fruitSpots {
-                drawFruit(context: &context, center: pos, radius: size.width * rf)
+                drawFruit(
+                    context: &context,
+                    center: pos,
+                    radius: size.width * rf,
+                    shimmer: ornamentPhase(anchor: pos, swayOffset: swayOffset, frequency: 0.1)
+                )
             }
         }
     }
@@ -1220,7 +1405,12 @@ struct PlantCanvasRenderer {
                 (CGPoint(x: branchEnds[6].x, y: branchEnds[6].y - 2), 0.011),
             ]
             for (pos, rf) in flowerSpots {
-                drawFlower(context: &context, center: pos, radius: size.width * rf)
+                drawFlower(
+                    context: &context,
+                    center: pos,
+                    radius: size.width * rf,
+                    bloomPhase: ornamentPhase(anchor: pos, swayOffset: swayOffset)
+                )
             }
 
             // Fruits
@@ -1234,7 +1424,12 @@ struct PlantCanvasRenderer {
                 (CGPoint(x: branchEnds[7].x, y: branchEnds[7].y + 2), 0.012),
             ]
             for (pos, rf) in fruitSpots {
-                drawFruit(context: &context, center: pos, radius: size.width * rf)
+                drawFruit(
+                    context: &context,
+                    center: pos,
+                    radius: size.width * rf,
+                    shimmer: ornamentPhase(anchor: pos, swayOffset: swayOffset, frequency: 0.1)
+                )
             }
 
             // Bird silhouettes
@@ -1271,23 +1466,17 @@ struct PlantCanvasRenderer {
 
     // MARK: - Drawing Helpers
 
-    /// Teardrop-shaped leaf with gradient fill and shade variation
-    static func drawGradientLeaf(
-        context: inout GraphicsContext,
-        origin: CGPoint,
-        length: CGFloat,
-        angle: CGFloat,
-        width: CGFloat,
-        isWilted: Bool,
-        shade: Int
-    ) {
+    static func ornamentPhase(anchor: CGPoint, swayOffset: CGFloat, frequency: CGFloat = 0.18) -> CGFloat {
+        0.5 + 0.5 * sin(swayOffset * frequency + anchor.x * 0.08 + anchor.y * 0.05)
+    }
+
+    static func teardropPath(origin: CGPoint, length: CGFloat, angle: CGFloat, width: CGFloat) -> Path {
         let tip = CGPoint(
             x: origin.x + cos(angle) * length,
             y: origin.y + sin(angle) * length
         )
         let perpAngle = angle + .pi / 2
 
-        // Teardrop: widest at ~30% from base, tapering to point
         let widePoint = CGPoint(
             x: origin.x + cos(angle) * length * 0.32,
             y: origin.y + sin(angle) * length * 0.32
@@ -1307,6 +1496,24 @@ struct PlantCanvasRenderer {
         path.addCurve(to: tip, control1: c1, control2: c3)
         path.addCurve(to: origin, control1: c4, control2: c2)
         path.closeSubpath()
+        return path
+    }
+
+    /// Teardrop-shaped leaf with gradient fill and shade variation
+    static func drawGradientLeaf(
+        context: inout GraphicsContext,
+        origin: CGPoint,
+        length: CGFloat,
+        angle: CGFloat,
+        width: CGFloat,
+        isWilted: Bool,
+        shade: Int
+    ) {
+        let tip = CGPoint(
+            x: origin.x + cos(angle) * length,
+            y: origin.y + sin(angle) * length
+        )
+        let path = teardropPath(origin: origin, length: length, angle: angle, width: width)
 
         if isWilted {
             context.fill(path, with: .linearGradient(
@@ -1324,6 +1531,9 @@ struct PlantCanvasRenderer {
                 Gradient(colors: colors), startPoint: origin, endPoint: tip
             ))
         }
+
+        let edgeColor = isWilted ? wiltedTip.opacity(0.14) : leafDark.opacity(0.12)
+        context.stroke(path, with: .color(edgeColor), lineWidth: max(0.45, width * 0.12))
     }
 
     /// Thin center vein on a leaf
@@ -1487,6 +1697,11 @@ struct PlantCanvasRenderer {
             highlightPath.move(to: leftPts[0])
             for pt in leftPts.dropFirst() { highlightPath.addLine(to: pt) }
             context.stroke(highlightPath, with: .color(trunkLight.opacity(0.2)), lineWidth: 0.8)
+
+            var shadowPath = Path()
+            shadowPath.move(to: rightPts[0])
+            for pt in rightPts.dropFirst() { shadowPath.addLine(to: pt) }
+            context.stroke(shadowPath, with: .color(trunkDark.opacity(0.16)), lineWidth: 0.75)
         }
     }
 
@@ -1555,34 +1770,108 @@ struct PlantCanvasRenderer {
         context.stroke(path, with: .color(color), lineWidth: width)
     }
 
-    /// Flower with 5 petals and center dot
-    static func drawFlower(context: inout GraphicsContext, center: CGPoint, radius: CGFloat) {
-        let petalR = radius * 0.55
-        for i in 0..<5 {
-            let angle = CGFloat(i) * (.pi * 2 / 5) - .pi / 2
-            let px = center.x + cos(angle) * radius * 0.7
-            let py = center.y + sin(angle) * radius * 0.7
-            let rect = CGRect(x: px - petalR, y: py - petalR, width: petalR * 2, height: petalR * 2)
-            context.fill(Path(ellipseIn: rect), with: .color(flowerPetal))
+    /// Layered flower with teardrop petals and a soft glow.
+    static func drawFlower(
+        context: inout GraphicsContext,
+        center: CGPoint,
+        radius: CGFloat,
+        bloomPhase: CGFloat = 0
+    ) {
+        let pulse = 1 + bloomPhase * 0.12
+        let glowRadius = radius * (2.2 + bloomPhase * 0.35)
+        let glowRect = CGRect(x: center.x - glowRadius, y: center.y - glowRadius, width: glowRadius * 2, height: glowRadius * 2)
+        context.fill(
+            Path(ellipseIn: glowRect),
+            with: .radialGradient(
+                Gradient(colors: [
+                    atmosphereWarm.opacity(0.08 + bloomPhase * 0.05),
+                    Color.clear
+                ]),
+                center: center,
+                startRadius: 0,
+                endRadius: glowRadius
+            )
+        )
+
+        let petalCount = 6
+        let petalLength = radius * 1.08 * pulse
+        let petalWidth = radius * 0.34
+
+        for i in 0..<petalCount {
+            let angle = CGFloat(i) * (.pi * 2 / CGFloat(petalCount)) - .pi / 2 + bloomPhase * 0.05
+            let tip = CGPoint(
+                x: center.x + cos(angle) * petalLength,
+                y: center.y + sin(angle) * petalLength
+            )
+            let petal = teardropPath(origin: center, length: petalLength, angle: angle, width: petalWidth)
+            context.fill(
+                petal,
+                with: .linearGradient(
+                    Gradient(colors: [
+                        flowerPetal.opacity(0.95),
+                        Color.white.opacity(0.7)
+                    ]),
+                    startPoint: center,
+                    endPoint: tip
+                )
+            )
+            context.stroke(petal, with: .color(flowerPetal.opacity(0.2)), lineWidth: max(0.25, radius * 0.08))
         }
-        // Center
-        let cr = radius * 0.35
-        let centerRect = CGRect(x: center.x - cr, y: center.y - cr, width: cr * 2, height: cr * 2)
-        context.fill(Path(ellipseIn: centerRect), with: .color(flowerCenter))
+
+        let coreRadius = radius * (0.36 + bloomPhase * 0.03)
+        let coreRect = CGRect(x: center.x - coreRadius, y: center.y - coreRadius, width: coreRadius * 2, height: coreRadius * 2)
+        context.fill(
+            Path(ellipseIn: coreRect),
+            with: .radialGradient(
+                Gradient(colors: [Color.white.opacity(0.25), flowerCenter]),
+                center: CGPoint(x: center.x - coreRadius * 0.15, y: center.y - coreRadius * 0.2),
+                startRadius: 0,
+                endRadius: coreRadius * 1.2
+            )
+        )
+
+        let highlightRadius = coreRadius * 0.32
+        let highlightRect = CGRect(
+            x: center.x - highlightRadius * 1.1,
+            y: center.y - highlightRadius * 1.4,
+            width: highlightRadius * 1.1,
+            height: highlightRadius * 0.9
+        )
+        context.fill(Path(ellipseIn: highlightRect), with: .color(Color.white.opacity(0.22)))
     }
 
-    /// A fruit with highlight
-    static func drawFruit(context: inout GraphicsContext, center: CGPoint, radius: CGFloat) {
+    /// A fruit with highlight and a tiny stem.
+    static func drawFruit(context: inout GraphicsContext, center: CGPoint, radius: CGFloat, shimmer: CGFloat = 0) {
+        let shadowRect = CGRect(
+            x: center.x - radius * 0.85,
+            y: center.y + radius * 0.45,
+            width: radius * 1.7,
+            height: radius * 0.8
+        )
+        context.fill(Path(ellipseIn: shadowRect), with: .color(Color.black.opacity(0.08)))
+
+        let stemTop = CGPoint(x: center.x + radius * 0.08, y: center.y - radius * 1.15)
+        var stem = Path()
+        stem.move(to: stemTop)
+        stem.addQuadCurve(
+            to: CGPoint(x: center.x, y: center.y - radius * 0.35),
+            control: CGPoint(x: center.x + radius * 0.35, y: center.y - radius * 0.85)
+        )
+        context.stroke(stem, with: .color(trunkDark.opacity(0.55)), lineWidth: max(0.45, radius * 0.22))
+
         let rect = CGRect(x: center.x - radius, y: center.y - radius, width: radius * 2, height: radius * 2)
         context.fill(Path(ellipseIn: rect), with: .linearGradient(
-            Gradient(colors: [fruitColor, fruitHighlight]),
+            Gradient(colors: [
+                fruitColor,
+                fruitHighlight.opacity(0.92 + shimmer * 0.08)
+            ]),
             startPoint: CGPoint(x: center.x - radius, y: center.y - radius),
             endPoint: CGPoint(x: center.x + radius, y: center.y + radius)
         ))
         // Tiny highlight
         let hr = radius * 0.3
-        let hlRect = CGRect(x: center.x - radius * 0.3, y: center.y - radius * 0.5, width: hr, height: hr)
-        context.fill(Path(ellipseIn: hlRect), with: .color(Color.white.opacity(0.3)))
+        let hlRect = CGRect(x: center.x - radius * 0.28, y: center.y - radius * 0.52, width: hr, height: hr)
+        context.fill(Path(ellipseIn: hlRect), with: .color(Color.white.opacity(0.28 + shimmer * 0.08)))
     }
 
     /// Grass tufts — 3 blades with lean direction

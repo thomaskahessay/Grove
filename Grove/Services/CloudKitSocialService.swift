@@ -154,6 +154,7 @@ class CloudKitSocialService {
     var interactionsByWorkout: [String: InteractionSummary] = [:]
     var rootConnections: [RootConnection] = []
     var availableSunlightCount: Int = 0
+    private var usedSunlightSources: Set<String> = []
 
     // Track previous root levels for milestone detection
     private var previousRootLevels: [String: RootLevel] = [:]
@@ -1024,16 +1025,11 @@ class CloudKitSocialService {
     func sendSunlight(to workoutRecordName: String, recipientID: String, fromWorkoutRecordName: String) async -> Bool {
         guard let myAppleUserID else { return false }
 
-        // Check if this sunlight source was already used
-        do {
-            let pred = NSPredicate(format: "type == %@ AND senderID == %@ AND senderWorkoutRecordName == %@",
-                                   "sunlight", myAppleUserID, fromWorkoutRecordName)
-            let query = CKQuery(recordType: RecordType.interaction, predicate: pred)
-            let (existing, _) = try await publicDB.records(matching: query, resultsLimit: 1)
-            if !existing.isEmpty { return false } // Already used
-        } catch {
-            // Schema may not exist yet — proceed
-        }
+        // Check local set first (prevents rapid-tap duplicates)
+        guard !usedSunlightSources.contains(fromWorkoutRecordName) else { return false }
+
+        // Mark as used immediately to block concurrent sends
+        usedSunlightSources.insert(fromWorkoutRecordName)
 
         // Optimistic local update
         var summary = interactionsByWorkout[workoutRecordName] ?? .empty(for: workoutRecordName)
@@ -1056,6 +1052,7 @@ class CloudKitSocialService {
             return true
         } catch {
             // Revert optimistic update
+            usedSunlightSources.remove(fromWorkoutRecordName)
             summary.sunlightCount -= 1
             summary.iSunlit = false
             summary.sunlighters.removeAll { $0.senderID == myAppleUserID }
@@ -1138,10 +1135,11 @@ class CloudKitSocialService {
         }
 
         // Available = my shared workouts minus those already used as sunlight source
+        usedSunlightSources = usedWorkoutNames
         availableSunlightCount = myWorkoutRecordNames.filter { !usedWorkoutNames.contains($0) }.count
     }
 
-    /// Get the record name of the user's most recent shared workout (for sunlight sending)
+    /// Get the record name of the user's most recent unused shared workout (for sunlight sending)
     func myLatestSharedWorkoutRecordName() async -> String? {
         guard let myAppleUserID else { return nil }
 
@@ -1149,11 +1147,16 @@ class CloudKitSocialService {
         let query = CKQuery(recordType: RecordType.sharedWorkout, predicate: pred)
         query.sortDescriptors = [NSSortDescriptor(key: "completedAt", ascending: false)]
 
-        guard let (results, _) = try? await publicDB.records(matching: query, resultsLimit: 1),
-              let (_, result) = results.first,
-              let record = try? result.get() else { return nil }
+        guard let (results, _) = try? await publicDB.records(matching: query, resultsLimit: 50) else { return nil }
 
-        return record.recordID.recordName
+        for (_, result) in results {
+            guard let record = try? result.get() else { continue }
+            let name = record.recordID.recordName
+            if !usedSunlightSources.contains(name) {
+                return name
+            }
+        }
+        return nil
     }
 
     // MARK: - Root Connections

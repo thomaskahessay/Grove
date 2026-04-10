@@ -668,7 +668,7 @@ struct ExerciseFullScreenCard: View {
 
             // Initialize bodyweight mode from existing sets
             if isBodyweightExercise {
-                if let existingMode = sortedSets.first(where: { $0.bodyweightModifier != .none })?.bodyweightModifier {
+                if let existingMode = sortedSets.first(where: { $0.bodyweightModifier != nil && $0.bodyweightModifier != BodyweightModifier.none })?.bodyweightModifier {
                     bodyweightMode = existingMode
                 }
             }
@@ -808,9 +808,9 @@ struct SetRowView: View {
     private var nudgeHint: String {
         if let w = suggestedWeight {
             let weightStr = w.truncatingRemainder(dividingBy: 1) == 0 ? String(Int(w)) : String(format: "%.1f", w)
-            return "try \(weightStr)?"
+            return "Try \(weightStr)?"
         } else if let r = suggestedReps {
-            return "try \(r)?"
+            return "Try \(r)?"
         }
         return ""
     }
@@ -1032,12 +1032,16 @@ struct SetRowView: View {
                         .foregroundStyle(.secondary.opacity(0.7))
                 }
                 if hasNudge {
-                    Text(valuesChangedFromLastSession ? " — " : "")
-                        .font(.caption2)
-                        .foregroundStyle(.secondary.opacity(0.7))
-                    + Text(nudgeHint)
-                        .font(.caption2)
-                        .foregroundStyle(Color.groveSage)
+                    HStack(spacing: 0) {
+                        if valuesChangedFromLastSession {
+                            Text(" — ")
+                                .font(.caption2)
+                                .foregroundStyle(.secondary.opacity(0.7))
+                        }
+                        Text(nudgeHint)
+                            .font(.caption2)
+                            .foregroundStyle(Color.groveSage)
+                    }
                 }
                 Spacer()
             }
