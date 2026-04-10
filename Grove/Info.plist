@@ -10,6 +10,17 @@
 	<array>
 		<string>fetch</string>
 	</array>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>com.grove.template</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>grove</string>
+			</array>
+		</dict>
+	</array>
 	<key>NSHealthShareUsageDescription</key>
 	<string>Grove reads your workout data to track heart rate and calories during your strength training sessions.</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>

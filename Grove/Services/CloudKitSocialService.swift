@@ -49,6 +49,7 @@ struct SharedWorkoutItem: Identifiable, Sendable, Hashable {
     let friendName: String
     let friendProfileImageData: Data?
     let workoutName: String
+    let templateCategory: String?  // TemplateCategory.rawValue, e.g. "Push", "Pull", "Legs"
     let duration: TimeInterval
     let exerciseCount: Int
     let totalSets: Int
@@ -469,6 +470,7 @@ class CloudKitSocialService {
                     friendName: isOwnPost ? "You" : (friend?.displayName ?? "Friend"),
                     friendProfileImageData: isOwnPost ? nil : friend?.profileImageData,
                     workoutName: record["workoutName"] as? String ?? "Workout",
+                    templateCategory: record["templateCategory"] as? String,
                     duration: record["duration"] as? TimeInterval ?? 0,
                     exerciseCount: Int(record["exerciseCount"] as? Int64 ?? 0),
                     totalSets: Int(record["totalSets"] as? Int64 ?? 0),
@@ -509,6 +511,7 @@ class CloudKitSocialService {
                     friendName: "You",
                     friendProfileImageData: nil,
                     workoutName: record["workoutName"] as? String ?? "Workout",
+                    templateCategory: record["templateCategory"] as? String,
                     duration: record["duration"] as? TimeInterval ?? 0,
                     exerciseCount: Int(record["exerciseCount"] as? Int64 ?? 0),
                     totalSets: Int(record["totalSets"] as? Int64 ?? 0),
@@ -601,6 +604,9 @@ class CloudKitSocialService {
             record["completedAt"] = (workout.completedAt ?? Date()) as CKRecordValue
             record["shareExercises"] = Int64(workout.shareExercises ? 1 : 0) as CKRecordValue
             record["shareWeights"] = Int64(workout.shareWeights ? 1 : 0) as CKRecordValue
+            if let category = workout.templateUsed?.category.rawValue {
+                record["templateCategory"] = category as CKRecordValue
+            }
 
             // PR data
             let sharePRs = workout.sharePRs && !prExerciseNames.isEmpty
@@ -682,6 +688,7 @@ class CloudKitSocialService {
                         friendName: profile.displayName,
                         friendProfileImageData: profile.profileImageData,
                         workoutName: record["workoutName"] as? String ?? "Workout",
+                        templateCategory: record["templateCategory"] as? String,
                         duration: record["duration"] as? TimeInterval ?? 0,
                         exerciseCount: Int(record["exerciseCount"] as? Int64 ?? 0),
                         totalSets: Int(record["totalSets"] as? Int64 ?? 0),
@@ -1280,7 +1287,6 @@ class CloudKitSocialService {
 
         let testID = "debug_friend_\(UUID().uuidString.prefix(8))"
         let names = ["Alex", "Jordan", "Sam", "Riley", "Morgan"]
-        let workoutNames = ["Push Day", "Pull Day", "Leg Day", "Upper Body", "Full Body"]
         let name = names.randomElement()!
 
         do {
@@ -1305,17 +1311,19 @@ class CloudKitSocialService {
             try await publicDB.save(link)
 
             // Create a couple shared workouts with exercise data
-            let exerciseNames = [
-                ["Bench Press", "Incline DB Press", "Cable Fly", "Tricep Pushdown", "Overhead Tricep"],
-                ["Barbell Row", "Pull-ups", "Cable Row", "Face Pulls", "Barbell Curl"],
-                ["Squat", "Romanian Deadlift", "Leg Press", "Leg Curl", "Calf Raises"],
-                ["Overhead Press", "Lateral Raises", "Front Raises", "Rear Delt Fly"],
-                ["Deadlift", "Bench Press", "Barbell Row", "Squat", "Pull-ups", "Dips"]
+            let workoutData: [(name: String, category: String, exercises: [String])] = [
+                ("Push Day", "Push", ["Barbell Bench Press", "Incline Dumbbell Press", "Cable Crossover", "Tricep Pushdown", "Overhead Tricep Extension"]),
+                ("Pull Day", "Pull", ["Barbell Row", "Pull-Ups", "Seated Cable Row", "Face Pulls", "Barbell Curl"]),
+                ("Leg Day", "Legs", ["Barbell Squat", "Romanian Deadlift", "Leg Press", "Leg Curl", "Calf Raises"]),
+                ("Shoulders", "Shoulders", ["Overhead Press", "Lateral Raises", "Front Raises", "Rear Delt Flyes"]),
+                ("Full Body", "Full Body", ["Deadlift", "Barbell Bench Press", "Barbell Row", "Barbell Squat", "Pull-Ups", "Tricep Dips"])
             ]
             for i in 0..<2 {
+                let picked = workoutData.randomElement()!
                 let workout = CKRecord(recordType: RecordType.sharedWorkout)
                 workout["userID"] = testID as CKRecordValue
-                workout["workoutName"] = workoutNames.randomElement()! as CKRecordValue
+                workout["workoutName"] = picked.name as CKRecordValue
+                workout["templateCategory"] = picked.category as CKRecordValue
                 workout["duration"] = Double.random(in: 1800...4200) as CKRecordValue
                 let exCount = Int.random(in: 4...6)
                 workout["exerciseCount"] = Int64(exCount) as CKRecordValue
@@ -1325,7 +1333,7 @@ class CloudKitSocialService {
                 workout["shareWeights"] = Int64(1) as CKRecordValue
 
                 // Build exercises JSON with weights
-                let selectedExercises = Array(exerciseNames.randomElement()!.prefix(exCount))
+                let selectedExercises = Array(picked.exercises.prefix(exCount))
                 // Randomly mark some exercises as PRs (first workout gets PRs, second doesn't)
                 let hasPRs = i == 0 && Bool.random()
                 var prNames: [String] = []
@@ -1479,6 +1487,7 @@ class CloudKitSocialService {
                     friendName: friend?.displayName ?? "Friend",
                     friendProfileImageData: friend?.profileImageData,
                     workoutName: record["workoutName"] as? String ?? "Workout",
+                    templateCategory: record["templateCategory"] as? String,
                     duration: record["duration"] as? TimeInterval ?? 0,
                     exerciseCount: Int(record["exerciseCount"] as? Int64 ?? 0),
                     totalSets: Int(record["totalSets"] as? Int64 ?? 0),

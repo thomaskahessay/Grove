@@ -24,29 +24,29 @@ enum SocialPreviewData {
         SharedWorkoutItem(
             id: "workout_1", userID: "user_sarah",
             friendName: "Sarah", friendProfileImageData: nil,
-            workoutName: "Push Day", duration: 3120,
+            workoutName: "Push Day", templateCategory: "Push", duration: 3120,
             exerciseCount: 5, totalSets: 15,
             completedAt: date(hoursAgo: 2),
             exercisesJSON: exercisesJSON([
-                ("Bench Press", 185, 8, 3, true),
-                ("Incline DB Press", 60, 10, 3, false),
-                ("Cable Fly", 30, 12, 3, false),
+                ("Barbell Bench Press", 185, 8, 3, true),
+                ("Incline Dumbbell Press", 60, 10, 3, false),
+                ("Cable Crossover", 30, 12, 3, false),
                 ("Tricep Pushdown", 55, 10, 3, false),
-                ("Overhead Extension", 40, 12, 3, false),
+                ("Overhead Tricep Extension", 40, 12, 3, false),
             ]),
-            prCount: 1, prExerciseNames: ["Bench Press"]
+            prCount: 1, prExerciseNames: ["Barbell Bench Press"]
         ),
         // Mike - Pull Day (4h ago)
         SharedWorkoutItem(
             id: "workout_2", userID: "user_mike",
             friendName: "Mike", friendProfileImageData: nil,
-            workoutName: "Pull Day", duration: 3600,
+            workoutName: "Pull Day", templateCategory: "Pull", duration: 3600,
             exerciseCount: 5, totalSets: 15,
             completedAt: date(hoursAgo: 4),
             exercisesJSON: exercisesJSON([
                 ("Barbell Row", 155, 8, 3, false),
-                ("Pull-ups", 0, 10, 3, false),
-                ("Cable Row", 120, 10, 3, false),
+                ("Pull-Ups", 0, 10, 3, false),
+                ("Seated Cable Row", 120, 10, 3, false),
                 ("Face Pulls", 40, 15, 3, false),
                 ("Barbell Curl", 75, 10, 3, false),
             ]),
@@ -56,31 +56,31 @@ enum SocialPreviewData {
         SharedWorkoutItem(
             id: "workout_3", userID: "user_alex",
             friendName: "Alex", friendProfileImageData: nil,
-            workoutName: "Leg Day", duration: 4200,
+            workoutName: "Leg Day", templateCategory: "Legs", duration: 4200,
             exerciseCount: 5, totalSets: 15,
             completedAt: date(hoursAgo: 6),
             exercisesJSON: exercisesJSON([
-                ("Squat", 275, 5, 4, true),
+                ("Barbell Squat", 275, 5, 4, true),
                 ("Romanian Deadlift", 225, 8, 3, true),
                 ("Leg Press", 400, 10, 3, false),
                 ("Leg Curl", 90, 12, 3, false),
                 ("Calf Raises", 135, 15, 3, false),
             ]),
-            prCount: 2, prExerciseNames: ["Squat", "Romanian Deadlift"]
+            prCount: 2, prExerciseNames: ["Barbell Squat", "Romanian Deadlift"]
         ),
         // Jordan - Upper Body (yesterday)
         SharedWorkoutItem(
             id: "workout_4", userID: "user_jordan",
             friendName: "Jordan", friendProfileImageData: nil,
-            workoutName: "Upper Body", duration: 2700,
+            workoutName: "Upper Body", templateCategory: "Upper", duration: 2700,
             exerciseCount: 6, totalSets: 18,
             completedAt: date(hoursAgo: 26),
             exercisesJSON: exercisesJSON([
                 ("Overhead Press", 115, 8, 3, false),
                 ("Lateral Raises", 20, 12, 3, false),
-                ("Bench Press", 165, 8, 3, false),
+                ("Barbell Bench Press", 165, 8, 3, false),
                 ("Barbell Row", 135, 8, 3, false),
-                ("Dips", 0, 12, 3, false),
+                ("Tricep Dips", 0, 12, 3, false),
                 ("Barbell Curl", 65, 10, 3, false),
             ]),
             prCount: 0, prExerciseNames: []
@@ -89,14 +89,14 @@ enum SocialPreviewData {
         SharedWorkoutItem(
             id: "workout_5", userID: "user_riley",
             friendName: "Riley", friendProfileImageData: nil,
-            workoutName: "Full Body", duration: 3900,
+            workoutName: "Full Body", templateCategory: "Full Body", duration: 3900,
             exerciseCount: 6, totalSets: 18,
             completedAt: date(hoursAgo: 28),
             exercisesJSON: exercisesJSON([
                 ("Deadlift", 315, 3, 5, true),
-                ("Bench Press", 155, 8, 3, false),
-                ("Squat", 185, 8, 3, false),
-                ("Pull-ups", 0, 8, 3, false),
+                ("Barbell Bench Press", 155, 8, 3, false),
+                ("Barbell Squat", 185, 8, 3, false),
+                ("Pull-Ups", 0, 8, 3, false),
                 ("Overhead Press", 95, 8, 3, false),
                 ("Barbell Row", 115, 8, 3, false),
             ]),
@@ -106,13 +106,13 @@ enum SocialPreviewData {
         SharedWorkoutItem(
             id: "workout_6", userID: "user_casey",
             friendName: "Casey", friendProfileImageData: nil,
-            workoutName: "Push Day", duration: 2400,
+            workoutName: "Push Day", templateCategory: "Push", duration: 2400,
             exerciseCount: 4, totalSets: 12,
             completedAt: date(hoursAgo: 50),
             exercisesJSON: exercisesJSON([
-                ("Bench Press", 135, 10, 3, false),
-                ("Incline DB Press", 45, 10, 3, false),
-                ("Cable Fly", 25, 12, 3, false),
+                ("Barbell Bench Press", 135, 10, 3, false),
+                ("Incline Dumbbell Press", 45, 10, 3, false),
+                ("Cable Crossover", 25, 12, 3, false),
                 ("Tricep Pushdown", 45, 12, 3, false),
             ]),
             prCount: 0, prExerciseNames: []
@@ -121,14 +121,14 @@ enum SocialPreviewData {
         SharedWorkoutItem(
             id: "workout_7", userID: "user_taylor",
             friendName: "Taylor", friendProfileImageData: nil,
-            workoutName: "Shoulders", duration: 2100,
+            workoutName: "Shoulders", templateCategory: "Shoulders", duration: 2100,
             exerciseCount: 4, totalSets: 12,
             completedAt: date(hoursAgo: 52),
             exercisesJSON: exercisesJSON([
                 ("Overhead Press", 105, 8, 3, false),
                 ("Lateral Raises", 25, 12, 3, false),
                 ("Front Raises", 20, 12, 3, false),
-                ("Rear Delt Fly", 15, 15, 3, false),
+                ("Rear Delt Flyes", 15, 15, 3, false),
             ]),
             prCount: 0, prExerciseNames: []
         ),

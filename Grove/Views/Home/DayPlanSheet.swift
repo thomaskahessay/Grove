@@ -52,6 +52,20 @@ struct DayPlanSheet: View {
         }
     }
 
+    private func sharedTemplate(for template: WorkoutTemplate) -> SharedTemplate {
+        let exerciseNames = template.exerciseIDs.compactMap { id in
+            allExercises.first { $0.id == id }?.name
+        }
+        return SharedTemplate(
+            name: template.name,
+            category: template.category.rawValue,
+            exerciseNames: exerciseNames,
+            defaultSets: template.defaultSets,
+            defaultReps: template.defaultReps,
+            sharedBy: nil
+        )
+    }
+
     var body: some View {
         NavigationStack {
             ScrollView {
@@ -222,6 +236,15 @@ struct DayPlanSheet: View {
                     .foregroundStyle(.secondary)
 
                 Spacer()
+
+                if let shareURL = sharedTemplate(for: template).toURL() {
+                    ShareLink(item: shareURL) {
+                        Label("Share", systemImage: "square.and.arrow.up")
+                            .font(.caption)
+                            .fontWeight(.medium)
+                            .foregroundStyle(Color.groveSage)
+                    }
+                }
 
                 Button {
                     editingTemplate = template

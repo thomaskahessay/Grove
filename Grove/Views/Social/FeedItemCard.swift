@@ -5,6 +5,7 @@ struct FeedItemCard: View {
     let interactions: InteractionSummary?
     let showSunlight: Bool
     var isOwnPost: Bool = false
+    var onUseTemplate: (() -> Void)? = nil
     @Binding var triggerSeedAnimation: Bool
     let onProfileTap: () -> Void
     let onWater: () -> Void
@@ -59,10 +60,27 @@ struct FeedItemCard: View {
                 prBanner
             }
 
-            // Workout title
-            Text(item.workoutName)
-                .font(.headline)
-                .foregroundStyle(Color.groveText)
+            // Workout title + category tag
+            HStack(spacing: 8) {
+                Text(item.workoutName)
+                    .font(.headline)
+                    .foregroundStyle(Color.groveText)
+
+                if let category = item.templateCategory,
+                   let tc = TemplateCategory(rawValue: category) {
+                    HStack(spacing: 3) {
+                        Image(systemName: tc.icon)
+                            .font(.system(size: 9))
+                        Text(category)
+                            .font(.system(size: 10, weight: .medium))
+                    }
+                    .foregroundStyle(Color.groveSage)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 3)
+                    .background(Color.groveSage.opacity(0.12))
+                    .clipShape(Capsule())
+                }
+            }
 
             // Stats row
             statsRow
@@ -73,6 +91,27 @@ struct FeedItemCard: View {
             // Exercise list (if available)
             if !exercises.isEmpty {
                 exerciseList
+
+                // "Use as Template" button
+                if !isOwnPost, let onUseTemplate {
+                    Button {
+                        onUseTemplate()
+                    } label: {
+                        HStack(spacing: 6) {
+                            Image(systemName: "doc.badge.plus")
+                                .font(.caption)
+                            Text("Use as Template")
+                                .font(.caption)
+                                .fontWeight(.medium)
+                        }
+                        .foregroundStyle(Color.groveSage)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 8)
+                        .background(Color.groveSage.opacity(0.1))
+                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                    }
+                    .buttonStyle(.plain)
+                }
             }
 
             // Interaction bar — hidden on own posts

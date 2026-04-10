@@ -9,6 +9,7 @@ struct SocialFeedView: View {
     @State private var codeCopied = false
     @State private var selectedSeedItem: SharedWorkoutItem?
     @State private var selectedDetailItem: SharedWorkoutItem?
+    @State private var templateImportItem: SharedWorkoutItem?
     @State private var feedMode: FeedMode = .canopy
     @State private var selectedConnection: RootConnection?
     @State private var selectedProfileUserID: String?
@@ -58,12 +59,12 @@ struct SocialFeedView: View {
                         }
 
                         // Feed or empty state
-                        if socialService.friends.isEmpty {
+                        if socialService.friends.isEmpty && socialService.feedItems.isEmpty {
                             noFriendsView
                         } else if socialService.feedItems.isEmpty && !socialService.isLoading {
                             noActivityView
                         } else {
-                            // Grove network view
+                            // Grove network view (only when friends exist)
                             if !socialService.friends.isEmpty {
                                 GroveNetworkView(
                                     connections: socialService.rootConnections,
@@ -85,6 +86,9 @@ struct SocialFeedView: View {
                                     CanopySoilToggle(mode: $feedMode)
                                     Spacer()
                                 }
+                            } else {
+                                // Compact banner when no friends but user has own posts
+                                addFriendsBanner
                             }
 
                             feedList
@@ -191,6 +195,9 @@ struct SocialFeedView: View {
                 InteractionBreakdownSheet(connection: connection)
                     .presentationDetents([.medium])
             }
+            .sheet(item: $templateImportItem) { item in
+                TemplateImportSheet(sharedTemplate: SharedTemplate.from(feedItem: item))
+            }
         }
     }
 
@@ -214,6 +221,9 @@ struct SocialFeedView: View {
                     interactions: socialService.interactionsByWorkout[item.id],
                     showSunlight: socialService.availableSunlightCount > 0,
                     isOwnPost: item.userID == socialService.currentUserID,
+                    onUseTemplate: item.exercisesJSON != nil && item.userID != socialService.currentUserID ? {
+                        templateImportItem = item
+                    } : nil,
                     triggerSeedAnimation: .init(
                         get: { seedAnimationWorkoutID == item.id },
                         set: { if !$0 { seedAnimationWorkoutID = nil } }
@@ -269,6 +279,36 @@ struct SocialFeedView: View {
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 60)
+    }
+
+    private var addFriendsBanner: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "person.2")
+                .font(.subheadline)
+                .foregroundStyle(Color.groveSage)
+
+            Text("Add friends to see their workouts here")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+
+            Spacer()
+
+            Button {
+                showingAddFriend = true
+            } label: {
+                Text("Add")
+                    .font(.caption)
+                    .fontWeight(.semibold)
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 6)
+                    .background(Color.groveSage)
+                    .clipShape(Capsule())
+            }
+        }
+        .padding(12)
+        .background(Color.groveCardBackground)
+        .clipShape(RoundedRectangle(cornerRadius: 12))
     }
 
     private var noFriendsView: some View {

@@ -43,6 +43,7 @@ struct GroveApp: App {
 
     @State private var workoutSessionManager = WorkoutSessionManager()
     @State private var socialService = CloudKitSocialService()
+    @State private var pendingTemplate: SharedTemplate?
     @Environment(\.scenePhase) private var scenePhase
 
     private static let feedCheckTaskID = "com.grove.feedCheck"
@@ -52,6 +53,14 @@ struct GroveApp: App {
             ContentView()
                 .environment(workoutSessionManager)
                 .environment(socialService)
+                .onOpenURL { url in
+                    if let template = SharedTemplate.from(url: url) {
+                        pendingTemplate = template
+                    }
+                }
+                .sheet(item: $pendingTemplate) { template in
+                    TemplateImportSheet(sharedTemplate: template)
+                }
         }
         .modelContainer(modelContainer)
         .onChange(of: scenePhase) { _, newPhase in
