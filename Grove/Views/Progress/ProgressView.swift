@@ -18,6 +18,7 @@ struct ProgressView: View {
     @State private var searchText = ""
     @State private var selectedExerciseForDetail: Exercise?
     @State private var achievementProgress: [AchievementService.AchievementProgress] = []
+    @State private var showingCreatineCalendar = false
 
     private var currentUser: User? { users.first }
 
@@ -80,6 +81,7 @@ struct ProgressView: View {
                         consistencySection
                         if currentUser?.trackCreatine == true {
                             creatineConsistencyCard
+                                .onTapGesture { showingCreatineCalendar = true }
                         }
                         programSection
                         insightsCard
@@ -109,6 +111,12 @@ struct ProgressView: View {
                     searchText: $searchText
                 )
                 .presentationDetents([.medium, .large])
+            }
+            .sheet(isPresented: $showingCreatineCalendar) {
+                if let user = currentUser {
+                    CreatineCalendarSheet(user: user)
+                        .presentationDetents([.medium, .large])
+                }
             }
             .onAppear { loadAchievements() }
             .onChange(of: currentUser?.achievements.count) { _, _ in loadAchievements() }
