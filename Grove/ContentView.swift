@@ -12,6 +12,9 @@ struct ContentView: View {
     @State private var showingDayPlanSheet = false
     @State private var showNotificationPrompt = false
     @State private var selectedTab: Int = 0
+    @State private var isLaunching = true
+    @State private var preloadFinished = false
+    @State private var minimumTimeElapsed = false
     @AppStorage("appearanceMode") private var appearanceMode: String = "System"
     @AppStorage("notificationPromptShown") private var notificationPromptShown = false
 
@@ -42,61 +45,87 @@ struct ContentView: View {
 
     var body: some View {
         if isOnboardingComplete {
-            mainAppView
-                .preferredColorScheme(colorScheme)
-                .task {
-                    sessionManager.user = users.first
-                    sessionManager.resumeIncompleteWorkout(context: modelContext)
-                    HealthKitManager.shared.checkAuthorizationStatus()
-                    sessionManager.onWorkoutCompleted = { workout in
-                        let calendar = Calendar.current
-                        let today = calendar.startOfDay(for: Date())
-                        if let todaysPlan = workoutPlans.first(where: { calendar.isDate($0.date, inSameDayAs: today) && !$0.isRestDay }) {
-                            todaysPlan.completedWorkout = workout
-                        }
-                    }
+            ZStack {
+                mainAppView
+                    .preferredColorScheme(colorScheme)
+                    .opacity(isLaunching ? 0 : 1)
 
-                    // Preload social feed in background
-                    if let user = users.first {
-                        await socialService.ensureUserProfile(user: user)
-                    }
-                    await socialService.fetchFriends()
-                    await socialService.fetchFeed()
-                    await socialService.fetchRootConnections()
-                    await socialService.checkAvailableSunlight()
-
-                    // Schedule notifications on each app launch
-                    let notificationService = NotificationService.shared
-                    await notificationService.checkAuthorizationStatus()
-                    if let user = users.first {
-                        notificationService.scheduleDailyWorkoutReminder(plans: workoutPlans, user: user)
-                        notificationService.scheduleWeeklyPlanningNudge(plans: workoutPlans, user: user)
-
-                        // Schedule watering reminder if there are un-watered posts today
-                        let hasUnwatered = socialService.feedItems.contains { item in
-                            let interactions = socialService.interactionsByWorkout[item.id]
-                            return interactions?.iWatered != true
-                                && Calendar.current.isDateInToday(item.completedAt)
-                        }
-                        notificationService.scheduleWateringReminder(hasUnwateredPosts: hasUnwatered, user: user)
-
-                        // Check for connection milestones
-                        let milestones = socialService.checkForConnectionMilestones()
-                        for (friendName, level) in milestones {
-                            notificationService.scheduleConnectionMilestone(friendName: friendName, level: level, user: user)
-                        }
-
-                        // Prompt existing users who haven't been asked yet
-                        if !notificationPromptShown && notificationService.authorizationStatus == .notDetermined {
-                            showNotificationPrompt = true
-                        }
+                if isLaunching {
+                    LaunchView()
+                        .transition(.opacity)
+                        .zIndex(1)
+                }
+            }
+            .task {
+                sessionManager.user = users.first
+                sessionManager.resumeIncompleteWorkout(context: modelContext)
+                HealthKitManager.shared.checkAuthorizationStatus()
+                sessionManager.onWorkoutCompleted = { workout in
+                    let calendar = Calendar.current
+                    let today = calendar.startOfDay(for: Date())
+                    if let todaysPlan = workoutPlans.first(where: { calendar.isDate($0.date, inSameDayAs: today) && !$0.isRestDay }) {
+                        todaysPlan.completedWorkout = workout
                     }
                 }
-                .onChange(of: users.first?.appleUserID) {
-                    sessionManager.user = users.first
+
+                // Start minimum timer
+                Task {
+                    try? await Task.sleep(for: .seconds(2))
+                    minimumTimeElapsed = true
+                    dismissLaunchIfReady()
                 }
+
+                // Preload social feed in background
+                if let user = users.first {
+                    await socialService.ensureUserProfile(user: user)
+                }
+                await socialService.fetchFriends()
+                await socialService.fetchFeed()
+                await socialService.fetchRootConnections()
+                await socialService.checkAvailableSunlight()
+
+                preloadFinished = true
+                dismissLaunchIfReady()
+
+                // Schedule notifications on each app launch
+                let notificationService = NotificationService.shared
+                await notificationService.checkAuthorizationStatus()
+                if let user = users.first {
+                    notificationService.scheduleDailyWorkoutReminder(plans: workoutPlans, user: user)
+                    notificationService.scheduleWeeklyPlanningNudge(plans: workoutPlans, user: user)
+
+                    // Schedule watering reminder if there are un-watered posts today
+                    let hasUnwatered = socialService.feedItems.contains { item in
+                        let interactions = socialService.interactionsByWorkout[item.id]
+                        return interactions?.iWatered != true
+                            && Calendar.current.isDateInToday(item.completedAt)
+                    }
+                    notificationService.scheduleWateringReminder(hasUnwateredPosts: hasUnwatered, user: user)
+
+                    // Check for connection milestones
+                    let milestones = socialService.checkForConnectionMilestones()
+                    for (friendName, level) in milestones {
+                        notificationService.scheduleConnectionMilestone(friendName: friendName, level: level, user: user)
+                    }
+
+                    // Prompt existing users who haven't been asked yet
+                    if !notificationPromptShown && notificationService.authorizationStatus == .notDetermined {
+                        showNotificationPrompt = true
+                    }
+                }
+            }
+            .onChange(of: users.first?.appleUserID) {
+                sessionManager.user = users.first
+            }
         } else {
             OnboardingContainerView()
+        }
+    }
+
+    private func dismissLaunchIfReady() {
+        guard minimumTimeElapsed && preloadFinished else { return }
+        withAnimation(.easeInOut(duration: 0.4)) {
+            isLaunching = false
         }
     }
 
