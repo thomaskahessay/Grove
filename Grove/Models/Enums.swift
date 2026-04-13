@@ -222,47 +222,151 @@ enum SplitType: String, Codable, CaseIterable, Identifiable {
 // MARK: - Achievements
 
 enum AchievementType: String, Codable, CaseIterable {
+    // Workout milestones
     case firstRep = "First Rep"
-    case weekWarrior = "Week Warrior"
+    case tenDown = "Ten Down"
+    case quarterCentury = "Quarter Century"
     case consistent = "Consistent"
-    case prCrusher = "PR Crusher"
-    case planner = "Planner"
     case centuryClub = "Century Club"
+    case dedicated = "Dedicated"
+
+    // Streak milestones
+    case threePeat = "Three-Peat"
+    case weekWarrior = "Week Warrior"
+    case fortnight = "Fortnight"
     case ironWill = "Iron Will"
+    case legendary = "Legendary"
+    case unstoppable = "Unstoppable"
+
+    // Personal records
+    case prCrusher = "PR Crusher"
+    case prCollector = "PR Collector"
+    case prMachine = "PR Machine"
+
+    // Variety & planning
+    case explorer = "Explorer"
+    case wellRounded = "Well-Rounded"
+    case planner = "Planner"
+
+    // Special
+    case earlyBird = "Early Bird"
+    case nightOwl = "Night Owl"
+    case marathoner = "Marathoner"
+    case socializer = "Socializer"
+    case volumeKing = "Volume King"
+    case creatineCommit = "Supplement Streak"
+    case customCreator = "Custom Creator"
 
     var description: String {
         switch self {
         case .firstRep: return "Log your first workout"
-        case .weekWarrior: return "Achieve a 7-day streak"
+        case .tenDown: return "Complete 10 workouts"
+        case .quarterCentury: return "Complete 25 workouts"
         case .consistent: return "Log 50 workouts"
-        case .prCrusher: return "Set a personal record"
-        case .planner: return "Complete a full planned week"
         case .centuryClub: return "Log 100 workouts"
+        case .dedicated: return "Log 200 workouts"
+        case .threePeat: return "Achieve a 3-day streak"
+        case .weekWarrior: return "Achieve a 7-day streak"
+        case .fortnight: return "Achieve a 14-day streak"
         case .ironWill: return "Achieve a 30-day streak"
+        case .legendary: return "Achieve a 60-day streak"
+        case .unstoppable: return "Achieve a 100-day streak"
+        case .prCrusher: return "Set a personal record"
+        case .prCollector: return "Set PRs on 5 different exercises"
+        case .prMachine: return "Set PRs on 10 different exercises"
+        case .explorer: return "Log 10 different exercises"
+        case .wellRounded: return "Train 6 different muscle groups"
+        case .planner: return "Complete a full planned week"
+        case .earlyBird: return "Complete a workout before 8 AM"
+        case .nightOwl: return "Complete a workout after 9 PM"
+        case .marathoner: return "Complete a workout over 90 minutes"
+        case .socializer: return "Share a workout with friends"
+        case .volumeKing: return "Complete 1,000 total sets"
+        case .creatineCommit: return "Log creatine 30 times"
+        case .customCreator: return "Create a custom exercise"
         }
     }
 
     var icon: String {
         switch self {
         case .firstRep: return "leaf.fill"
-        case .weekWarrior: return "flame.fill"
+        case .tenDown: return "figure.strengthtraining.traditional"
+        case .quarterCentury: return "dumbbell.fill"
         case .consistent: return "calendar"
-        case .prCrusher: return "trophy.fill"
-        case .planner: return "checkmark.calendar"
         case .centuryClub: return "medal.fill"
+        case .dedicated: return "heart.circle.fill"
+        case .threePeat: return "bolt.fill"
+        case .weekWarrior: return "flame.fill"
+        case .fortnight: return "clock.badge.checkmark"
         case .ironWill: return "mountain.2.fill"
+        case .legendary: return "crown.fill"
+        case .unstoppable: return "infinity"
+        case .prCrusher: return "trophy.fill"
+        case .prCollector: return "star.fill"
+        case .prMachine: return "seal.fill"
+        case .explorer: return "map.fill"
+        case .wellRounded: return "figure.mixed.cardio"
+        case .planner: return "calendar.badge.checkmark"
+        case .earlyBird: return "sunrise.fill"
+        case .nightOwl: return "moon.stars.fill"
+        case .marathoner: return "timer"
+        case .socializer: return "square.and.arrow.up.fill"
+        case .volumeKing: return "scalemass.fill"
+        case .creatineCommit: return "pill.fill"
+        case .customCreator: return "plus.circle.fill"
         }
     }
 
     var shortLabel: String {
         switch self {
         case .firstRep: return "1st"
-        case .weekWarrior: return "7day"
+        case .tenDown: return "10"
+        case .quarterCentury: return "25"
         case .consistent: return "50"
-        case .prCrusher: return "PR"
-        case .planner: return "Plan"
         case .centuryClub: return "100"
+        case .dedicated: return "200"
+        case .threePeat: return "3x"
+        case .weekWarrior: return "7d"
+        case .fortnight: return "14d"
         case .ironWill: return "30d"
+        case .legendary: return "60d"
+        case .unstoppable: return "100d"
+        case .prCrusher: return "PR"
+        case .prCollector: return "5PR"
+        case .prMachine: return "10PR"
+        case .explorer: return "10ex"
+        case .wellRounded: return "All"
+        case .planner: return "Plan"
+        case .earlyBird: return "AM"
+        case .nightOwl: return "PM"
+        case .marathoner: return "90m"
+        case .socializer: return "Share"
+        case .volumeKing: return "1K"
+        case .creatineCommit: return "Supp"
+        case .customCreator: return "New"
         }
     }
+
+    var category: String {
+        switch self {
+        case .firstRep, .tenDown, .quarterCentury, .consistent, .centuryClub, .dedicated:
+            return "Workout Milestones"
+        case .threePeat, .weekWarrior, .fortnight, .ironWill, .legendary, .unstoppable:
+            return "Streak Milestones"
+        case .prCrusher, .prCollector, .prMachine:
+            return "Personal Records"
+        case .explorer, .wellRounded, .planner:
+            return "Variety & Planning"
+        case .earlyBird, .nightOwl, .marathoner, .socializer, .volumeKing, .creatineCommit, .customCreator:
+            return "Special"
+        }
+    }
+
+    static let categoryOrder = [
+        "Workout Milestones",
+        "Streak Milestones",
+        "Personal Records",
+        "Variety & Planning",
+        "Special"
+    ]
 }

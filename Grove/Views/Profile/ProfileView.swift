@@ -53,8 +53,10 @@ struct ProfileView: View {
         GridItem(.flexible(), spacing: 12)
     ]
 
+    @State private var screenWidth: CGFloat = 393 // sensible default, updated by GeometryReader
+
     private var plantHeroHeight: CGFloat {
-        UIScreen.main.bounds.width * 0.75
+        screenWidth * 0.75
     }
 
     var body: some View {
@@ -83,6 +85,11 @@ struct ProfileView: View {
                     .padding(.horizontal)
                     .padding(.bottom, 32)
                 }
+            }
+            .onGeometryChange(for: CGFloat.self) { proxy in
+                proxy.size.width
+            } action: { newWidth in
+                screenWidth = newWidth
             }
             .ignoresSafeArea(edges: .top)
             .background(Color.groveBackground)
@@ -181,10 +188,10 @@ struct ProfileView: View {
                         streak: user.currentStreak,
                         isWilted: user.isStreakWilted,
                         wiltedAtStage: PlantStage(rawValue: user.wiltedAtStage) ?? .seed,
-                        size: UIScreen.main.bounds.width,
+                        size: screenWidth,
                         showLabel: false
                     )
-                    .frame(width: UIScreen.main.bounds.width, height: plantHeroHeight, alignment: .center)
+                    .frame(width: screenWidth, height: plantHeroHeight, alignment: .center)
                     .mask(
                         LinearGradient(
                             stops: [
@@ -674,6 +681,8 @@ struct ProfileView: View {
 
     // MARK: - Achievement Shelf
 
+    private let achievementColumns = Array(repeating: GridItem(.flexible(), spacing: 6), count: 5)
+
     private var achievementShelf: some View {
         VStack(alignment: .leading, spacing: 14) {
             // Header
@@ -694,41 +703,30 @@ struct ProfileView: View {
                 }
             }
 
-            // Icon shelf
-            HStack(spacing: 0) {
+            // Icon grid (5 columns)
+            LazyVGrid(columns: achievementColumns, spacing: 10) {
                 ForEach(achievementProgress, id: \.type) { progress in
-                    VStack(spacing: 6) {
-                        ZStack {
-                            Circle()
-                                .fill(progress.isUnlocked
-                                      ? Color.groveSage
-                                      : Color.groveWarmSand.opacity(0.2))
-                                .frame(width: 40, height: 40)
-                                .shadow(
-                                    color: progress.isUnlocked
-                                        ? Color.groveSage.opacity(0.3)
-                                        : .clear,
-                                    radius: 6
-                                )
+                    ZStack {
+                        Circle()
+                            .fill(progress.isUnlocked
+                                  ? Color.groveSage
+                                  : Color.groveWarmSand.opacity(0.2))
+                            .frame(width: 36, height: 36)
+                            .shadow(
+                                color: progress.isUnlocked
+                                    ? Color.groveSage.opacity(0.3)
+                                    : .clear,
+                                radius: 4
+                            )
 
-                            Image(systemName: progress.type.icon)
-                                .font(.system(size: 16))
-                                .foregroundStyle(
-                                    progress.isUnlocked
-                                        ? .white
-                                        : Color.groveText.opacity(0.15)
-                                )
-                        }
-
-                        Text(progress.type.shortLabel)
-                            .font(.system(size: 9, weight: .medium))
+                        Image(systemName: progress.type.icon)
+                            .font(.system(size: 14))
                             .foregroundStyle(
                                 progress.isUnlocked
-                                    ? Color.groveSage
-                                    : .secondary.opacity(0.5)
+                                    ? .white
+                                    : Color.groveText.opacity(0.15)
                             )
                     }
-                    .frame(maxWidth: .infinity)
                 }
             }
 
@@ -748,6 +746,8 @@ struct ProfileView: View {
 
     private func loadAchievementProgress() {
         if let user = user {
+            // Award any achievements the user already qualifies for (retroactive check)
+            let _ = AchievementService.checkAndAwardAchievements(for: user, context: modelContext)
             achievementProgress = AchievementService.getProgress(for: user, context: modelContext)
         } else {
             achievementProgress = AchievementType.allCases.map { type in

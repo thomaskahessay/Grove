@@ -806,29 +806,21 @@ struct ProgressView: View {
                 .padding(.horizontal, 16)
                 .padding(.top, 14)
 
-                // Achievement icons row
-                HStack(spacing: 0) {
+                // Achievement icons grid
+                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 6), count: 5), spacing: 8) {
                     ForEach(AchievementType.allCases, id: \.self) { type in
                         let progress = achievementProgress.first { $0.type == type }
                         let isUnlocked = progress?.isUnlocked == true
 
-                        VStack(spacing: 4) {
-                            ZStack {
-                                Circle()
-                                    .fill(isUnlocked ? Color.groveSage : Color.groveWarmSand.opacity(0.2))
-                                    .frame(width: 36, height: 36)
+                        ZStack {
+                            Circle()
+                                .fill(isUnlocked ? Color.groveSage : Color.groveWarmSand.opacity(0.2))
+                                .frame(width: 32, height: 32)
 
-                                Image(systemName: type.icon)
-                                    .font(.system(size: 14))
-                                    .foregroundStyle(isUnlocked ? .white : .secondary.opacity(0.5))
-                            }
-
-                            Text(type.shortLabel)
-                                .font(.system(size: 8))
-                                .foregroundStyle(.secondary)
-                                .lineLimit(1)
+                            Image(systemName: type.icon)
+                                .font(.system(size: 13))
+                                .foregroundStyle(isUnlocked ? .white : .secondary.opacity(0.5))
                         }
-                        .frame(maxWidth: .infinity)
                     }
                 }
                 .padding(.horizontal, 12)
@@ -891,6 +883,7 @@ struct ProgressView: View {
 
     private func loadAchievements() {
         if let user = currentUser {
+            let _ = AchievementService.checkAndAwardAchievements(for: user, context: modelContext)
             achievementProgress = AchievementService.getProgress(for: user, context: modelContext)
         }
     }

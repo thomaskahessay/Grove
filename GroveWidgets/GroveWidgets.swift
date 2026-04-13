@@ -45,7 +45,7 @@ struct StreakPlantEntry: TimelineEntry {
 
 struct LogCreatineIntent: AppIntent {
     static let title: LocalizedStringResource = "Log Creatine"
-    nonisolated(unsafe) static let description: IntentDescription = "Toggle today's creatine log"
+    static let description: IntentDescription = "Toggle today's creatine log"
 
     func perform() async throws -> some IntentResult {
         let container = try SharedModelContainer.makeContainer()

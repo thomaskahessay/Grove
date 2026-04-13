@@ -15,8 +15,15 @@ struct AchievementsGalleryView: View {
             VStack(spacing: 16) {
                 summaryHeader
 
-                ForEach(progressData, id: \.type) { progress in
-                    AchievementGalleryCard(item: progress)
+                ForEach(AchievementType.categoryOrder, id: \.self) { category in
+                    let items = progressData.filter { $0.type.category == category }
+                    if !items.isEmpty {
+                        categorySectionHeader(category)
+
+                        ForEach(items, id: \.type) { progress in
+                            AchievementGalleryCard(item: progress)
+                        }
+                    }
                 }
             }
             .padding()
@@ -37,9 +44,10 @@ struct AchievementsGalleryView: View {
 
     private func loadProgress() {
         if let user = currentUser {
+            // Award any achievements the user already qualifies for (retroactive check)
+            let _ = AchievementService.checkAndAwardAchievements(for: user, context: modelContext)
             progressData = AchievementService.getProgress(for: user, context: modelContext)
         } else {
-            // Show all achievements as locked when no user exists
             progressData = AchievementType.allCases.map { type in
                 AchievementService.AchievementProgress(
                     type: type,
@@ -55,8 +63,9 @@ struct AchievementsGalleryView: View {
     private var summaryHeader: some View {
         VStack(spacing: 8) {
             let unlocked = progressData.filter { $0.isUnlocked }.count
+            let total = progressData.count
 
-            Text("\(unlocked) / 7")
+            Text("\(unlocked) / \(total)")
                 .font(.largeTitle)
                 .fontWeight(.bold)
                 .foregroundStyle(Color.groveTerracotta)
@@ -66,6 +75,15 @@ struct AchievementsGalleryView: View {
                 .foregroundStyle(.secondary)
         }
         .padding(.vertical, 8)
+    }
+
+    private func categorySectionHeader(_ title: String) -> some View {
+        Text(title)
+            .font(.subheadline)
+            .fontWeight(.semibold)
+            .foregroundStyle(Color.groveText)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.top, 8)
     }
 }
 
