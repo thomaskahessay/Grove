@@ -80,11 +80,12 @@ struct PRDetectionService {
                         let currentPR = getCurrentPR(for: exercise, user: user, context: context, type: .maxWeight)
                         let currentValue = currentPR?.value ?? 0
                         let currentReps = currentPR?.reps ?? 0
-                        if bestWeight > currentValue || (bestWeight == currentValue && (set.reps ?? 0) > currentReps) {
+                        if bestWeight > currentValue || (bestWeight == currentValue && (set.reps ?? 0) > currentReps),
+                           let weight = set.weight, let reps = set.reps {
                             let pr = PersonalRecord(
                                 exercise: exercise,
-                                weight: set.weight!,
-                                reps: set.reps!,
+                                weight: weight,
+                                reps: reps,
                                 achievedAt: workout.completedAt ?? Date(),
                                 setLogID: set.id
                             )
@@ -118,11 +119,12 @@ struct PRDetectionService {
                 let currentPR = getCurrentPR(for: exercise, user: user, context: context)
                 let currentValue = currentPR?.value ?? 0
                 let currentReps = currentPR?.reps ?? 0
-                if bestWeight > currentValue || (bestWeight == currentValue && (set.reps ?? 0) > currentReps) {
+                if bestWeight > currentValue || (bestWeight == currentValue && (set.reps ?? 0) > currentReps),
+                   let weight = set.weight, let reps = set.reps {
                     let pr = PersonalRecord(
                         exercise: exercise,
-                        weight: set.weight!,
-                        reps: set.reps!,
+                        weight: weight,
+                        reps: reps,
                         achievedAt: workout.completedAt ?? Date(),
                         setLogID: set.id
                     )
@@ -136,7 +138,11 @@ struct PRDetectionService {
             }
         }
 
-        try? context.save()
+        do {
+            try context.save()
+        } catch {
+            print("[Grove] ERROR: Failed to save PRs: \(error)")
+        }
         return results
     }
 
@@ -180,8 +186,8 @@ struct PRDetectionService {
 
             // Find the best reps at this weight across all completed sets in the same exercise log
             let bestReps = exerciseLog.sets
-                .filter { $0.isCompleted && $0.weight == pr.weight && $0.reps != nil }
-                .map { $0.reps! }
+                .filter { $0.isCompleted && $0.weight == pr.weight }
+                .compactMap { $0.reps }
                 .max() ?? pr.reps
 
             if bestReps > pr.reps {
@@ -193,7 +199,11 @@ struct PRDetectionService {
             }
         }
 
-        try? context.save()
+        do {
+            try context.save()
+        } catch {
+            print("[Grove] ERROR: Failed to save PR reps fix: \(error)")
+        }
     }
 
     /// Gets all PRs for a user, optionally filtered by exercise

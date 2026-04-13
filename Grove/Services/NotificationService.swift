@@ -328,7 +328,7 @@ class NotificationService {
 
     private static let friendActivityID = "grove.social.friendActivity"
 
-    func scheduleFriendActivityNotification(friendName: String, workoutName: String, duration: TimeInterval, user: User) {
+    func scheduleFriendActivityNotification(friendName: String, workoutName: String, duration: TimeInterval, workoutID: String, user: User) {
         let center = UNUserNotificationCenter.current()
 
         guard authorizationStatus == .authorized,
@@ -348,7 +348,7 @@ class NotificationService {
 
         let trigger = UNTimeIntervalNotificationTrigger(timeInterval: 1, repeats: false)
 
-        let id = "\(Self.friendActivityID).\(UUID().uuidString.prefix(8))"
+        let id = "\(Self.friendActivityID).\(workoutID)"
         let request = UNNotificationRequest(identifier: id, content: content, trigger: trigger)
         center.add(request)
     }

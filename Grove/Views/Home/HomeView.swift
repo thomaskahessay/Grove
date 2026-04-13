@@ -194,7 +194,9 @@ struct HomeView: View {
                                         .font(.subheadline)
                                         .fontWeight(.medium)
                                         .foregroundStyle(Color.groveText)
-                                    Text("\(user.consecutiveRestDays) rest days — your grove misses you")
+                                    Text((!user.weeklyTemplateIDs.isEmpty && !user.preferredTrainingSlots.isEmpty)
+                                        ? "\(user.consecutiveRestDays) missed sessions — your grove misses you"
+                                        : "\(user.consecutiveRestDays) rest days — your grove misses you")
                                         .font(.caption)
                                         .foregroundStyle(.secondary)
                                 }

@@ -61,22 +61,28 @@ class WorkoutSessionManager {
 
         let cutoff = Date().addingTimeInterval(-24 * 60 * 60)
 
-        // Clean up old abandoned workouts
-        for workout in incompleteWorkouts {
-            if workout.startedAt < cutoff {
-                for exerciseLog in workout.exercises {
-                    for setLog in exerciseLog.sets {
-                        context.delete(setLog)
-                    }
-                    context.delete(exerciseLog)
-                }
-                context.delete(workout)
-            }
-        }
-        try? context.save()
+        // Separate fresh from stale before any deletion to avoid accessing deleted objects
+        let freshWorkouts = incompleteWorkouts.filter { $0.startedAt >= cutoff }
+        let staleWorkouts = incompleteWorkouts.filter { $0.startedAt < cutoff }
 
-        // Resume the most recent one if it's fresh and has exercises
-        guard let recent = incompleteWorkouts.first(where: { $0.startedAt >= cutoff }),
+        // Clean up old abandoned workouts
+        for workout in staleWorkouts {
+            for exerciseLog in workout.exercises {
+                for setLog in exerciseLog.sets {
+                    context.delete(setLog)
+                }
+                context.delete(exerciseLog)
+            }
+            context.delete(workout)
+        }
+        do {
+            try context.save()
+        } catch {
+            print("[Grove] ERROR: Failed to save after cleaning up stale workouts: \(error)")
+        }
+
+        // Resume the most recent fresh workout if it has exercises
+        guard let recent = freshWorkouts.first,
               !recent.exercises.isEmpty else { return }
         activeWorkout = recent
         isMinimized = true
@@ -115,7 +121,11 @@ class WorkoutSessionManager {
 
         // Persist immediately so recalculateStreak sees the new workout in its fetch
         if let context = context {
-            try? context.save()
+            do {
+                try context.save()
+            } catch {
+                print("[Grove] ERROR: Failed to save workout completion: \(error)")
+            }
         }
 
         if let user = user, let context = context {
@@ -125,6 +135,13 @@ class WorkoutSessionManager {
             StreakManager.recalculateStreak(for: user, workouts: completedWorkouts, plans: allPlans)
             if user.currentStreak > 0 {
                 user.isStreakWilted = false
+            }
+
+            // Persist streak before PR/achievement detection so it's not lost if app exits
+            do {
+                try context.save()
+            } catch {
+                print("[Grove] ERROR: Failed to save streak update: \(error)")
             }
         }
 
@@ -297,6 +314,12 @@ class WorkoutSessionManager {
         template.usageCount += 1
         template.lastUsedDate = Date()
 
+        do {
+            try context.save()
+        } catch {
+            print("[Grove] ERROR: Failed to save new workout: \(error)")
+        }
+
         sessionManager.startWorkout(workout)
     }
 
@@ -385,6 +408,12 @@ class WorkoutSessionManager {
             context.delete(exerciseLog)
         }
         context.delete(workout)
+
+        do {
+            try context.save()
+        } catch {
+            print("[Grove] ERROR: Failed to save workout discard: \(error)")
+        }
 
         activeWorkout = nil
         isMinimized = false

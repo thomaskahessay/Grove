@@ -7,38 +7,50 @@ struct GroveApp: App {
     let modelContainer: ModelContainer
 
     init() {
+        let schema = Schema([
+            User.self,
+            Exercise.self,
+            Workout.self,
+            ExerciseLog.self,
+            SetLog.self,
+            WorkoutTemplate.self,
+            WorkoutPlan.self,
+            Achievement.self,
+            PersonalRecord.self,
+            CreatineLog.self
+        ])
+
         do {
-            let schema = Schema([
-                User.self,
-                Exercise.self,
-                Workout.self,
-                ExerciseLog.self,
-                SetLog.self,
-                WorkoutTemplate.self,
-                WorkoutPlan.self,
-                Achievement.self,
-                PersonalRecord.self,
-                CreatineLog.self
-            ])
             let modelConfiguration = ModelConfiguration(schema: schema, cloudKitDatabase: .none)
             modelContainer = try ModelContainer(for: schema, configurations: [modelConfiguration])
-
-            // Seed built-in exercises on first launch
-            let context = ModelContext(modelContainer)
-            ExerciseSeeds.seedExercises(context: context)
-
-            // Migrate existing templates to 3 default sets
-            let templates = (try? context.fetch(FetchDescriptor<WorkoutTemplate>())) ?? []
-            for template in templates where template.defaultSets != 3 {
-                template.defaultSets = 3
-            }
-            try? context.save()
-
-            // Fix existing PR reps (one-time migration for records with wrong rep counts)
-            PRDetectionService.fixExistingPRReps(context: context)
         } catch {
-            fatalError("Could not initialize ModelContainer: \(error)")
+            print("[Grove] ERROR: Persistent store failed: \(error). Using in-memory fallback.")
+            do {
+                let fallbackConfig = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true, cloudKitDatabase: .none)
+                modelContainer = try ModelContainer(for: schema, configurations: [fallbackConfig])
+            } catch {
+                fatalError("[Grove] FATAL: Could not initialize any ModelContainer: \(error)")
+            }
+            return // Skip migrations on fresh in-memory store
         }
+
+        // Seed built-in exercises on first launch
+        let context = ModelContext(modelContainer)
+        ExerciseSeeds.seedExercises(context: context)
+
+        // Migrate existing templates to 3 default sets
+        let templates = (try? context.fetch(FetchDescriptor<WorkoutTemplate>())) ?? []
+        for template in templates where template.defaultSets != 3 {
+            template.defaultSets = 3
+        }
+        do {
+            try context.save()
+        } catch {
+            print("[Grove] ERROR: Failed to save template migration: \(error)")
+        }
+
+        // Fix existing PR reps (one-time migration for records with wrong rep counts)
+        PRDetectionService.fixExistingPRReps(context: context)
     }
 
     @State private var workoutSessionManager = WorkoutSessionManager()
@@ -116,6 +128,7 @@ struct GroveApp: App {
                         friendName: item.friendName,
                         workoutName: item.workoutName,
                         duration: item.duration,
+                        workoutID: item.id,
                         user: user
                     )
                 }
@@ -123,7 +136,11 @@ struct GroveApp: App {
         }
 
         user.lastFeedCheckDate = Date()
-        try? context.save()
+        do {
+            try context.save()
+        } catch {
+            print("[Grove] ERROR: Failed to save feed check date: \(error)")
+        }
 
         // Reschedule for next check
         scheduleFeedCheckTask()

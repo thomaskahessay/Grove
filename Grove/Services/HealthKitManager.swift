@@ -24,11 +24,13 @@ class HealthKitManager {
     func requestAuthorization() async -> Bool {
         guard let healthStore else { return false }
 
-        let typesToRead: Set<HKObjectType> = [
-            HKObjectType.workoutType(),
-            HKObjectType.quantityType(forIdentifier: .heartRate)!,
-            HKObjectType.quantityType(forIdentifier: .activeEnergyBurned)!
-        ]
+        var typesToRead: Set<HKObjectType> = [HKObjectType.workoutType()]
+        if let heartRate = HKObjectType.quantityType(forIdentifier: .heartRate) {
+            typesToRead.insert(heartRate)
+        }
+        if let activeEnergy = HKObjectType.quantityType(forIdentifier: .activeEnergyBurned) {
+            typesToRead.insert(activeEnergy)
+        }
 
         do {
             try await healthStore.requestAuthorization(toShare: [], read: typesToRead)

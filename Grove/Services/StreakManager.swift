@@ -58,16 +58,33 @@ struct StreakManager {
             user.longestStreak = streak
         }
 
-        // Compute consecutive rest days (walk backwards from today)
-        var restDays = 0
-        var checkDate = today
-        while !workoutDates.contains(checkDate) {
-            restDays += 1
-            guard let prev = calendar.date(byAdding: .day, value: -1, to: checkDate) else { break }
-            checkDate = prev
-            if restDays > 30 { break }
+        // Compute consecutive rest / missed-training days
+        if hasActivePlan {
+            // Plan-aware: only count training days that were missed (skip planned rest days)
+            var missedTrainingDays = 0
+            var checkDate = today
+            for _ in 0..<30 {
+                if workoutDates.contains(checkDate) { break }
+                let weekday = (calendar.component(.weekday, from: checkDate) + 5) % 7 // Mon=0..Sun=6
+                if user.preferredTrainingSlots.contains(weekday) {
+                    missedTrainingDays += 1
+                }
+                guard let prev = calendar.date(byAdding: .day, value: -1, to: checkDate) else { break }
+                checkDate = prev
+            }
+            user.consecutiveRestDays = missedTrainingDays
+        } else {
+            // No plan: count all consecutive days without a workout
+            var restDays = 0
+            var checkDate = today
+            while !workoutDates.contains(checkDate) {
+                restDays += 1
+                guard let prev = calendar.date(byAdding: .day, value: -1, to: checkDate) else { break }
+                checkDate = prev
+                if restDays > 30 { break }
+            }
+            user.consecutiveRestDays = restDays
         }
-        user.consecutiveRestDays = restDays
     }
 
     // MARK: - Plan-Aware Streak (Week Chunks)
