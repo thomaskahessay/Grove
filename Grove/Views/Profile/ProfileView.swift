@@ -35,10 +35,10 @@ struct ProfileView: View {
     @State private var showingCamera = false
     @State private var showingPlanEditor = false
     @State private var selectedSharedWorkout: SharedWorkoutItem?
+    @State private var achievementProgress: [AchievementService.AchievementProgress] = []
 
     private var user: User? { users.first }
 
-    /// Number of exercises with a max-weight PR (deduplicated per exercise)
     private var prExerciseCount: Int {
         guard let records = user?.personalRecords else { return 0 }
         let maxWeightRecords = records.filter { $0.type == .maxWeight }
@@ -46,38 +46,80 @@ struct ProfileView: View {
         return uniqueExercises.count
     }
 
+    private let sharedWorkoutColumns = [
+        GridItem(.flexible(), spacing: 12),
+        GridItem(.flexible(), spacing: 12)
+    ]
+
+    private var plantHeroHeight: CGFloat {
+        UIScreen.main.bounds.width * 0.75
+    }
+
     var body: some View {
         NavigationStack {
             ScrollView {
-                VStack(spacing: 24) {
-                    heroSection
-                    statsCard
-                    streakPlantCard
-                    quickAccessCards
-                    currentProgramCard
-                    sharedWorkoutsSection
+                VStack(spacing: 0) {
+                    Spacer()
+                        .frame(height: 40)
+
+                    plantHeroSection
+
+                    VStack(spacing: 24) {
+                        statBadges
+                            .padding(.top, 16)
+
+                        currentProgramCard
+
+                        workoutHeatmapSection
+
+                        achievementShelf
+
+                        sharedWorkoutsSection
+                    }
+                    .padding(.horizontal)
+                    .padding(.bottom, 32)
                 }
-                .padding(.horizontal)
-                .padding(.bottom, 32)
             }
+            .ignoresSafeArea(edges: .top)
             .background(Color.groveBackground)
+            .overlay(alignment: .top) {
+                LinearGradient(
+                    colors: [
+                        Color.groveBackground,
+                        Color.groveBackground.opacity(0.8),
+                        Color.groveBackground.opacity(0.4),
+                        .clear
+                    ],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+                .frame(height: 100)
+                .ignoresSafeArea(edges: .top)
+                .allowsHitTesting(false)
+            }
+            .overlay(alignment: .topTrailing) {
+                NavigationLink {
+                    SettingsView()
+                } label: {
+                    Image(systemName: "gearshape.fill")
+                        .font(.title3)
+                        .foregroundStyle(Color.groveSage)
+                        .padding(12)
+                        .background(.ultraThinMaterial, in: Circle())
+                        .shadow(color: .black.opacity(0.15), radius: 6, y: 2)
+                }
+                .padding(.top, 12)
+                .padding(.trailing, 12)
+            }
             .task {
                 await socialService.fetchMySharedWorkouts()
             }
+            .onAppear { loadAchievementProgress() }
+            .onChange(of: users.count) { _, _ in loadAchievementProgress() }
             .navigationDestination(item: $selectedSharedWorkout) { item in
                 WorkoutInteractionDetailView(item: item)
             }
-            .navigationTitle("Profile")
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    NavigationLink {
-                        SettingsView()
-                    } label: {
-                        Image(systemName: "gearshape.fill")
-                            .foregroundStyle(Color.groveSage)
-                    }
-                }
-            }
+            .toolbar(.hidden, for: .navigationBar)
         }
         .photosPicker(isPresented: $showingPhotoPicker, selection: $photoItem, matching: .images)
         .onChange(of: photoItem) { _, newItem in
@@ -116,222 +158,435 @@ struct ProfileView: View {
         }
     }
 
-    // MARK: - Hero Section
+    // MARK: - Plant Hero Section
 
-    private var heroSection: some View {
-        VStack(spacing: 12) {
-            Menu {
-                Button {
-                    showingPhotoPicker = true
-                } label: {
-                    Label("Choose from Library", systemImage: "photo.on.rectangle")
-                }
-                Button {
-                    showingCamera = true
-                } label: {
-                    Label("Take Photo", systemImage: "camera")
-                }
-            } label: {
-                ZStack(alignment: .bottomTrailing) {
-                    Circle()
-                        .fill(Color.groveSage.opacity(0.15))
-                        .frame(width: 100, height: 100)
-                        .overlay {
-                            if let user = user,
-                               let data = user.profileImageData,
-                               let img = UIImage(data: data) {
-                                Image(uiImage: img)
-                                    .resizable()
-                                    .scaledToFill()
-                                    .clipShape(Circle())
-                            } else {
-                                Text(initials(for: user))
-                                    .font(.title)
-                                    .fontWeight(.semibold)
-                                    .foregroundStyle(Color.groveSage)
-                            }
-                        }
-
-                    Circle()
-                        .fill(Color.groveSage)
-                        .frame(width: 28, height: 28)
-                        .overlay {
-                            Image(systemName: "camera.fill")
-                                .font(.system(size: 12))
-                                .foregroundStyle(.white)
-                        }
-                        .offset(x: 2, y: 2)
-                }
-            }
-            .menuStyle(.button)
-            .buttonStyle(.plain)
-
+    private var plantHeroSection: some View {
+        ZStack(alignment: .bottom) {
+            // Layer 1: Full-width atmospheric plant
             if let user = user {
-                Text(user.displayName ?? "Grove User")
-                    .font(.title2)
+                NavigationLink {
+                    StreakDetailView(user: user)
+                } label: {
+                    StreakPlantView(
+                        streak: user.currentStreak,
+                        isWilted: user.isStreakWilted,
+                        wiltedAtStage: PlantStage(rawValue: user.wiltedAtStage) ?? .seed,
+                        size: UIScreen.main.bounds.width,
+                        showLabel: false
+                    )
+                    .frame(width: UIScreen.main.bounds.width, height: plantHeroHeight, alignment: .center)
+                    .mask(
+                        LinearGradient(
+                            stops: [
+                                .init(color: .white, location: 0),
+                                .init(color: .white, location: 0.75),
+                                .init(color: .clear, location: 1.0)
+                            ],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
+                    )
+                }
+                .buttonStyle(.plain)
+            }
+
+            // Layer 2: Bottom gradient fade to background
+            LinearGradient(
+                stops: [
+                    .init(color: .clear, location: 0),
+                    .init(color: .clear, location: 0.3),
+                    .init(color: Color.groveBackground.opacity(0.5), location: 0.6),
+                    .init(color: Color.groveBackground.opacity(0.85), location: 0.8),
+                    .init(color: Color.groveBackground, location: 1.0)
+                ],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+            .allowsHitTesting(false)
+
+            // Layer 3: Profile photo + name overlay
+            if let user = user {
+                VStack(spacing: 8) {
+                    profilePhotoWithGlassRing
+
+                    Text(user.displayName ?? "Grove User")
+                        .font(.title3)
+                        .fontWeight(.bold)
+                        .foregroundStyle(Color.groveText)
+
+                    HStack(spacing: 6) {
+                        Text("Member since \(memberSinceText(user.createdAt))")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+
+                        Text("\u{00B7}")
+                            .foregroundStyle(.secondary)
+
+                        Text(PlantStage.from(streak: user.currentStreak).displayName)
+                            .font(.caption2)
+                            .fontWeight(.medium)
+                            .foregroundStyle(Color.groveSage)
+                    }
+                }
+                .padding(.bottom, 12)
+            }
+        }
+        .frame(height: plantHeroHeight + 40)
+    }
+
+    private var profilePhotoWithGlassRing: some View {
+        Menu {
+            Button {
+                showingPhotoPicker = true
+            } label: {
+                Label("Choose from Library", systemImage: "photo.on.rectangle")
+            }
+            Button {
+                showingCamera = true
+            } label: {
+                Label("Take Photo", systemImage: "camera")
+            }
+        } label: {
+            ZStack(alignment: .bottomTrailing) {
+                Circle()
+                    .fill(.ultraThinMaterial)
+                    .frame(width: 90, height: 90)
+                    .overlay {
+                        Circle()
+                            .fill(Color.groveSage.opacity(0.1))
+                            .frame(width: 80, height: 80)
+                            .overlay {
+                                if let user = user,
+                                   let data = user.profileImageData,
+                                   let img = UIImage(data: data) {
+                                    Image(uiImage: img)
+                                        .resizable()
+                                        .scaledToFill()
+                                        .frame(width: 80, height: 80)
+                                        .clipShape(Circle())
+                                } else {
+                                    Text(initials(for: user))
+                                        .font(.title2)
+                                        .fontWeight(.semibold)
+                                        .foregroundStyle(Color.groveSage)
+                                }
+                            }
+                            .clipShape(Circle())
+                    }
+                    .shadow(color: .black.opacity(0.2), radius: 8, y: 2)
+
+                Circle()
+                    .fill(Color.groveSage)
+                    .frame(width: 24, height: 24)
+                    .overlay {
+                        Image(systemName: "camera.fill")
+                            .font(.system(size: 10))
+                            .foregroundStyle(.white)
+                    }
+                    .offset(x: 2, y: 2)
+            }
+        }
+        .menuStyle(.button)
+        .buttonStyle(.plain)
+    }
+
+    // MARK: - Stat Badges
+
+    private var statBadges: some View {
+        HStack(spacing: 8) {
+            statBadge(icon: "dumbbell.fill", value: "\(user?.workouts.count ?? 0)", label: "Workouts")
+            statBadge(icon: "flame.fill", value: "\(user?.currentStreak ?? 0)", label: "Streak")
+            statBadge(icon: "trophy.fill", value: "\(prExerciseCount)", label: "PRs")
+            statBadge(icon: "medal.fill", value: "\(user?.achievements.count ?? 0)", label: "Badges")
+        }
+    }
+
+    private func statBadge(icon: String, value: String, label: String) -> some View {
+        VStack(spacing: 3) {
+            HStack(spacing: 4) {
+                Image(systemName: icon)
+                    .font(.system(size: 10))
+                    .foregroundStyle(Color.groveSage)
+                Text(value)
+                    .font(.subheadline)
                     .fontWeight(.bold)
                     .foregroundStyle(Color.groveText)
-
-                Text("Member since \(memberSinceText(user.createdAt))")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
             }
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.top, 8)
-    }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
+            .background(.ultraThinMaterial)
+            .clipShape(Capsule())
 
-    // MARK: - Stats Card
-
-    private var statsCard: some View {
-        HStack(spacing: 0) {
-            statItem(
-                icon: "dumbbell.fill",
-                value: "\(user?.workouts.count ?? 0)",
-                label: "Workouts"
-            )
-
-            statDivider
-
-            statItem(
-                icon: "flame.fill",
-                value: "\(user?.currentStreak ?? 0)",
-                label: "Streak"
-            )
-
-            statDivider
-
-            statItem(
-                icon: "trophy.fill",
-                value: "\(prExerciseCount)",
-                label: "PRs"
-            )
-
-            statDivider
-
-            statItem(
-                icon: "medal.fill",
-                value: "\(user?.achievements.count ?? 0)",
-                label: "Badges"
-            )
-        }
-        .padding(.vertical, 16)
-        .frame(maxWidth: .infinity)
-        .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 12))
-        .shadow(color: .black.opacity(0.07), radius: 10, y: 3)
-    }
-
-    private func statItem(icon: String, value: String, label: String) -> some View {
-        VStack(spacing: 6) {
-            Image(systemName: icon)
-                .font(.caption)
-                .foregroundStyle(Color.groveSage)
-            Text(value)
-                .font(.title3)
-                .fontWeight(.bold)
-                .foregroundStyle(Color.groveText)
             Text(label)
-                .font(.caption2)
+                .font(.system(size: 8))
                 .foregroundStyle(.secondary)
         }
         .frame(maxWidth: .infinity)
     }
 
-    private var statDivider: some View {
-        Rectangle()
-            .fill(Color.groveText.opacity(0.1))
-            .frame(width: 1, height: 40)
+    // MARK: - Workout Heatmap
+
+    private var workoutDayCounts: [Date: Int] {
+        guard let workouts = user?.workouts else { return [:] }
+        var counts: [Date: Int] = [:]
+        let calendar = Calendar.current
+        for workout in workouts {
+            guard let completedAt = workout.completedAt else { continue }
+            let day = calendar.startOfDay(for: completedAt)
+            counts[day, default: 0] += 1
+        }
+        return counts
     }
 
-    // MARK: - Streak Plant Card
+    private func heatmapGrid(weeks: Int) -> [[Date?]] {
+        let calendar = Calendar.current
+        let today = calendar.startOfDay(for: Date())
+        let weekday = calendar.component(.weekday, from: today) - 1
+        let currentWeekStart = calendar.date(byAdding: .day, value: -weekday, to: today)!
+        let gridStart = calendar.date(byAdding: .weekOfYear, value: -(weeks - 1), to: currentWeekStart)!
 
-    private var streakPlantCard: some View {
-        Group {
-            if let user = user {
-                NavigationLink {
-                    StreakDetailView(user: user)
-                } label: {
-                    HStack(spacing: 16) {
-                        StreakPlantView(
-                            streak: user.currentStreak,
-                            isWilted: user.isStreakWilted,
-                            wiltedAtStage: PlantStage(rawValue: user.wiltedAtStage) ?? .seed,
-                            size: 80,
-                            showLabel: false
-                        )
+        var columns: [[Date?]] = []
+        for week in 0..<weeks {
+            let weekStart = calendar.date(byAdding: .day, value: week * 7, to: gridStart)!
+            var days: [Date?] = []
+            for day in 0..<7 {
+                let date = calendar.date(byAdding: .day, value: day, to: weekStart)!
+                days.append(date <= today ? date : nil)
+            }
+            columns.append(days)
+        }
+        return columns
+    }
 
-                        VStack(alignment: .leading, spacing: 6) {
-                            Text("Your Grove")
-                                .font(.headline)
-                                .foregroundStyle(Color.groveText)
+    private func heatmapMonthLabels(grid: [[Date?]]) -> [Int: String] {
+        let calendar = Calendar.current
+        let formatter = DateFormatter()
+        formatter.dateFormat = "MMM"
 
-                            Text(PlantStage.from(streak: user.currentStreak).displayName)
-                                .font(.subheadline)
-                                .foregroundStyle(Color.groveSage)
+        var labels: [Int: String] = [:]
+        var lastMonth = -1
 
-                            if user.isStreakWilted {
-                                Text("Streak broken — keep going!")
-                                    .font(.caption)
-                                    .foregroundStyle(Color.groveMutedRust)
-                            } else {
-                                Text("\(user.currentStreak)-day streak")
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                            }
-                        }
-
-                        Spacer()
-
-                        Image(systemName: "chevron.right")
-                            .font(.caption)
-                            .foregroundStyle(.tertiary)
-                    }
-                    .padding(16)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .contentShape(Rectangle())
-                    .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 12))
-                    .shadow(color: .black.opacity(0.07), radius: 10, y: 3)
-                }
-                .buttonStyle(.plain)
+        for (i, week) in grid.enumerated() {
+            guard let firstDay = week.compactMap({ $0 }).first else { continue }
+            let month = calendar.component(.month, from: firstDay)
+            if month != lastMonth {
+                labels[i] = formatter.string(from: firstDay)
+                lastMonth = month
             }
         }
+        return labels
     }
 
-    // MARK: - Quick Access Cards
+    private var workoutHeatmapSection: some View {
+        let weeks = 13
+        let grid = heatmapGrid(weeks: weeks)
+        let counts = workoutDayCounts
+        let monthLabels = heatmapMonthLabels(grid: grid)
+        let calendar = Calendar.current
+        let today = calendar.startOfDay(for: Date())
+        let cellSize: CGFloat = 18
+        let cellSpacing: CGFloat = 3
+        let dayLabelWidth: CGFloat = 14
 
-    private var quickAccessCards: some View {
-        NavigationLink {
-            AchievementsGalleryView()
-        } label: {
-            HStack(spacing: 14) {
-                Image(systemName: "trophy.fill")
-                    .font(.title2)
-                    .foregroundStyle(Color.groveTerracotta)
-                    .frame(width: 36)
+        var totalInPeriod = 0
+        for week in grid {
+            for date in week.compactMap({ $0 }) {
+                totalInPeriod += counts[date] ?? 0
+            }
+        }
 
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Achievements")
-                        .font(.headline)
-                        .foregroundStyle(Color.groveText)
-
-                    Text("\(user?.achievements.count ?? 0) / \(AchievementType.allCases.count) earned")
-                        .font(.subheadline)
+        return VStack(alignment: .leading, spacing: 10) {
+            // Header
+            HStack(spacing: 6) {
+                Image(systemName: "leaf.fill")
+                    .font(.caption)
+                    .foregroundStyle(Color.groveSage)
+                Text("Activity")
+                    .font(.headline)
+                    .foregroundStyle(Color.groveText)
+                Spacer()
+                HStack(spacing: 3) {
+                    Text("Less")
+                        .font(.system(size: 8))
+                        .foregroundStyle(.secondary)
+                    ForEach([0.0, 0.4, 0.65, 0.9], id: \.self) { level in
+                        RoundedRectangle(cornerRadius: 2)
+                            .fill(level == 0 ? Color.groveWarmSand.opacity(0.25) : Color.groveSage.opacity(level))
+                            .frame(width: 10, height: 10)
+                    }
+                    Text("More")
+                        .font(.system(size: 8))
                         .foregroundStyle(.secondary)
                 }
-
-                Spacer()
-
-                Image(systemName: "chevron.right")
-                    .font(.caption)
-                    .foregroundStyle(.tertiary)
             }
-            .padding(16)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .contentShape(Rectangle())
-            .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 12))
-            .shadow(color: .black.opacity(0.07), radius: 10, y: 3)
+
+            // Month labels row
+            HStack(alignment: .bottom, spacing: cellSpacing) {
+                Color.clear.frame(width: dayLabelWidth, height: 12)
+
+                ForEach(0..<weeks, id: \.self) { i in
+                    if let label = monthLabels[i] {
+                        Text(label)
+                            .font(.system(size: 9))
+                            .foregroundStyle(.secondary)
+                            .frame(width: cellSize, alignment: .leading)
+                    } else {
+                        Color.clear.frame(width: cellSize, height: 12)
+                    }
+                }
+            }
+
+            // Grid
+            HStack(alignment: .top, spacing: cellSpacing) {
+                // Day-of-week labels (show Mon, Wed, Fri)
+                VStack(spacing: cellSpacing) {
+                    ForEach(0..<7, id: \.self) { dayIndex in
+                        if dayIndex == 1 || dayIndex == 3 || dayIndex == 5 {
+                            Text(["S","M","T","W","T","F","S"][dayIndex])
+                                .font(.system(size: 8))
+                                .foregroundStyle(.secondary)
+                                .frame(width: dayLabelWidth, height: cellSize)
+                        } else {
+                            Color.clear.frame(width: dayLabelWidth, height: cellSize)
+                        }
+                    }
+                }
+
+                // Week columns
+                ForEach(0..<weeks, id: \.self) { weekIndex in
+                    VStack(spacing: cellSpacing) {
+                        ForEach(0..<7, id: \.self) { dayIndex in
+                            if let date = grid[weekIndex][dayIndex] {
+                                let count = counts[date] ?? 0
+                                let isToday = date == today
+
+                                RoundedRectangle(cornerRadius: 3)
+                                    .fill(heatmapCellColor(count: count))
+                                    .frame(width: cellSize, height: cellSize)
+                                    .overlay {
+                                        if isToday {
+                                            RoundedRectangle(cornerRadius: 3)
+                                                .strokeBorder(Color.groveSage, lineWidth: 1.5)
+                                        }
+                                    }
+                            } else {
+                                RoundedRectangle(cornerRadius: 3)
+                                    .fill(Color.groveWarmSand.opacity(0.08))
+                                    .frame(width: cellSize, height: cellSize)
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Summary
+            Text("\(totalInPeriod) workout\(totalInPeriod == 1 ? "" : "s") in the last \(weeks) weeks")
+                .font(.caption2)
+                .foregroundStyle(.secondary)
         }
-        .buttonStyle(.plain)
+    }
+
+    private func heatmapCellColor(count: Int) -> Color {
+        switch count {
+        case 0:
+            return Color.groveWarmSand.opacity(0.25)
+        case 1:
+            return Color.groveSage.opacity(0.4)
+        case 2:
+            return Color.groveSage.opacity(0.65)
+        default:
+            return Color.groveSage.opacity(0.9)
+        }
+    }
+
+    // MARK: - Achievement Shelf
+
+    private var achievementShelf: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            // Header
+            HStack {
+                Image(systemName: "trophy.fill")
+                    .font(.caption)
+                    .foregroundStyle(Color.groveTerracotta)
+                Text("Achievements")
+                    .font(.headline)
+                    .foregroundStyle(Color.groveText)
+                Spacer()
+                NavigationLink {
+                    AchievementsGalleryView()
+                } label: {
+                    Text("See All")
+                        .font(.subheadline)
+                        .foregroundStyle(Color.groveSage)
+                }
+            }
+
+            // Icon shelf
+            HStack(spacing: 0) {
+                ForEach(achievementProgress, id: \.type) { progress in
+                    VStack(spacing: 6) {
+                        ZStack {
+                            Circle()
+                                .fill(progress.isUnlocked
+                                      ? Color.groveSage
+                                      : Color.groveWarmSand.opacity(0.2))
+                                .frame(width: 40, height: 40)
+                                .shadow(
+                                    color: progress.isUnlocked
+                                        ? Color.groveSage.opacity(0.3)
+                                        : .clear,
+                                    radius: 6
+                                )
+
+                            Image(systemName: progress.type.icon)
+                                .font(.system(size: 16))
+                                .foregroundStyle(
+                                    progress.isUnlocked
+                                        ? .white
+                                        : Color.groveText.opacity(0.15)
+                                )
+                        }
+
+                        Text(progress.type.shortLabel)
+                            .font(.system(size: 9, weight: .medium))
+                            .foregroundStyle(
+                                progress.isUnlocked
+                                    ? Color.groveSage
+                                    : .secondary.opacity(0.5)
+                            )
+                    }
+                    .frame(maxWidth: .infinity)
+                }
+            }
+
+            // Shelf line
+            Capsule()
+                .fill(Color.groveWarmSand.opacity(0.35))
+                .frame(height: 1.5)
+
+            // Earned count
+            let earned = achievementProgress.filter(\.isUnlocked).count
+            Text("\(earned) of \(AchievementType.allCases.count) earned")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .frame(maxWidth: .infinity, alignment: .center)
+        }
+    }
+
+    private func loadAchievementProgress() {
+        if let user = user {
+            achievementProgress = AchievementService.getProgress(for: user, context: modelContext)
+        } else {
+            achievementProgress = AchievementType.allCases.map { type in
+                AchievementService.AchievementProgress(
+                    type: type,
+                    isUnlocked: false,
+                    unlockedAt: nil,
+                    currentValue: 0,
+                    targetValue: 1
+                )
+            }
+        }
     }
 
     // MARK: - Current Program Card
@@ -357,7 +612,7 @@ struct ProfileView: View {
                                 .font(.subheadline)
                                 .foregroundStyle(Color.groveSage)
 
-                            Text("\(user.preferredDaysPerWeek) days/week · \(user.preferredRepRange.rawValue)")
+                            Text("\(user.preferredDaysPerWeek) days/week \u{00B7} \(user.preferredRepRange.rawValue)")
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
 
@@ -383,91 +638,87 @@ struct ProfileView: View {
         }
     }
 
-    // MARK: - Shared Workouts Section
+    // MARK: - Shared Workouts Grid
 
     private var sharedWorkoutsSection: some View {
         Group {
             if !socialService.mySharedWorkouts.isEmpty {
                 VStack(alignment: .leading, spacing: 12) {
-                    Label("Shared Workouts", systemImage: "square.and.arrow.up.fill")
-                        .font(.headline)
-                        .foregroundStyle(Color.groveText)
-                        .padding(.leading, 4)
-
-                    ForEach(socialService.mySharedWorkouts) { item in
-                        let interactions = socialService.interactionsByWorkout[item.id]
-
-                        Button {
-                            selectedSharedWorkout = item
-                        } label: {
-                            HStack(spacing: 12) {
-                                // Mini plant background preview
-                                CardSceneBackgroundView(interactions: interactions, hasPRs: item.hasPRs)
-                                    .frame(width: 56, height: 56)
-                                    .clipShape(RoundedRectangle(cornerRadius: 10))
-
-                                VStack(alignment: .leading, spacing: 4) {
-                                    Text(item.workoutName)
-                                        .font(.subheadline)
-                                        .fontWeight(.medium)
-                                        .foregroundStyle(Color.groveText)
-
-                                    Text(sharedWorkoutDateText(item.completedAt))
-                                        .font(.caption)
-                                        .foregroundStyle(.secondary)
-                                }
-
-                                Spacer()
-
-                                // Interaction summary icons
-                                interactionIcons(for: interactions)
-
-                                Image(systemName: "chevron.right")
-                                    .font(.caption2)
-                                    .foregroundStyle(.tertiary)
-                            }
-                            .padding(12)
-                            .contentShape(Rectangle())
-                            .background(Color.groveCardBackground)
-                            .clipShape(RoundedRectangle(cornerRadius: 12))
-                        }
-                        .buttonStyle(.plain)
+                    // Section header
+                    HStack {
+                        Label("Shared Workouts", systemImage: "square.and.arrow.up.fill")
+                            .font(.headline)
+                            .foregroundStyle(Color.groveText)
+                        Spacer()
+                        Text("\(socialService.mySharedWorkouts.count)")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
                     }
-                }
-            }
-        }
-    }
+                    .padding(.leading, 4)
 
-    private func interactionIcons(for interactions: InteractionSummary?) -> some View {
-        HStack(spacing: 6) {
-            if let interactions, interactions.waterCount > 0 {
-                HStack(spacing: 2) {
-                    Image(systemName: "drop.fill")
-                        .font(.system(size: 9))
-                        .foregroundStyle(.blue.opacity(0.7))
-                    Text("\(interactions.waterCount)")
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                }
-            }
-            if let interactions, !interactions.seeds.isEmpty {
-                HStack(spacing: 2) {
-                    Image(systemName: "leaf.fill")
-                        .font(.system(size: 9))
-                        .foregroundStyle(Color.groveSage.opacity(0.7))
-                    Text("\(interactions.seeds.count)")
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                }
-            }
-            if let interactions, interactions.sunlightCount > 0 {
-                HStack(spacing: 2) {
-                    Image(systemName: "sun.max.fill")
-                        .font(.system(size: 9))
-                        .foregroundStyle(.orange.opacity(0.7))
-                    Text("\(interactions.sunlightCount)")
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
+                    // 2-column grid
+                    LazyVGrid(columns: sharedWorkoutColumns, spacing: 12) {
+                        ForEach(socialService.mySharedWorkouts) { item in
+                            let interactions = socialService.interactionsByWorkout[item.id]
+
+                            Button {
+                                selectedSharedWorkout = item
+                            } label: {
+                                VStack(alignment: .leading, spacing: 0) {
+                                    // Plant scene thumbnail
+                                    CardSceneBackgroundView(
+                                        interactions: interactions,
+                                        hasPRs: item.hasPRs
+                                    )
+                                    .frame(height: 120)
+                                    .clipShape(UnevenRoundedRectangle(
+                                        topLeadingRadius: 12,
+                                        bottomLeadingRadius: 0,
+                                        bottomTrailingRadius: 0,
+                                        topTrailingRadius: 12
+                                    ))
+
+                                    // Text content
+                                    VStack(alignment: .leading, spacing: 3) {
+                                        Text(item.workoutName)
+                                            .font(.caption)
+                                            .fontWeight(.semibold)
+                                            .foregroundStyle(Color.groveText)
+                                            .lineLimit(1)
+
+                                        Text(sharedWorkoutDateText(item.completedAt))
+                                            .font(.caption2)
+                                            .foregroundStyle(.secondary)
+
+                                        HStack(spacing: 4) {
+                                            HStack(spacing: 2) {
+                                                Image(systemName: "figure.strengthtraining.traditional")
+                                                    .font(.system(size: 8))
+                                                Text("\(item.exerciseCount)")
+                                                    .font(.system(size: 10))
+                                            }
+
+                                            Text("\u{00B7}")
+                                                .font(.system(size: 10))
+
+                                            HStack(spacing: 2) {
+                                                Image(systemName: "arrow.triangle.2.circlepath")
+                                                    .font(.system(size: 8))
+                                                Text("\(item.totalSets)")
+                                                    .font(.system(size: 10))
+                                            }
+                                        }
+                                        .foregroundStyle(.secondary)
+                                    }
+                                    .padding(.horizontal, 8)
+                                    .padding(.vertical, 8)
+                                }
+                                .background(Color.groveCardBackground)
+                                .clipShape(RoundedRectangle(cornerRadius: 12))
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
                 }
             }
         }
