@@ -109,7 +109,6 @@ struct WeeklyProgressProvider: TimelineProvider {
 
             // Get plans for the week
             let allPlans = try context.fetch(FetchDescriptor<WorkoutPlan>())
-            let sunday = calendar.date(byAdding: .day, value: 6, to: monday)!
 
             // Training slots (0=Mon..6=Sun)
             let trainingSlots = Set(user.preferredTrainingSlots)
