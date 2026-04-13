@@ -1109,12 +1109,13 @@ class CloudKitSocialService {
         }
     }
 
-    /// Check how many sunlights the user has available (earned workouts not yet used)
+    /// Check how many sunlights the user has available (only from today's completed workouts)
     func checkAvailableSunlight() async {
         guard let myAppleUserID else { return }
 
-        // Fetch my shared workouts
-        let myWorkoutsPred = NSPredicate(format: "userID == %@", myAppleUserID)
+        // Fetch only today's shared workouts
+        let startOfToday = Calendar.current.startOfDay(for: Date())
+        let myWorkoutsPred = NSPredicate(format: "userID == %@ AND completedAt >= %@", myAppleUserID, startOfToday as NSDate)
         let myWorkoutsQuery = CKQuery(recordType: RecordType.sharedWorkout, predicate: myWorkoutsPred)
         guard let (myWorkouts, _) = try? await publicDB.records(matching: myWorkoutsQuery, resultsLimit: 50) else {
             availableSunlightCount = 0
@@ -1149,11 +1150,12 @@ class CloudKitSocialService {
         availableSunlightCount = myWorkoutRecordNames.filter { !usedWorkoutNames.contains($0) }.count
     }
 
-    /// Get the record name of the user's most recent unused shared workout (for sunlight sending)
+    /// Get the record name of the user's most recent unused shared workout from today (for sunlight sending)
     func myLatestSharedWorkoutRecordName() async -> String? {
         guard let myAppleUserID else { return nil }
 
-        let pred = NSPredicate(format: "userID == %@", myAppleUserID)
+        let startOfToday = Calendar.current.startOfDay(for: Date())
+        let pred = NSPredicate(format: "userID == %@ AND completedAt >= %@", myAppleUserID, startOfToday as NSDate)
         let query = CKQuery(recordType: RecordType.sharedWorkout, predicate: pred)
         query.sortDescriptors = [NSSortDescriptor(key: "completedAt", ascending: false)]
 
