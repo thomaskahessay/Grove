@@ -144,6 +144,7 @@ struct FriendProfileData: Sendable {
 class CloudKitSocialService {
     // State
     var friends: [CKFriendProfile] = []
+    var friendsLoaded: Bool = false
     var feedItems: [SharedWorkoutItem] = []
     var mySharedWorkouts: [SharedWorkoutItem] = []
     var myInviteCode: String?
@@ -426,6 +427,7 @@ class CloudKitSocialService {
         }
 
         self.friends = profiles.sorted { $0.displayName < $1.displayName }
+        self.friendsLoaded = true
         self.error = nil
     }
 

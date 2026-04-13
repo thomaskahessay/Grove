@@ -36,6 +36,8 @@ struct ProfileView: View {
     @State private var showingPlanEditor = false
     @State private var selectedSharedWorkout: SharedWorkoutItem?
     @State private var achievementProgress: [AchievementService.AchievementProgress] = []
+    @State private var showingAddFriend = false
+    @State private var selectedFriendID: String?
 
     private var user: User? { users.first }
 
@@ -65,8 +67,10 @@ struct ProfileView: View {
                     plantHeroSection
 
                     VStack(spacing: 24) {
-                        statBadges
+                        statsCard
                             .padding(.top, 16)
+
+                        friendsSection
 
                         currentProgramCard
 
@@ -118,6 +122,12 @@ struct ProfileView: View {
             .onChange(of: users.count) { _, _ in loadAchievementProgress() }
             .navigationDestination(item: $selectedSharedWorkout) { item in
                 WorkoutInteractionDetailView(item: item)
+            }
+            .navigationDestination(item: $selectedFriendID) { userID in
+                FriendProfileView(userID: userID)
+            }
+            .sheet(isPresented: $showingAddFriend) {
+                AddFriendSheet()
             }
             .toolbar(.hidden, for: .navigationBar)
         }
@@ -290,38 +300,201 @@ struct ProfileView: View {
         .buttonStyle(.plain)
     }
 
-    // MARK: - Stat Badges
+    // MARK: - Stats Card
 
-    private var statBadges: some View {
-        HStack(spacing: 8) {
-            statBadge(icon: "dumbbell.fill", value: "\(user?.workouts.count ?? 0)", label: "Workouts")
-            statBadge(icon: "flame.fill", value: "\(user?.currentStreak ?? 0)", label: "Streak")
-            statBadge(icon: "trophy.fill", value: "\(prExerciseCount)", label: "PRs")
-            statBadge(icon: "medal.fill", value: "\(user?.achievements.count ?? 0)", label: "Badges")
+    private var statsCard: some View {
+        HStack(spacing: 0) {
+            statColumn(icon: "dumbbell.fill", value: "\(user?.workouts.count ?? 0)", label: "Workouts")
+            statDivider
+            statColumn(icon: "flame.fill", value: "\(user?.currentStreak ?? 0)", label: "Streak")
+            statDivider
+            statColumn(icon: "trophy.fill", value: "\(prExerciseCount)", label: "PRs")
+            statDivider
+            statColumn(icon: "person.2.fill", value: "\(socialService.friends.count)", label: "Friends")
         }
+        .padding(.vertical, 16)
+        .frame(maxWidth: .infinity)
+        .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 14))
+        .shadow(color: .black.opacity(0.07), radius: 10, y: 3)
     }
 
-    private func statBadge(icon: String, value: String, label: String) -> some View {
-        VStack(spacing: 3) {
-            HStack(spacing: 4) {
-                Image(systemName: icon)
-                    .font(.system(size: 10))
-                    .foregroundStyle(Color.groveSage)
-                Text(value)
-                    .font(.subheadline)
-                    .fontWeight(.bold)
-                    .foregroundStyle(Color.groveText)
-            }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 6)
-            .background(.ultraThinMaterial)
-            .clipShape(Capsule())
-
+    private func statColumn(icon: String, value: String, label: String) -> some View {
+        VStack(spacing: 6) {
+            Image(systemName: icon)
+                .font(.caption)
+                .foregroundStyle(Color.groveSage)
+            Text(value)
+                .font(.title3)
+                .fontWeight(.bold)
+                .foregroundStyle(Color.groveText)
             Text(label)
-                .font(.system(size: 8))
+                .font(.caption2)
                 .foregroundStyle(.secondary)
         }
         .frame(maxWidth: .infinity)
+    }
+
+    private var statDivider: some View {
+        Rectangle()
+            .fill(Color.groveText.opacity(0.1))
+            .frame(width: 1, height: 40)
+    }
+
+    // MARK: - Friends Section
+
+    private var friendsSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Image(systemName: "person.2.fill")
+                    .font(.caption)
+                    .foregroundStyle(Color.groveSage)
+                Text("Friends")
+                    .font(.headline)
+                    .foregroundStyle(Color.groveText)
+                Spacer()
+                if !socialService.friends.isEmpty {
+                    Button {
+                        showingAddFriend = true
+                    } label: {
+                        Image(systemName: "person.badge.plus")
+                            .font(.subheadline)
+                            .foregroundStyle(Color.groveSage)
+                    }
+                }
+            }
+
+            if !socialService.friendsLoaded {
+                // Still loading — show placeholder to avoid flashing the empty state
+                HStack(spacing: 14) {
+                    ForEach(0..<3, id: \.self) { _ in
+                        VStack(spacing: 6) {
+                            Circle()
+                                .fill(Color.groveWarmSand.opacity(0.2))
+                                .frame(width: 52, height: 52)
+                            RoundedRectangle(cornerRadius: 3)
+                                .fill(Color.groveWarmSand.opacity(0.15))
+                                .frame(width: 36, height: 8)
+                        }
+                        .frame(width: 60)
+                    }
+                    Spacer()
+                }
+            } else if socialService.friends.isEmpty {
+                Button {
+                    showingAddFriend = true
+                } label: {
+                    HStack(spacing: 10) {
+                        Circle()
+                            .strokeBorder(Color.groveSage.opacity(0.4), style: StrokeStyle(lineWidth: 1.5, dash: [4, 3]))
+                            .frame(width: 52, height: 52)
+                            .overlay {
+                                Image(systemName: "person.badge.plus")
+                                    .font(.title3)
+                                    .foregroundStyle(Color.groveSage.opacity(0.6))
+                            }
+
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Add your first friend")
+                                .font(.subheadline)
+                                .fontWeight(.medium)
+                                .foregroundStyle(Color.groveText)
+                            Text("Share invite codes to connect")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+
+                        Spacer()
+
+                        Image(systemName: "chevron.right")
+                            .font(.caption)
+                            .foregroundStyle(.tertiary)
+                    }
+                    .padding(14)
+                    .background(Color.groveCardBackground)
+                    .clipShape(RoundedRectangle(cornerRadius: 12))
+                }
+                .buttonStyle(.plain)
+            } else {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 14) {
+                        ForEach(socialService.friends) { friend in
+                            Button {
+                                selectedFriendID = friend.id
+                            } label: {
+                                friendAvatar(friend)
+                            }
+                            .buttonStyle(.plain)
+                        }
+
+                        // Add friend button at end
+                        Button {
+                            showingAddFriend = true
+                        } label: {
+                            VStack(spacing: 6) {
+                                Circle()
+                                    .strokeBorder(Color.groveSage.opacity(0.4), style: StrokeStyle(lineWidth: 1.5, dash: [4, 3]))
+                                    .frame(width: 52, height: 52)
+                                    .overlay {
+                                        Image(systemName: "plus")
+                                            .font(.title3)
+                                            .foregroundStyle(Color.groveSage.opacity(0.6))
+                                    }
+
+                                Text("Add")
+                                    .font(.caption2)
+                                    .foregroundStyle(.secondary)
+                            }
+                            .frame(width: 60)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                    .padding(.horizontal, 2)
+                }
+            }
+        }
+    }
+
+    private func friendAvatar(_ friend: CKFriendProfile) -> some View {
+        VStack(spacing: 6) {
+            Circle()
+                .fill(Color.groveSage.opacity(0.12))
+                .frame(width: 52, height: 52)
+                .overlay {
+                    if let data = friend.profileImageData,
+                       let img = UIImage(data: data) {
+                        Image(uiImage: img)
+                            .resizable()
+                            .scaledToFill()
+                            .clipShape(Circle())
+                    } else {
+                        Text(friend.initials)
+                            .font(.subheadline)
+                            .fontWeight(.semibold)
+                            .foregroundStyle(Color.groveSage)
+                    }
+                }
+                .overlay(alignment: .bottomTrailing) {
+                    if friend.currentStreak > 0 {
+                        HStack(spacing: 1) {
+                            Image(systemName: "flame.fill")
+                                .font(.system(size: 7))
+                            Text("\(friend.currentStreak)")
+                                .font(.system(size: 8, weight: .bold))
+                        }
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 4)
+                        .padding(.vertical, 2)
+                        .background(Color.groveTerracotta, in: Capsule())
+                        .offset(x: 4, y: 2)
+                    }
+                }
+
+            Text(friend.displayName.split(separator: " ").first.map(String.init) ?? friend.displayName)
+                .font(.caption2)
+                .foregroundStyle(Color.groveText)
+                .lineLimit(1)
+        }
+        .frame(width: 60)
     }
 
     // MARK: - Workout Heatmap
