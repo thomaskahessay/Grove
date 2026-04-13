@@ -1,5 +1,6 @@
 import SwiftUI
 import SwiftData
+import WidgetKit
 
 @MainActor
 @Observable
@@ -186,6 +187,9 @@ class WorkoutSessionManager {
         activeWorkout = nil
         isMinimized = false
         isFullScreenPresented = false
+
+        // Refresh widgets with updated streak/plan data
+        WidgetCenter.shared.reloadAllTimelines()
 
         // Cancel abandoned workout notification since workout is now complete
         NotificationService.shared.cancelAbandonedWorkoutReminder()

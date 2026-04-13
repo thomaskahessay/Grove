@@ -6,11 +6,73 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		9DB2E5772F8D7A2100BE6078 /* WidgetKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 9DB2E5762F8D7A2100BE6078 /* WidgetKit.framework */; };
+		9DB2E5792F8D7A2100BE6078 /* SwiftUI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 9DB2E5782F8D7A2100BE6078 /* SwiftUI.framework */; };
+		9DB2E5862F8D7A2300BE6078 /* GroveWidgetsExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 9DB2E5742F8D7A2100BE6078 /* GroveWidgetsExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		9DB2E5842F8D7A2300BE6078 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = A000000A /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 9DB2E5732F8D7A2100BE6078;
+			remoteInfo = GroveWidgetsExtension;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		9DB2E58B2F8D7A2300BE6078 /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				9DB2E5862F8D7A2300BE6078 /* GroveWidgetsExtension.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
 /* Begin PBXFileReference section */
+		9DB2E5742F8D7A2100BE6078 /* GroveWidgetsExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = GroveWidgetsExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		9DB2E5762F8D7A2100BE6078 /* WidgetKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = WidgetKit.framework; path = System/Library/Frameworks/WidgetKit.framework; sourceTree = SDKROOT; };
+		9DB2E5782F8D7A2100BE6078 /* SwiftUI.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = SwiftUI.framework; path = System/Library/Frameworks/SwiftUI.framework; sourceTree = SDKROOT; };
+		9DB2E58C2F8D7ADD00BE6078 /* GroveWidgetsExtension.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = GroveWidgetsExtension.entitlements; sourceTree = "<group>"; };
 		A0000001 /* Grove.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Grove.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		9DB2E58A2F8D7A2300BE6078 /* Exceptions for "GroveWidgets" folder in "GroveWidgetsExtension" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = 9DB2E5732F8D7A2100BE6078 /* GroveWidgetsExtension */;
+		};
+		9DB2E5942F8D7CF900BE6078 /* Exceptions for "Grove" folder in "GroveWidgetsExtension" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Components/ColorExtensions.swift,
+				Components/StreakPlant/PlantCanvasRenderer.swift,
+				Models/Achievement.swift,
+				Models/CreatineLog.swift,
+				Models/Enums.swift,
+				Models/Exercise.swift,
+				Models/ExerciseLog.swift,
+				Models/PersonalRecord.swift,
+				Models/PlantStage.swift,
+				Models/SetLog.swift,
+				Models/User.swift,
+				Models/Workout.swift,
+				Models/WorkoutPlan.swift,
+				Models/WorkoutTemplate.swift,
+				Services/SharedModelContainer.swift,
+			);
+			target = 9DB2E5732F8D7A2100BE6078 /* GroveWidgetsExtension */;
+		};
 		A0000010 /* Exceptions for "Grove" folder in "Grove" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
@@ -21,10 +83,19 @@
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
+		9DB2E57A2F8D7A2100BE6078 /* GroveWidgets */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				9DB2E58A2F8D7A2300BE6078 /* Exceptions for "GroveWidgets" folder in "GroveWidgetsExtension" target */,
+			);
+			path = GroveWidgets;
+			sourceTree = "<group>";
+		};
 		A0000003 /* Grove */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
 				A0000010 /* Exceptions for "Grove" folder in "Grove" target */,
+				9DB2E5942F8D7CF900BE6078 /* Exceptions for "Grove" folder in "GroveWidgetsExtension" target */,
 			);
 			path = Grove;
 			sourceTree = "<group>";
@@ -32,6 +103,15 @@
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
+		9DB2E5712F8D7A2100BE6078 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				9DB2E5792F8D7A2100BE6078 /* SwiftUI.framework in Frameworks */,
+				9DB2E5772F8D7A2100BE6078 /* WidgetKit.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		A0000004 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
@@ -42,10 +122,22 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		9DB2E5752F8D7A2100BE6078 /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				9DB2E5762F8D7A2100BE6078 /* WidgetKit.framework */,
+				9DB2E5782F8D7A2100BE6078 /* SwiftUI.framework */,
+			);
+			name = Frameworks;
+			sourceTree = "<group>";
+		};
 		A0000005 = {
 			isa = PBXGroup;
 			children = (
+				9DB2E58C2F8D7ADD00BE6078 /* GroveWidgetsExtension.entitlements */,
 				A0000003 /* Grove */,
+				9DB2E57A2F8D7A2100BE6078 /* GroveWidgets */,
+				9DB2E5752F8D7A2100BE6078 /* Frameworks */,
 				A0000006 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -54,6 +146,7 @@
 			isa = PBXGroup;
 			children = (
 				A0000001 /* Grove.app */,
+				9DB2E5742F8D7A2100BE6078 /* GroveWidgetsExtension.appex */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -61,6 +154,28 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
+		9DB2E5732F8D7A2100BE6078 /* GroveWidgetsExtension */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 9DB2E5872F8D7A2300BE6078 /* Build configuration list for PBXNativeTarget "GroveWidgetsExtension" */;
+			buildPhases = (
+				9DB2E5702F8D7A2100BE6078 /* Sources */,
+				9DB2E5712F8D7A2100BE6078 /* Frameworks */,
+				9DB2E5722F8D7A2100BE6078 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				9DB2E57A2F8D7A2100BE6078 /* GroveWidgets */,
+			);
+			name = GroveWidgetsExtension;
+			packageProductDependencies = (
+			);
+			productName = GroveWidgetsExtension;
+			productReference = 9DB2E5742F8D7A2100BE6078 /* GroveWidgetsExtension.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
 		A0000002 /* Grove */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = A0000007 /* Build configuration list for PBXNativeTarget "Grove" */;
@@ -68,10 +183,12 @@
 				A0000008 /* Sources */,
 				A0000004 /* Frameworks */,
 				A0000009 /* Resources */,
+				9DB2E58B2F8D7A2300BE6078 /* Embed Foundation Extensions */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				9DB2E5852F8D7A2300BE6078 /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
 				A0000003 /* Grove */,
@@ -90,9 +207,12 @@
 			isa = PBXProject;
 			attributes = {
 				BuildIndependentTargetsInParallel = 1;
-				LastSwiftUpdateCheck = 1600;
+				LastSwiftUpdateCheck = 2640;
 				LastUpgradeCheck = 2630;
 				TargetAttributes = {
+					9DB2E5732F8D7A2100BE6078 = {
+						CreatedOnToolsVersion = 26.4;
+					};
 					A0000002 = {
 						CreatedOnToolsVersion = 16.0;
 					};
@@ -113,11 +233,19 @@
 			projectRoot = "";
 			targets = (
 				A0000002 /* Grove */,
+				9DB2E5732F8D7A2100BE6078 /* GroveWidgetsExtension */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
+		9DB2E5722F8D7A2100BE6078 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		A0000009 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -128,6 +256,13 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
+		9DB2E5702F8D7A2100BE6078 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		A0000008 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -137,7 +272,77 @@
 		};
 /* End PBXSourcesBuildPhase section */
 
+/* Begin PBXTargetDependency section */
+		9DB2E5852F8D7A2300BE6078 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 9DB2E5732F8D7A2100BE6078 /* GroveWidgetsExtension */;
+			targetProxy = 9DB2E5842F8D7A2300BE6078 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
 /* Begin XCBuildConfiguration section */
+		9DB2E5882F8D7A2300BE6078 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = WidgetBackground;
+				CODE_SIGN_ENTITLEMENTS = GroveWidgetsExtension.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = GroveWidgets/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = GroveWidgets;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.thomaskahessay.Grove.GroveWidgets;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 6.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		9DB2E5892F8D7A2300BE6078 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = WidgetBackground;
+				CODE_SIGN_ENTITLEMENTS = GroveWidgetsExtension.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = GroveWidgets/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = GroveWidgets;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.thomaskahessay.Grove.GroveWidgets;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 6.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
 		A000000C /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -336,6 +541,15 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
+		9DB2E5872F8D7A2300BE6078 /* Build configuration list for PBXNativeTarget "GroveWidgetsExtension" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				9DB2E5882F8D7A2300BE6078 /* Debug */,
+				9DB2E5892F8D7A2300BE6078 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
 		A0000007 /* Build configuration list for PBXNativeTarget "Grove" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (

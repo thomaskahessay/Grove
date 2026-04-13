@@ -1,6 +1,7 @@
 import SwiftUI
 import SwiftData
 import BackgroundTasks
+import WidgetKit
 
 @main
 struct GroveApp: App {
@@ -78,6 +79,7 @@ struct GroveApp: App {
         .onChange(of: scenePhase) { _, newPhase in
             switch newPhase {
             case .background:
+                WidgetCenter.shared.reloadAllTimelines()
                 if workoutSessionManager.hasActiveWorkout {
                     Task { @MainActor in
                         await NotificationService.shared.checkAuthorizationStatus()
