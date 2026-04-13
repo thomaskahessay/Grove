@@ -1,10 +1,18 @@
 import SwiftUI
 import SwiftData
+import UIKit
 import BackgroundTasks
 import WidgetKit
 
+class AppDelegate: NSObject, UIApplicationDelegate {
+    func application(_ application: UIApplication, supportedInterfaceOrientationsFor window: UIWindow?) -> UIInterfaceOrientationMask {
+        return .portrait
+    }
+}
+
 @main
 struct GroveApp: App {
+    @UIApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
     let modelContainer: ModelContainer
 
     init() {
