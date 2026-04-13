@@ -45,6 +45,23 @@ extension Color {
         }
     )
 
+    // MARK: - Grove Network Window (light-mode "window" effect)
+    static let groveGroveWindowBackground = Color(
+        uiColor: UIColor { traits in
+            traits.userInterfaceStyle == .dark
+                ? UIColor(Color(hex: "1C1917"))  // Match page background — canvas provides contrast
+                : UIColor(Color(hex: "FFFDF8"))  // Slightly warmer/lighter than cream page — subtle lift
+        }
+    )
+
+    static let groveGroveWindowBorder = Color(
+        uiColor: UIColor { traits in
+            traits.userInterfaceStyle == .dark
+                ? UIColor(Color(hex: "3D3229")).withAlphaComponent(0.5)  // Subtle charcoal frame
+                : UIColor(Color(hex: "C4B99A")).withAlphaComponent(0.6)  // Warm sand border — visible frame
+        }
+    )
+
     // MARK: - Semantic Aliases
     static let grovePrimary = groveSage
     static let groveSecondary = groveTerracotta

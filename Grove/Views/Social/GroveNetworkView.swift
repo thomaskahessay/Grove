@@ -38,7 +38,15 @@ struct GroveNetworkView: View {
                 }
             }
         .frame(height: 220)
+        .background {
+            RoundedRectangle(cornerRadius: 16)
+                .fill(Color.groveGroveWindowBackground)
+        }
         .clipShape(RoundedRectangle(cornerRadius: 16))
+        .overlay(
+            RoundedRectangle(cornerRadius: 16)
+                .strokeBorder(Color.groveGroveWindowBorder, lineWidth: 1)
+        )
     }
 
     @ViewBuilder
