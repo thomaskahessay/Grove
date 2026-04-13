@@ -329,6 +329,7 @@ struct ProgressView: View {
                         .font(.caption)
                         .foregroundStyle(Color.groveSage)
                 }
+                .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
 
@@ -785,6 +786,7 @@ struct ProgressView: View {
                         .font(.caption)
                         .foregroundStyle(Color.groveSage)
                 }
+                .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
 

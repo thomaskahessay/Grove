@@ -229,6 +229,7 @@ struct SettingsView: View {
                         .font(.caption)
                         .foregroundStyle(.tertiary)
                 }
+                .contentShape(Rectangle())
             }
         }
     }

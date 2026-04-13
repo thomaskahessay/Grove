@@ -15,6 +15,7 @@ struct SocialFeedView: View {
     @State private var selectedProfileUserID: String?
     /// Tracks which workout just had a seed sent — triggers the drop animation immediately
     @State private var seedAnimationWorkoutID: String?
+    @State private var showSunlightUnavailableAlert = false
 
     private var user: User? { users.first }
     private var hasCode: Bool { socialService.myInviteCode != nil }
@@ -198,6 +199,11 @@ struct SocialFeedView: View {
             .sheet(item: $templateImportItem) { item in
                 TemplateImportSheet(sharedTemplate: SharedTemplate.from(feedItem: item))
             }
+            .alert("Share a Workout First", isPresented: $showSunlightUnavailableAlert) {
+                Button("OK", role: .cancel) { }
+            } message: {
+                Text("You need to share a workout to the feed before you can send sunlight to others.")
+            }
         }
     }
 
@@ -251,6 +257,8 @@ struct SocialFeedView: View {
                                     recipientID: item.userID,
                                     fromWorkoutRecordName: myWorkout
                                 )
+                            } else {
+                                showSunlightUnavailableAlert = true
                             }
                         }
                     }

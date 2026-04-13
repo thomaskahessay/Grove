@@ -17,11 +17,6 @@ struct InteractionBar: View {
     private var iWatered: Bool { summary?.iWatered ?? false }
     private var iSunlit: Bool { summary?.iSunlit ?? false }
 
-    /// Whether there are any action buttons to show
-    private var hasActions: Bool {
-        !iWatered || !iSunlit && showSunlight
-    }
-
     var body: some View {
         VStack(spacing: 8) {
             // Interaction counts (only in detail view mode)

@@ -123,9 +123,8 @@ struct SharedWorkoutItem: Identifiable, Sendable, Hashable {
             let w = weights[0] == floor(weights[0]) ? "\(Int(weights[0]))" : String(format: "%.1f", weights[0])
             return "\(w) lbs · \(reps.map(String.init).joined(separator: ","))"
         } else {
-            let minW = Int(weights.min()!)
-            let maxW = Int(weights.max()!)
-            return "\(sets.count) sets · \(minW)-\(maxW) lbs"
+            guard let minW = weights.min(), let maxW = weights.max() else { return nil }
+            return "\(sets.count) sets · \(Int(minW))-\(Int(maxW)) lbs"
         }
     }
 }
@@ -155,7 +154,9 @@ class CloudKitSocialService {
     var interactionsByWorkout: [String: InteractionSummary] = [:]
     var rootConnections: [RootConnection] = []
     var availableSunlightCount: Int = 0
-    private var usedSunlightSources: Set<String> = []
+    private var usedSunlightSources: Set<String> = Set(UserDefaults.standard.stringArray(forKey: "grove_usedSunlightSources") ?? []) {
+        didSet { UserDefaults.standard.set(Array(usedSunlightSources), forKey: "grove_usedSunlightSources") }
+    }
 
     // Track previous root levels for milestone detection
     private var previousRootLevels: [String: RootLevel] = [:]
@@ -555,14 +556,14 @@ class CloudKitSocialService {
                 summary.waterCount += 1
                 summary.waterers.append(InteractorInfo(userID: senderID, displayName: senderName, profileImageData: senderImage))
                 if senderID == myAppleUserID { summary.iWatered = true }
-                if let createdAt, summary.latestWaterDate == nil || createdAt > summary.latestWaterDate! {
+                if let createdAt, createdAt > (summary.latestWaterDate ?? .distantPast) {
                     summary.latestWaterDate = createdAt
                 }
             case "sunlight":
                 summary.sunlightCount += 1
                 summary.sunlighters.append(SunlightInfo(senderID: senderID, senderName: senderName, senderProfileImageData: senderImage, earnedFromWorkoutName: nil))
                 if senderID == myAppleUserID { summary.iSunlit = true }
-                if let createdAt, summary.latestSunlightDate == nil || createdAt > summary.latestSunlightDate! {
+                if let createdAt, createdAt > (summary.latestSunlightDate ?? .distantPast) {
                     summary.latestSunlightDate = createdAt
                 }
             case "seed":
@@ -784,7 +785,7 @@ class CloudKitSocialService {
                 summary.waterCount += 1
                 summary.waterers.append(InteractorInfo(userID: senderID, displayName: senderName, profileImageData: senderImage))
                 if senderID == myAppleUserID { summary.iWatered = true }
-                if summary.latestWaterDate == nil || createdAt > summary.latestWaterDate! {
+                if createdAt > (summary.latestWaterDate ?? .distantPast) {
                     summary.latestWaterDate = createdAt
                 }
 
@@ -797,7 +798,7 @@ class CloudKitSocialService {
                     earnedFromWorkoutName: nil
                 ))
                 if senderID == myAppleUserID { summary.iSunlit = true }
-                if summary.latestSunlightDate == nil || createdAt > summary.latestSunlightDate! {
+                if createdAt > (summary.latestSunlightDate ?? .distantPast) {
                     summary.latestSunlightDate = createdAt
                 }
 
@@ -863,7 +864,7 @@ class CloudKitSocialService {
                 summary.waterCount += 1
                 summary.waterers.append(InteractorInfo(userID: senderID, displayName: senderName, profileImageData: senderImage))
                 if senderID == myAppleUserID { summary.iWatered = true }
-                if summary.latestWaterDate == nil || createdAt > summary.latestWaterDate! {
+                if createdAt > (summary.latestWaterDate ?? .distantPast) {
                     summary.latestWaterDate = createdAt
                 }
             case "sunlight":
@@ -875,7 +876,7 @@ class CloudKitSocialService {
                     earnedFromWorkoutName: nil
                 ))
                 if senderID == myAppleUserID { summary.iSunlit = true }
-                if summary.latestSunlightDate == nil || createdAt > summary.latestSunlightDate! {
+                if createdAt > (summary.latestSunlightDate ?? .distantPast) {
                     summary.latestSunlightDate = createdAt
                 }
             case "seed":
@@ -947,7 +948,7 @@ class CloudKitSocialService {
                 summary.waterCount += 1
                 summary.waterers.append(InteractorInfo(userID: senderID, displayName: senderName, profileImageData: senderImage))
                 if senderID == myAppleUserID { summary.iWatered = true }
-                if summary.latestWaterDate == nil || createdAt > summary.latestWaterDate! {
+                if createdAt > (summary.latestWaterDate ?? .distantPast) {
                     summary.latestWaterDate = createdAt
                 }
             case "sunlight":
@@ -961,7 +962,7 @@ class CloudKitSocialService {
                     earnedFromWorkoutName: resolvedName
                 ))
                 if senderID == myAppleUserID { summary.iSunlit = true }
-                if summary.latestSunlightDate == nil || createdAt > summary.latestSunlightDate! {
+                if createdAt > (summary.latestSunlightDate ?? .distantPast) {
                     summary.latestSunlightDate = createdAt
                 }
             case "seed":
@@ -1272,7 +1273,9 @@ class CloudKitSocialService {
         for connection in rootConnections {
             let previousLevel = previousRootLevels[connection.friendID]
             if let prev = previousLevel, connection.level != prev,
-               RootLevel.allCases.firstIndex(of: connection.level)! > RootLevel.allCases.firstIndex(of: prev)! {
+               let currentIdx = RootLevel.allCases.firstIndex(of: connection.level),
+               let prevIdx = RootLevel.allCases.firstIndex(of: prev),
+               currentIdx > prevIdx {
                 milestones.append((connection.friendName, connection.level))
             }
         }

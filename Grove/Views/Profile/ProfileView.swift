@@ -288,6 +288,7 @@ struct ProfileView: View {
                     }
                     .padding(16)
                     .frame(maxWidth: .infinity, alignment: .leading)
+                    .contentShape(Rectangle())
                     .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 12))
                     .shadow(color: .black.opacity(0.07), radius: 10, y: 3)
                 }
@@ -326,6 +327,7 @@ struct ProfileView: View {
             }
             .padding(16)
             .frame(maxWidth: .infinity, alignment: .leading)
+            .contentShape(Rectangle())
             .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 12))
             .shadow(color: .black.opacity(0.07), radius: 10, y: 3)
         }
@@ -372,6 +374,7 @@ struct ProfileView: View {
                     }
                     .padding(16)
                     .frame(maxWidth: .infinity, alignment: .leading)
+                    .contentShape(Rectangle())
                     .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 12))
                     .shadow(color: .black.opacity(0.07), radius: 10, y: 3)
                 }
@@ -424,6 +427,7 @@ struct ProfileView: View {
                                     .foregroundStyle(.tertiary)
                             }
                             .padding(12)
+                            .contentShape(Rectangle())
                             .background(Color.groveCardBackground)
                             .clipShape(RoundedRectangle(cornerRadius: 12))
                         }

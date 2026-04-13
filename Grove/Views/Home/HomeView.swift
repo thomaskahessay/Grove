@@ -629,6 +629,7 @@ struct RecentWorkoutsSection: View {
                         .fontWeight(.semibold)
                         .foregroundStyle(Color.groveTextSecondary)
                 }
+                .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
 
@@ -707,6 +708,7 @@ struct RecentWorkoutRow: View {
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
+        .contentShape(Rectangle())
     }
 }
 
