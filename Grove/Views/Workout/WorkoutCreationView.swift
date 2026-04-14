@@ -170,6 +170,11 @@ struct WorkoutCreationView: View {
                                 if workoutName.isEmpty || TemplateCategory.allCases.map(\.rawValue).contains(workoutName) {
                                     workoutName = category.rawValue
                                 }
+                                // Auto-select template if only one exists for this category
+                                let matchingTemplates = userTemplates.filter { $0.category == category }
+                                if matchingTemplates.count == 1, let template = matchingTemplates.first {
+                                    selectTemplate(template)
+                                }
                             }
                         }
                     }
