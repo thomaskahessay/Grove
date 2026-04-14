@@ -1501,12 +1501,14 @@ struct AddExerciseToWorkoutView: View {
         let descriptor = FetchDescriptor<ExerciseLog>(
             predicate: #Predicate<ExerciseLog> { log in
                 log.exercise?.id == exerciseID
-            },
-            sortBy: [SortDescriptor(\.workout?.completedAt, order: .reverse)]
+            }
         )
 
         guard let logs = try? context.fetch(descriptor) else { return [] }
-        guard let lastLog = logs.first(where: { $0.workout?.completedAt != nil }) else { return [] }
+        let completedLogs = logs
+            .filter { $0.workout?.completedAt != nil }
+            .sorted { ($0.workout?.completedAt ?? .distantPast) > ($1.workout?.completedAt ?? .distantPast) }
+        guard let lastLog = completedLogs.first else { return [] }
 
         return lastLog.sets
             .filter { $0.isCompleted }
@@ -1600,12 +1602,14 @@ struct ReplaceExerciseView: View {
         let descriptor = FetchDescriptor<ExerciseLog>(
             predicate: #Predicate<ExerciseLog> { log in
                 log.exercise?.id == exerciseID
-            },
-            sortBy: [SortDescriptor(\.workout?.completedAt, order: .reverse)]
+            }
         )
 
         guard let logs = try? modelContext.fetch(descriptor) else { return [] }
-        guard let lastLog = logs.first(where: { $0.workout?.completedAt != nil }) else { return [] }
+        let completedLogs = logs
+            .filter { $0.workout?.completedAt != nil }
+            .sorted { ($0.workout?.completedAt ?? .distantPast) > ($1.workout?.completedAt ?? .distantPast) }
+        guard let lastLog = completedLogs.first else { return [] }
 
         return lastLog.sets
             .filter { $0.isCompleted }
