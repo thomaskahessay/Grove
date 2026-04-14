@@ -481,7 +481,7 @@ class CloudKitSocialService {
                     id: record.recordID.recordName,
                     userID: userID,
                     friendName: isOwnPost ? "You" : (friend?.displayName ?? "Friend"),
-                    friendProfileImageData: isOwnPost ? nil : friend?.profileImageData,
+                    friendProfileImageData: isOwnPost ? myProfileImageData : friend?.profileImageData,
                     workoutName: record["workoutName"] as? String ?? "Workout",
                     templateCategory: record["templateCategory"] as? String,
                     duration: record["duration"] as? TimeInterval ?? 0,
