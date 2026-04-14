@@ -1099,6 +1099,7 @@ struct SetRowView: View {
     }
 
     private func incrementWeight() {
+        syncWeightFromText()
         let current = setLog.weight ?? 0
         let newWeight = current + 5
         setLog.weight = newWeight
@@ -1107,6 +1108,7 @@ struct SetRowView: View {
     }
 
     private func decrementWeight() {
+        syncWeightFromText()
         let current = setLog.weight ?? 0
         let newWeight = max(0, current - 5)
         setLog.weight = newWeight
@@ -1115,6 +1117,7 @@ struct SetRowView: View {
     }
 
     private func incrementReps() {
+        syncRepsFromText()
         let current = setLog.reps ?? 0
         let newReps = current + 1
         setLog.reps = newReps
@@ -1123,6 +1126,7 @@ struct SetRowView: View {
     }
 
     private func decrementReps() {
+        syncRepsFromText()
         let current = setLog.reps ?? 0
         let newReps = max(0, current - 1)
         setLog.reps = newReps
