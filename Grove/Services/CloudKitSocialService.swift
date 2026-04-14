@@ -147,7 +147,9 @@ class CloudKitSocialService {
     var friendsLoaded: Bool = false
     var feedItems: [SharedWorkoutItem] = []
     var mySharedWorkouts: [SharedWorkoutItem] = []
-    var myInviteCode: String?
+    var myInviteCode: String? = UserDefaults.standard.string(forKey: "grove_myInviteCode") {
+        didSet { UserDefaults.standard.set(myInviteCode, forKey: "grove_myInviteCode") }
+    }
     var isLoading: Bool = false
     var error: String?
 
@@ -209,6 +211,12 @@ class CloudKitSocialService {
 
             // Try to fetch existing profile
             if let existing = try? await publicDB.record(for: recordID) {
+                // Read invite code immediately — before save which can fail
+                if let code = existing["inviteCode"] as? String, !code.isEmpty {
+                    self.myInviteCode = code
+                    user.inviteCode = code
+                }
+
                 // Update mutable fields
                 existing["displayName"] = (user.displayName ?? "Athlete") as CKRecordValue
                 existing["workoutCount"] = Int64(user.workouts.count) as CKRecordValue
@@ -223,8 +231,6 @@ class CloudKitSocialService {
                 Self.writeProgramFields(to: existing, user: user)
 
                 try await publicDB.save(existing)
-                self.myInviteCode = existing["inviteCode"] as? String
-                user.inviteCode = self.myInviteCode
             } else {
                 // Create new profile — include all fields so schema gets created
                 let record = CKRecord(recordType: RecordType.userProfile, recordID: recordID)
