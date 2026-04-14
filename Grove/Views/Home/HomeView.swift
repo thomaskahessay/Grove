@@ -128,45 +128,48 @@ struct HomeView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 24) {
                     // Today's Workout Card
-                    if let plan = todaysPlan {
-                        if plan.isRestDay {
-                            RestDayCard()
-                        } else if let completedWorkout = plan.completedWorkout {
+                    Group {
+                        if let plan = todaysPlan {
+                            if plan.isRestDay {
+                                RestDayCard()
+                            } else if let completedWorkout = plan.completedWorkout {
+                                CompletedTodayCard(
+                                    workout: completedWorkout,
+                                    tomorrowsPlan: tomorrowsPlan,
+                                    onPlanTomorrow: { showingWeeklyPlan = true }
+                                )
+                            } else if let template = plan.template {
+                                TodayWorkoutCard(
+                                    workoutName: template.name,
+                                    exerciseCount: template.exerciseIDs.count,
+                                    category: template.category,
+                                    isResuming: sessionManager.activeWorkout != nil,
+                                    onStart: {
+                                        if sessionManager.activeWorkout != nil {
+                                            sessionManager.expandWorkout()
+                                        } else {
+                                            startTodaysWorkout(plan: plan)
+                                        }
+                                    }
+                                )
+                            } else if let next = nextPlannedWorkout {
+                                NextWorkoutCard(name: next.name, date: next.date)
+                            } else {
+                                EmptyTodayCard()
+                            }
+                        } else if let completedWorkout = todaysCompletedWorkout {
                             CompletedTodayCard(
                                 workout: completedWorkout,
                                 tomorrowsPlan: tomorrowsPlan,
                                 onPlanTomorrow: { showingWeeklyPlan = true }
-                            )
-                        } else if let template = plan.template {
-                            TodayWorkoutCard(
-                                workoutName: template.name,
-                                exerciseCount: template.exerciseIDs.count,
-                                category: template.category,
-                                isResuming: sessionManager.activeWorkout != nil,
-                                onStart: {
-                                    if sessionManager.activeWorkout != nil {
-                                        sessionManager.expandWorkout()
-                                    } else {
-                                        startTodaysWorkout(plan: plan)
-                                    }
-                                }
                             )
                         } else if let next = nextPlannedWorkout {
                             NextWorkoutCard(name: next.name, date: next.date)
                         } else {
                             EmptyTodayCard()
                         }
-                    } else if let completedWorkout = todaysCompletedWorkout {
-                        CompletedTodayCard(
-                            workout: completedWorkout,
-                            tomorrowsPlan: tomorrowsPlan,
-                            onPlanTomorrow: { showingWeeklyPlan = true }
-                        )
-                    } else if let next = nextPlannedWorkout {
-                        NextWorkoutCard(name: next.name, date: next.date)
-                    } else {
-                        EmptyTodayCard()
                     }
+                    .coachMarkAnchor(.todaysWorkout)
 
                     // Streak Plant
                     if let user = currentUser {
@@ -181,6 +184,7 @@ struct HomeView: View {
                             .frame(maxWidth: .infinity)
                         }
                         .buttonStyle(.plain)
+                        .coachMarkAnchor(.streakPlant)
 
                         // Rest day nudge
                         if user.consecutiveRestDays >= 3, !restNudgeDismissed {
@@ -253,6 +257,7 @@ struct HomeView: View {
                         .contentShape(RoundedRectangle(cornerRadius: 10))
                     }
                     .buttonStyle(.plain)
+                    .coachMarkAnchor(.planMyWeek)
 
                     // Recent Workouts Section
                     if !recentWorkouts.isEmpty {

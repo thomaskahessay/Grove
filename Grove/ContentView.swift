@@ -17,6 +17,7 @@ struct ContentView: View {
     @State private var minimumTimeElapsed = false
     @AppStorage("appearanceMode") private var appearanceMode: String = "System"
     @AppStorage("notificationPromptShown") private var notificationPromptShown = false
+    @State private var coachMarkManager = CoachMarkManager()
 
     private var colorScheme: ColorScheme? {
         switch appearanceMode {
@@ -49,6 +50,11 @@ struct ContentView: View {
                 mainAppView
                     .preferredColorScheme(colorScheme)
                     .opacity(isLaunching ? 0 : 1)
+                    .environment(coachMarkManager)
+
+                CoachMarkOverlay()
+                    .environment(coachMarkManager)
+                    .zIndex(0.5)
 
                 if isLaunching {
                     LaunchView()
@@ -109,7 +115,7 @@ struct ContentView: View {
                     }
 
                     // Prompt existing users who haven't been asked yet
-                    if !notificationPromptShown && notificationService.authorizationStatus == .notDetermined {
+                    if !notificationPromptShown && !coachMarkManager.isActive && notificationService.authorizationStatus == .notDetermined {
                         showNotificationPrompt = true
                     }
                 }
@@ -126,6 +132,11 @@ struct ContentView: View {
         guard minimumTimeElapsed && preloadFinished else { return }
         withAnimation(.easeInOut(duration: 0.4)) {
             isLaunching = false
+        }
+        // Start guided tour after launch animation completes
+        Task {
+            try? await Task.sleep(for: .seconds(0.8))
+            coachMarkManager.startTourIfNeeded()
         }
     }
 
@@ -150,6 +161,26 @@ struct ContentView: View {
                 }
             }
             .tint(.groveSage)
+            .background(
+                GeometryReader { geometry in
+                    Color.clear
+                        .onAppear {
+                            let tabBarHeight: CGFloat = 49
+                            let safeBottom = geometry.safeAreaInsets.bottom
+                            let tabBarY = geometry.size.height - tabBarHeight - safeBottom + geometry.safeAreaInsets.top
+                            let tabWidth = geometry.size.width / 4
+
+                            coachMarkManager.registerFrame(.progressTab, frame: CGRect(
+                                x: tabWidth * 1, y: tabBarY,
+                                width: tabWidth, height: tabBarHeight
+                            ))
+                            coachMarkManager.registerFrame(.socialTab, frame: CGRect(
+                                x: tabWidth * 2, y: tabBarY,
+                                width: tabWidth, height: tabBarHeight
+                            ))
+                        }
+                }
+            )
 
             // Floating Action Button (Home tab only, hidden when workout is active)
             if !sessionManager.hasActiveWorkout && selectedTab == 0 {
@@ -193,6 +224,7 @@ struct ContentView: View {
                                     .stroke(Color.groveSage.opacity(0.3), lineWidth: 1)
                             )
                             .shadow(color: .black.opacity(0.1), radius: 8, y: 4)
+                            .coachMarkAnchor(.fab)
                     }
                     .menuStyle(.button)
                     .buttonStyle(.plain)
@@ -286,11 +318,29 @@ struct ContentView: View {
         } message: {
             Text("Get reminders for your planned workouts and weekly check-ins.")
         }
+        .onPreferenceChange(CoachMarkAnchorsKey.self) { anchors in
+            for (step, frame) in anchors where frame.width > 0 && frame.height > 0 {
+                coachMarkManager.registerFrame(step, frame: frame)
+            }
+        }
+        .onChange(of: coachMarkManager.currentStep) { _, newStep in
+            switch newStep {
+            case .progressTab:
+                withAnimation { selectedTab = 1 }
+            case .socialTab:
+                withAnimation { selectedTab = 2 }
+            default:
+                if selectedTab != 0 {
+                    withAnimation { selectedTab = 0 }
+                }
+            }
+        }
     }
 }
 
 #Preview {
     ContentView()
         .environment(WorkoutSessionManager())
+        .environment(CloudKitSocialService())
         .modelContainer(.preview)
 }
