@@ -46,7 +46,12 @@ struct SmartBuilderEngine {
         var categoryUsed: [TemplateCategory: Int] = [:]
 
         for (dayIndex, label) in labels.enumerated() {
-            let category = categoryFor(label)
+            let category: TemplateCategory
+            if state.selectedSplit == .custom {
+                category = categoryForMuscleGroups(state.muscleGroups(forDayIndex: dayIndex))
+            } else {
+                category = categoryFor(label)
+            }
             let usedCount = categoryUsed[category, default: 0]
             categoryUsed[category] = usedCount + 1
 
@@ -186,7 +191,13 @@ struct SmartBuilderEngine {
             }
 
             let exercises = state.sortedExercises(for: dayIndex)
-            let template = WorkoutTemplate(name: name, category: categoryFor(label), isBuiltIn: false)
+            let category: TemplateCategory
+            if state.selectedSplit == .custom {
+                category = categoryForMuscleGroups(state.muscleGroups(forDayIndex: dayIndex))
+            } else {
+                category = categoryFor(label)
+            }
+            let template = WorkoutTemplate(name: name, category: category, isBuiltIn: false)
             template.exerciseIDs = exercises.map { $0.id }
             template.defaultSets = state.repRange.compoundSets
             template.defaultReps = state.repRange.compoundReps
@@ -371,5 +382,55 @@ struct SmartBuilderEngine {
         case "Shoulders & Arms": return .shoulders
         default: return .custom
         }
+    }
+
+    /// Infers the best TemplateCategory from selected muscle groups (used for custom splits)
+    private static func categoryForMuscleGroups(_ groups: [MuscleGroup]) -> TemplateCategory {
+        let set = Set(groups)
+
+        let hasChest = set.contains(.chest)
+        let hasBack = set.contains(.back)
+        let hasShoulders = set.contains(.shoulders)
+        let hasBiceps = set.contains(.biceps)
+        let hasTriceps = set.contains(.triceps)
+        let hasLegs = set.contains(.legs)
+        let hasUpperBody = hasChest || hasBack || hasShoulders || hasBiceps || hasTriceps
+
+        // Full body: both upper and lower muscle groups
+        if hasUpperBody && hasLegs {
+            return .fullBody
+        }
+
+        // Legs (with or without core)
+        if hasLegs {
+            return .legs
+        }
+
+        // Push: chest + shoulders (± triceps), no back
+        if hasChest && hasShoulders && !hasBack {
+            return .push
+        }
+
+        // Pull: back (± biceps), no chest or shoulders
+        if hasBack && !hasChest && !hasShoulders {
+            return hasBiceps ? .pull : .backBiceps
+        }
+
+        // Chest focused (± triceps)
+        if hasChest && !hasBack && !hasShoulders {
+            return .chestTriceps
+        }
+
+        // Shoulders focused (± arms)
+        if hasShoulders && !hasChest && !hasBack {
+            return .shoulders
+        }
+
+        // Broad upper body (chest + back)
+        if hasChest && hasBack {
+            return .upper
+        }
+
+        return .custom
     }
 }
