@@ -144,6 +144,9 @@ struct ProfileView: View {
                 if let data = try? await newItem?.loadTransferable(type: Data.self),
                    let image = UIImage(data: data) {
                     user?.profileImageData = processImage(image)
+                    if let user = user {
+                        await socialService.ensureUserProfile(user: user)
+                    }
                 }
             }
         }
@@ -155,6 +158,11 @@ struct ProfileView: View {
             if let image = newImage {
                 user?.profileImageData = processImage(image)
                 cameraImage = nil
+                if let user = user {
+                    Task {
+                        await socialService.ensureUserProfile(user: user)
+                    }
+                }
             }
         }
         .sheet(isPresented: $showingPlanEditor) {

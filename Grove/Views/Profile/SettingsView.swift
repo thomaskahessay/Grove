@@ -5,6 +5,7 @@ import PhotosUI
 struct SettingsView: View {
     @Query private var users: [User]
     @Environment(\.modelContext) private var modelContext
+    @Environment(CloudKitSocialService.self) private var socialService
     @AppStorage("appearanceMode") private var appearanceMode: String = AppearanceMode.system.rawValue
 
     @State private var photoItem: PhotosPickerItem? = nil
@@ -48,6 +49,9 @@ struct SettingsView: View {
                 if let data = try? await newItem?.loadTransferable(type: Data.self),
                    let image = UIImage(data: data) {
                     user?.profileImageData = processImage(image)
+                    if let user = user {
+                        await socialService.ensureUserProfile(user: user)
+                    }
                 }
             }
         }
@@ -59,6 +63,11 @@ struct SettingsView: View {
             if let image = newImage {
                 user?.profileImageData = processImage(image)
                 cameraImage = nil
+                if let user = user {
+                    Task {
+                        await socialService.ensureUserProfile(user: user)
+                    }
+                }
             }
         }
         .alert("Sign Out?", isPresented: $showingSignOutConfirm) {

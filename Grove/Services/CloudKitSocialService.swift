@@ -172,6 +172,8 @@ class CloudKitSocialService {
     private var publicDB: CKDatabase { container.publicCloudDatabase }
     private var myUserRecordID: CKRecord.ID?
     private var myAppleUserID: String?
+    private var myDisplayName: String?
+    private var myProfileImageData: Data?
 
     // Record type constants
     private enum RecordType {
@@ -204,6 +206,8 @@ class CloudKitSocialService {
     func ensureUserProfile(user: User) async {
         let appleUserID = user.appleUserID
         self.myAppleUserID = appleUserID
+        self.myDisplayName = user.displayName
+        self.myProfileImageData = user.profileImageData
 
         do {
             let recordID = CKRecord.ID(recordName: appleUserID)
@@ -477,7 +481,7 @@ class CloudKitSocialService {
                     id: record.recordID.recordName,
                     userID: userID,
                     friendName: isOwnPost ? "You" : (friend?.displayName ?? "Friend"),
-                    friendProfileImageData: isOwnPost ? nil : friend?.profileImageData,
+                    friendProfileImageData: isOwnPost ? myProfileImageData : friend?.profileImageData,
                     workoutName: record["workoutName"] as? String ?? "Workout",
                     templateCategory: record["templateCategory"] as? String,
                     duration: record["duration"] as? TimeInterval ?? 0,
@@ -661,6 +665,10 @@ class CloudKitSocialService {
     func updateMyStats(user: User) async {
         guard let myUserRecordID else { return }
 
+        // Keep cached profile data fresh
+        self.myDisplayName = user.displayName
+        self.myProfileImageData = user.profileImageData
+
         do {
             let record = try await publicDB.record(for: myUserRecordID)
             record["workoutCount"] = Int64(user.workouts.filter { $0.completedAt != nil }.count) as CKRecordValue
@@ -786,7 +794,7 @@ class CloudKitSocialService {
             guard var summary = grouped[workoutID] else { continue }
 
             let senderName = senderID == myAppleUserID ? "You" : (friendLookup[senderID]?.displayName ?? "Friend")
-            let senderImage = friendLookup[senderID]?.profileImageData
+            let senderImage = senderID == myAppleUserID ? myProfileImageData : friendLookup[senderID]?.profileImageData
 
             switch typeStr {
             case "water":
@@ -865,7 +873,7 @@ class CloudKitSocialService {
             guard var summary = grouped[workoutID] else { continue }
 
             let senderName = senderID == myAppleUserID ? "You" : (friendLookup[senderID]?.displayName ?? "Friend")
-            let senderImage = friendLookup[senderID]?.profileImageData
+            let senderImage = senderID == myAppleUserID ? myProfileImageData : friendLookup[senderID]?.profileImageData
 
             switch typeStr {
             case "water":
@@ -949,7 +957,7 @@ class CloudKitSocialService {
             let createdAt = record["createdAt"] as? Date ?? Date()
 
             let senderName = senderID == myAppleUserID ? "You" : (friendLookup[senderID]?.displayName ?? "Friend")
-            let senderImage = friendLookup[senderID]?.profileImageData
+            let senderImage = senderID == myAppleUserID ? myProfileImageData : friendLookup[senderID]?.profileImageData
 
             switch typeStr {
             case "water":
@@ -1014,7 +1022,7 @@ class CloudKitSocialService {
         summary.waterCount += 1
         summary.iWatered = true
         summary.latestWaterDate = Date()
-        summary.waterers.append(InteractorInfo(userID: myAppleUserID, displayName: "You", profileImageData: nil))
+        summary.waterers.append(InteractorInfo(userID: myAppleUserID, displayName: "You", profileImageData: myProfileImageData))
         interactionsByWorkout[workoutRecordName] = summary
 
         do {
@@ -1052,7 +1060,7 @@ class CloudKitSocialService {
         summary.sunlightCount += 1
         summary.iSunlit = true
         summary.latestSunlightDate = Date()
-        summary.sunlighters.append(SunlightInfo(senderID: myAppleUserID, senderName: "You", senderProfileImageData: nil, earnedFromWorkoutName: nil))
+        summary.sunlighters.append(SunlightInfo(senderID: myAppleUserID, senderName: "You", senderProfileImageData: myProfileImageData, earnedFromWorkoutName: nil))
         interactionsByWorkout[workoutRecordName] = summary
         availableSunlightCount = max(0, availableSunlightCount - 1)
 
@@ -1102,7 +1110,7 @@ class CloudKitSocialService {
                 id: record.recordID.recordName,
                 senderID: myAppleUserID,
                 senderName: "You",
-                senderProfileImageData: nil,
+                senderProfileImageData: myProfileImageData,
                 message: trimmed,
                 isCustom: isCustom,
                 createdAt: Date()
