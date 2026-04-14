@@ -59,11 +59,14 @@ struct StreakManager {
         }
 
         // Compute consecutive rest / missed-training days
+        // Don't count days before the user's account was created
+        let earliestDate = calendar.startOfDay(for: user.createdAt)
         if hasActivePlan {
             // Plan-aware: only count training days that were missed (skip planned rest days)
             var missedTrainingDays = 0
             var checkDate = today
             for _ in 0..<30 {
+                if checkDate < earliestDate { break }
                 if workoutDates.contains(checkDate) { break }
                 let weekday = (calendar.component(.weekday, from: checkDate) + 5) % 7 // Mon=0..Sun=6
                 if user.preferredTrainingSlots.contains(weekday) {
@@ -78,6 +81,7 @@ struct StreakManager {
             var restDays = 0
             var checkDate = today
             while !workoutDates.contains(checkDate) {
+                if checkDate < earliestDate { break }
                 restDays += 1
                 guard let prev = calendar.date(byAdding: .day, value: -1, to: checkDate) else { break }
                 checkDate = prev
