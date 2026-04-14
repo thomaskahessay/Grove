@@ -395,9 +395,18 @@ struct WorkoutCreationView: View {
             }
         }
 
-        // Start workout via session manager and dismiss sheet
-        sessionManager.startWorkout(workout)
+        do {
+            try modelContext.save()
+        } catch {
+            print("[Grove] ERROR: Failed to save new workout: \(error)")
+        }
+
+        // Dismiss the sheet first, then present the workout after a delay
+        // to avoid the SwiftUI crash from simultaneous sheet dismiss + fullScreenCover present.
         dismiss()
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+            sessionManager.startWorkout(workout)
+        }
     }
 
     /// Gets completed sets from the last N sessions for an exercise, most recent first.
@@ -406,13 +415,16 @@ struct WorkoutCreationView: View {
         let descriptor = FetchDescriptor<ExerciseLog>(
             predicate: #Predicate<ExerciseLog> { log in
                 log.exercise?.id == exerciseID
-            },
-            sortBy: [SortDescriptor(\.workout?.completedAt, order: .reverse)]
+            }
         )
 
         guard let logs = try? modelContext.fetch(descriptor) else { return [] }
 
-        let completedLogs = logs.filter { $0.workout?.completedAt != nil }
+        // Sort in memory — SortDescriptor through optional relationships
+        // (\.workout?.completedAt) crashes SwiftData's schema validation.
+        let completedLogs = logs
+            .filter { $0.workout?.completedAt != nil }
+            .sorted { ($0.workout?.completedAt ?? .distantPast) > ($1.workout?.completedAt ?? .distantPast) }
         let sessionsToUse = completedLogs.prefix(sessionCount)
 
         return sessionsToUse.map { log in

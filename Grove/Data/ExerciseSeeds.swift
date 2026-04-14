@@ -31,6 +31,7 @@ struct ExerciseSeeds {
         SeedExercise(name: "Decline Dumbbell Press", group: .chest, subgroup: "Lower", isCompound: true, sortPriority: 24),
         SeedExercise(name: "Dumbbell Flyes", group: .chest, subgroup: "Inner", isCompound: false, sortPriority: 60),
         SeedExercise(name: "Incline Dumbbell Flyes", group: .chest, subgroup: "Upper", isCompound: false, sortPriority: 62),
+        SeedExercise(name: "Cable Flyes", group: .chest, subgroup: "Inner", isCompound: false, sortPriority: 64),
         SeedExercise(name: "Cable Crossover", group: .chest, subgroup: "Inner", isCompound: false, sortPriority: 65),
         SeedExercise(name: "Low Cable Crossover", group: .chest, subgroup: "Upper", isCompound: false, sortPriority: 66),
         SeedExercise(name: "Push-Ups", group: .chest, subgroup: "Middle", isCompound: true, sortPriority: 30, isBodyweight: true),

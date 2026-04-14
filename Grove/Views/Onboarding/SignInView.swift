@@ -126,9 +126,6 @@ struct SignInView: View {
 
             if let existingUser = existingUsers.first {
                 existingUser.appleUserID = userID
-                if existingUser.onboardingCompletedAt == nil {
-                    existingUser.onboardingCompletedAt = Date()
-                }
                 if !displayName.isEmpty && existingUser.displayName == nil {
                     existingUser.displayName = displayName
                 }

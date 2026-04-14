@@ -343,13 +343,16 @@ class WorkoutSessionManager {
         let descriptor = FetchDescriptor<ExerciseLog>(
             predicate: #Predicate<ExerciseLog> { log in
                 log.exercise?.id == exerciseID
-            },
-            sortBy: [SortDescriptor(\.workout?.completedAt, order: .reverse)]
+            }
         )
 
         guard let logs = try? context.fetch(descriptor) else { return [] }
 
-        let completedLogs = logs.filter { $0.workout?.completedAt != nil }
+        // Sort in memory — SortDescriptor through optional relationships
+        // (\.workout?.completedAt) crashes SwiftData's schema validation.
+        let completedLogs = logs
+            .filter { $0.workout?.completedAt != nil }
+            .sorted { ($0.workout?.completedAt ?? .distantPast) > ($1.workout?.completedAt ?? .distantPast) }
         let sessionsToUse = completedLogs.prefix(sessionCount)
 
         return sessionsToUse.map { log in
