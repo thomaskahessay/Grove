@@ -128,6 +128,14 @@ struct NotificationSettingsView: View {
                         get: { user.notifySeedReceived },
                         set: { user.notifySeedReceived = $0 }
                     ))
+                    Toggle("Water Received", isOn: Binding(
+                        get: { user.notifyWaterReceived },
+                        set: { user.notifyWaterReceived = $0 }
+                    ))
+                    Toggle("Sunlight Received", isOn: Binding(
+                        get: { user.notifySunlightReceived },
+                        set: { user.notifySunlightReceived = $0 }
+                    ))
                     Toggle("Connection Milestones", isOn: Binding(
                         get: { user.notifyConnectionMilestone },
                         set: { user.notifyConnectionMilestone = $0 }
@@ -136,7 +144,7 @@ struct NotificationSettingsView: View {
             } header: {
                 Text("Social")
             } footer: {
-                Text("Watering Reminders notify you when friends share workouts. Seed Received alerts you when someone plants a seed on your post. Connection Milestones celebrate when your roots grow deeper.")
+                Text("Watering Reminders notify you when friends share workouts. Seed, Water, and Sunlight Received alert you when someone interacts with your post. Connection Milestones celebrate when your roots grow deeper.")
             }
 
             Section("Quiet Hours") {

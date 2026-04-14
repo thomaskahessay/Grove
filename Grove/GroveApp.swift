@@ -119,30 +119,72 @@ struct GroveApp: App {
     @Sendable
     private func handleFeedCheck() async {
         let context = ModelContext(modelContainer)
-        guard let user = try? context.fetch(FetchDescriptor<User>()).first,
-              user.notifyFriendActivity else { return }
-
-        let lastCheck = user.lastFeedCheckDate ?? Date(timeIntervalSinceNow: -3600)
+        guard let user = try? context.fetch(FetchDescriptor<User>()).first else { return }
 
         // Ensure friends list is loaded before querying
         await socialService.bootstrapIfNeeded(appleUserID: user.appleUserID)
 
-        let newWorkouts = await socialService.checkForNewFriendWorkouts(since: lastCheck, user: user)
+        await NotificationService.shared.checkAuthorizationStatus()
 
-        if !newWorkouts.isEmpty {
-            await NotificationService.shared.checkAuthorizationStatus()
-            let items = Array(newWorkouts.prefix(3))
-            await MainActor.run {
-                for item in items {
-                    NotificationService.shared.scheduleFriendActivityNotification(
-                        friendName: item.friendName,
-                        workoutName: item.workoutName,
-                        duration: item.duration,
-                        workoutID: item.id,
-                        user: user
-                    )
+        // Check for new friend workouts
+        if user.notifyFriendActivity {
+            let lastCheck = user.lastFeedCheckDate ?? Date(timeIntervalSinceNow: -3600)
+            let newWorkouts = await socialService.checkForNewFriendWorkouts(since: lastCheck, user: user)
+
+            if !newWorkouts.isEmpty {
+                let items = Array(newWorkouts.prefix(3))
+                await MainActor.run {
+                    for item in items {
+                        NotificationService.shared.scheduleFriendActivityNotification(
+                            friendName: item.friendName,
+                            workoutName: item.workoutName,
+                            duration: item.duration,
+                            workoutID: item.id,
+                            user: user
+                        )
+                    }
                 }
             }
+        }
+
+        // Check for new interactions on the user's posts
+        let wantsInteractionNotifications = user.notifyWaterReceived
+            || user.notifySeedReceived
+            || user.notifySunlightReceived
+
+        if wantsInteractionNotifications {
+            let lastInteractionCheck = user.lastInteractionCheckDate ?? Date(timeIntervalSinceNow: -3600)
+            let newInteractions = await socialService.checkForNewInteractions(since: lastInteractionCheck)
+
+            if !newInteractions.isEmpty {
+                let items = Array(newInteractions.prefix(5))
+                await MainActor.run {
+                    for interaction in items {
+                        switch interaction.type {
+                        case .water:
+                            NotificationService.shared.scheduleWaterReceivedNotification(
+                                senderName: interaction.senderName,
+                                workoutName: interaction.workoutName,
+                                user: user
+                            )
+                        case .seed:
+                            NotificationService.shared.scheduleSeedReceivedNotification(
+                                senderName: interaction.senderName,
+                                message: interaction.seedMessage ?? "🌱",
+                                user: user
+                            )
+                        case .sunlight:
+                            NotificationService.shared.scheduleSunlightReceivedNotification(
+                                senderName: interaction.senderName,
+                                workoutName: interaction.workoutName,
+                                user: user
+                            )
+                        }
+                    }
+                }
+            }
+
+            user.lastInteractionCheckDate = Date()
         }
 
         user.lastFeedCheckDate = Date()

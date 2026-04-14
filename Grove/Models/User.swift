@@ -31,6 +31,7 @@ class User {
 
     // Feed check
     var lastFeedCheckDate: Date?
+    var lastInteractionCheckDate: Date?
 
     // Sharing preferences (defaults)
     var autoShareWorkouts: Bool = false
@@ -48,6 +49,8 @@ class User {
     var notifyPersonalRecord: Bool = true
     var notifyWeeklySummary: Bool = true
     var notifySeedReceived: Bool = true
+    var notifyWaterReceived: Bool = true
+    var notifySunlightReceived: Bool = true
     var notifyConnectionMilestone: Bool = true
     var notifyWateringReminder: Bool = true
     var preferredReminderHour: Int = 8      // 0-23, default 8 AM

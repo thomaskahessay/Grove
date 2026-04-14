@@ -108,6 +108,38 @@ struct ContentView: View {
                         notificationService.scheduleConnectionMilestone(friendName: friendName, level: level, user: user)
                     }
 
+                    // Check for new interactions on the user's posts
+                    let wantsInteractionNotifications = user.notifyWaterReceived
+                        || user.notifySeedReceived
+                        || user.notifySunlightReceived
+                    if wantsInteractionNotifications {
+                        let lastInteractionCheck = user.lastInteractionCheckDate ?? Date(timeIntervalSinceNow: -3600)
+                        let newInteractions = await socialService.checkForNewInteractions(since: lastInteractionCheck)
+                        for interaction in newInteractions.prefix(5) {
+                            switch interaction.type {
+                            case .water:
+                                notificationService.scheduleWaterReceivedNotification(
+                                    senderName: interaction.senderName,
+                                    workoutName: interaction.workoutName,
+                                    user: user
+                                )
+                            case .seed:
+                                notificationService.scheduleSeedReceivedNotification(
+                                    senderName: interaction.senderName,
+                                    message: interaction.seedMessage ?? "🌱",
+                                    user: user
+                                )
+                            case .sunlight:
+                                notificationService.scheduleSunlightReceivedNotification(
+                                    senderName: interaction.senderName,
+                                    workoutName: interaction.workoutName,
+                                    user: user
+                                )
+                            }
+                        }
+                        user.lastInteractionCheckDate = Date()
+                    }
+
                     // Prompt existing users who haven't been asked yet
                     if !notificationPromptShown && notificationService.authorizationStatus == .notDetermined {
                         showNotificationPrompt = true

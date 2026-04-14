@@ -1515,6 +1515,87 @@ class CloudKitSocialService {
         return items
     }
 
+    // MARK: - Background Interaction Check
+
+    struct ReceivedInteraction: Sendable {
+        let type: InteractionType
+        let senderName: String
+        let workoutName: String
+        let seedMessage: String?
+    }
+
+    func checkForNewInteractions(since lastCheck: Date) async -> [ReceivedInteraction] {
+        guard let myAppleUserID else { return [] }
+
+        let pred = NSPredicate(format: "recipientID == %@ AND senderID != %@ AND createdAt > %@",
+                               myAppleUserID, myAppleUserID, lastCheck as NSDate)
+        let query = CKQuery(recordType: RecordType.interaction, predicate: pred)
+        query.sortDescriptors = [NSSortDescriptor(key: "createdAt", ascending: false)]
+
+        guard let (results, _) = try? await publicDB.records(matching: query, resultsLimit: 20) else {
+            return []
+        }
+
+        // Collect unique sender IDs and workout record names to resolve display names
+        var senderIDs = Set<String>()
+        var workoutRecordNames = Set<String>()
+        var records: [CKRecord] = []
+
+        for (_, result) in results {
+            if let record = try? result.get() {
+                records.append(record)
+                if let senderID = record["senderID"] as? String {
+                    senderIDs.insert(senderID)
+                }
+                if let workoutRN = record["workoutRecordName"] as? String {
+                    workoutRecordNames.insert(workoutRN)
+                }
+            }
+        }
+
+        guard !records.isEmpty else { return [] }
+
+        // Resolve sender names from friends list or CloudKit
+        let friendLookup = Dictionary(uniqueKeysWithValues: friends.map { ($0.id, $0.displayName) })
+        var senderNames = friendLookup
+        let unknownSenders = senderIDs.subtracting(Set(friendLookup.keys))
+        for senderID in unknownSenders {
+            let profileID = CKRecord.ID(recordName: senderID)
+            if let profile = try? await publicDB.record(for: profileID),
+               let name = profile["displayName"] as? String {
+                senderNames[senderID] = name
+            }
+        }
+
+        // Resolve workout names from shared workouts
+        var workoutNames: [String: String] = [:]
+        for rn in workoutRecordNames {
+            let recordID = CKRecord.ID(recordName: rn)
+            if let workout = try? await publicDB.record(for: recordID),
+               let name = workout["workoutName"] as? String {
+                workoutNames[rn] = name
+            }
+        }
+
+        // Build interaction items
+        var interactions: [ReceivedInteraction] = []
+        for record in records {
+            let typeStr = record["type"] as? String ?? ""
+            guard let type = InteractionType(rawValue: typeStr) else { continue }
+            let senderID = record["senderID"] as? String ?? ""
+            let workoutRN = record["workoutRecordName"] as? String ?? ""
+
+            interactions.append(ReceivedInteraction(
+                type: type,
+                senderName: senderNames[senderID] ?? "Someone",
+                workoutName: workoutNames[workoutRN] ?? "Workout",
+                seedMessage: record["message"] as? String
+            ))
+        }
+
+        return interactions
+    }
+
     // MARK: - Program Sync Helpers
 
     private static func writeProgramFields(to record: CKRecord, user: User) {

@@ -17,6 +17,8 @@ class NotificationService {
     private static let wateringReminderID = "grove.social.watering"
     private static let seedReceivedID = "grove.social.seed"
     private static let connectionMilestoneID = "grove.social.milestone"
+    private static let waterReceivedID = "grove.social.waterReceived"
+    private static let sunlightReceivedID = "grove.social.sunlightReceived"
 
     private init() {}
 
@@ -298,6 +300,50 @@ class NotificationService {
         let trigger = UNTimeIntervalNotificationTrigger(timeInterval: 1, repeats: false)
 
         let id = "\(Self.seedReceivedID).\(UUID().uuidString.prefix(8))"
+        let request = UNNotificationRequest(identifier: id, content: content, trigger: trigger)
+        center.add(request)
+    }
+
+    // MARK: - Water Received Notification
+
+    func scheduleWaterReceivedNotification(senderName: String, workoutName: String, user: User) {
+        let center = UNUserNotificationCenter.current()
+
+        guard authorizationStatus == .authorized,
+              user.notifyWaterReceived else { return }
+
+        if isInQuietHours(Date(), user: user) { return }
+
+        let content = UNMutableNotificationContent()
+        content.title = "Grove"
+        content.body = "\(senderName) watered your \(workoutName) \u{1F4A7}"
+        content.sound = .default
+
+        let trigger = UNTimeIntervalNotificationTrigger(timeInterval: 1, repeats: false)
+
+        let id = "\(Self.waterReceivedID).\(UUID().uuidString.prefix(8))"
+        let request = UNNotificationRequest(identifier: id, content: content, trigger: trigger)
+        center.add(request)
+    }
+
+    // MARK: - Sunlight Received Notification
+
+    func scheduleSunlightReceivedNotification(senderName: String, workoutName: String, user: User) {
+        let center = UNUserNotificationCenter.current()
+
+        guard authorizationStatus == .authorized,
+              user.notifySunlightReceived else { return }
+
+        if isInQuietHours(Date(), user: user) { return }
+
+        let content = UNMutableNotificationContent()
+        content.title = "Grove"
+        content.body = "\(senderName) sent sunlight to your \(workoutName) \u{2600}\u{FE0F}"
+        content.sound = .default
+
+        let trigger = UNTimeIntervalNotificationTrigger(timeInterval: 1, repeats: false)
+
+        let id = "\(Self.sunlightReceivedID).\(UUID().uuidString.prefix(8))"
         let request = UNNotificationRequest(identifier: id, content: content, trigger: trigger)
         center.add(request)
     }
