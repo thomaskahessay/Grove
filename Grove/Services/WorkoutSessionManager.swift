@@ -407,26 +407,31 @@ class WorkoutSessionManager {
     func discardWorkout(context: ModelContext) {
         guard let workout = activeWorkout else { return }
 
-        // Delete all related data (sets, exercise logs, workout)
-        for exerciseLog in workout.exercises {
-            for setLog in exerciseLog.sets {
-                context.delete(setLog)
-            }
-            context.delete(exerciseLog)
-        }
-        context.delete(workout)
-
-        do {
-            try context.save()
-        } catch {
-            print("[Grove] ERROR: Failed to save workout discard: \(error)")
-        }
-
+        // Dismiss the UI first so SwiftUI stops reading from the model objects.
+        // Deleting data while the fullScreenCover is still presented causes a
+        // fault crash (detached backing data) during the dismiss animation.
         activeWorkout = nil
         isMinimized = false
         isFullScreenPresented = false
 
         // Cancel abandoned workout notification since workout is discarded
         NotificationService.shared.cancelAbandonedWorkoutReminder()
+
+        // Delete the data after the dismiss animation completes
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+            for exerciseLog in workout.exercises {
+                for setLog in exerciseLog.sets {
+                    context.delete(setLog)
+                }
+                context.delete(exerciseLog)
+            }
+            context.delete(workout)
+
+            do {
+                try context.save()
+            } catch {
+                print("[Grove] ERROR: Failed to save workout discard: \(error)")
+            }
+        }
     }
 }
