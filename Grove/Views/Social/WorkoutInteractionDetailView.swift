@@ -278,7 +278,14 @@ struct WorkoutInteractionDetailView: View {
                         }
                         HStack(spacing: -6) {
                             ForEach(Array(interactions.waterers.prefix(6).enumerated()), id: \.offset) { _, waterer in
-                                miniAvatar(name: waterer.displayName, imageData: waterer.profileImageData)
+                                if waterer.userID != socialService.currentUserID {
+                                    NavigationLink(value: waterer.userID) {
+                                        miniAvatar(name: waterer.displayName, imageData: waterer.profileImageData)
+                                    }
+                                    .buttonStyle(.plain)
+                                } else {
+                                    miniAvatar(name: waterer.displayName, imageData: waterer.profileImageData)
+                                }
                             }
                             if interactions.waterers.count > 6 {
                                 Text("+\(interactions.waterers.count - 6)")
@@ -303,16 +310,13 @@ struct WorkoutInteractionDetailView: View {
                                 .foregroundStyle(Color.groveTextSecondary)
                         }
                         ForEach(Array(interactions.sunlighters.enumerated()), id: \.offset) { _, sunlighter in
-                            HStack(spacing: 6) {
-                                miniAvatar(name: sunlighter.senderName, imageData: sunlighter.senderProfileImageData)
-                                Text(sunlighter.senderName)
-                                    .font(.caption)
-                                    .foregroundStyle(Color.groveText)
-                                if let workoutName = sunlighter.earnedFromWorkoutName {
-                                    Text("after \(workoutName)")
-                                        .font(.caption2)
-                                        .foregroundStyle(Color.groveTextSecondary)
+                            if sunlighter.senderID != socialService.currentUserID {
+                                NavigationLink(value: sunlighter.senderID) {
+                                    sunlighterRow(sunlighter)
                                 }
+                                .buttonStyle(.plain)
+                            } else {
+                                sunlighterRow(sunlighter)
                             }
                         }
                     }
@@ -331,23 +335,13 @@ struct WorkoutInteractionDetailView: View {
                                 .foregroundStyle(Color.groveTextSecondary)
                         }
                         ForEach(interactions.seeds) { seed in
-                            HStack(alignment: .top, spacing: 8) {
-                                miniAvatar(name: seed.senderName, imageData: seed.senderProfileImageData)
-                                VStack(alignment: .leading, spacing: 2) {
-                                    HStack(spacing: 4) {
-                                        Text(seed.senderName)
-                                            .font(.caption)
-                                            .fontWeight(.medium)
-                                            .foregroundStyle(Color.groveText)
-                                        Text(seed.timeAgo)
-                                            .font(.caption2)
-                                            .foregroundStyle(Color.groveTextSecondary)
-                                    }
-                                    Text("\"\(seed.message)\"")
-                                        .font(.caption)
-                                        .foregroundStyle(Color.groveText)
-                                        .italic()
+                            if seed.senderID != socialService.currentUserID {
+                                NavigationLink(value: seed.senderID) {
+                                    seedRow(seed)
                                 }
+                                .buttonStyle(.plain)
+                            } else {
+                                seedRow(seed)
                             }
                         }
                     }
@@ -505,6 +499,41 @@ struct WorkoutInteractionDetailView: View {
     }
 
     // MARK: - Helpers
+
+    private func sunlighterRow(_ sunlighter: SunlightInfo) -> some View {
+        HStack(spacing: 6) {
+            miniAvatar(name: sunlighter.senderName, imageData: sunlighter.senderProfileImageData)
+            Text(sunlighter.senderName)
+                .font(.caption)
+                .foregroundStyle(Color.groveText)
+            if let workoutName = sunlighter.earnedFromWorkoutName {
+                Text("after \(workoutName)")
+                    .font(.caption2)
+                    .foregroundStyle(Color.groveTextSecondary)
+            }
+        }
+    }
+
+    private func seedRow(_ seed: SeedMessage) -> some View {
+        HStack(alignment: .top, spacing: 8) {
+            miniAvatar(name: seed.senderName, imageData: seed.senderProfileImageData)
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(spacing: 4) {
+                    Text(seed.senderName)
+                        .font(.caption)
+                        .fontWeight(.medium)
+                        .foregroundStyle(Color.groveText)
+                    Text(seed.timeAgo)
+                        .font(.caption2)
+                        .foregroundStyle(Color.groveTextSecondary)
+                }
+                Text("\"\(seed.message)\"")
+                    .font(.caption)
+                    .foregroundStyle(Color.groveText)
+                    .italic()
+            }
+        }
+    }
 
     private func interactionCount(icon: String, count: Int, color: Color) -> some View {
         HStack(spacing: 3) {
