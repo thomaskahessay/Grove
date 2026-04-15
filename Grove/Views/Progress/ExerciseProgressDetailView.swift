@@ -276,7 +276,7 @@ struct ExerciseProgressDetailView: View {
                                     .fontWeight(.medium)
                                     .foregroundStyle(Color.groveText)
 
-                                let completedSets = item.log.sets.filter { $0.isCompleted }
+                                let completedSets = item.log.sets.filter { $0.isCompleted && !$0.isWarmup }
                                 let maxWeight = completedSets.compactMap { $0.weight }.max()
                                 let setCount = completedSets.count
 
@@ -334,7 +334,7 @@ struct ExerciseProgressDetailView: View {
                 guard log.exercise?.id == exercise.id,
                       log.status == .completed else { continue }
 
-                let completedSets = log.sets.filter { $0.isCompleted && $0.reps != nil }
+                let completedSets = log.sets.filter { $0.isCompleted && !$0.isWarmup && $0.reps != nil }
                 guard !completedSets.isEmpty else { continue }
 
                 let value: Double
@@ -386,7 +386,7 @@ struct ExerciseProgressDetailView: View {
         for workout in completedWorkouts {
             for log in workout.exercises {
                 guard log.exercise?.id == exercise.id, log.status == .completed else { continue }
-                for set in log.sets where set.isCompleted {
+                for set in log.sets where set.isCompleted && !set.isWarmup {
                     if let weight = set.weight {
                         if maxWeight == nil || weight > maxWeight! { maxWeight = weight }
                     }

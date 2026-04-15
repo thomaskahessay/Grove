@@ -9,6 +9,7 @@ class SetLog {
     var weight: Double?
     var reps: Int?
     var isCompleted: Bool = false
+    var isWarmup: Bool = false
     var completedAt: Date?
     var lastSessionWeight: Double?
     var lastSessionReps: Int?

@@ -487,10 +487,12 @@ struct ExerciseFullScreenCard: View {
                             .foregroundStyle(Color.groveTerracotta)
                         }
 
-                        // Set progress bar
+                        // Set progress bar (excludes warmup sets)
                         HStack(spacing: 8) {
-                            let completed = sortedSets.filter(\.isCompleted).count
-                            let total = sortedSets.count
+                            let workingSets = sortedSets.filter { !$0.isWarmup }
+                            let completed = workingSets.filter(\.isCompleted).count
+                            let total = workingSets.count
+                            let warmupCount = sortedSets.filter { $0.isWarmup }.count
 
                             GeometryReader { geo in
                                 Capsule()
@@ -504,7 +506,9 @@ struct ExerciseFullScreenCard: View {
                             }
                             .frame(width: 120, height: 6)
 
-                            Text("\(sortedSets.filter(\.isCompleted).count)/\(sortedSets.count)")
+                            Text(warmupCount > 0
+                                 ? "\(completed)/\(total) (+\(warmupCount)W)"
+                                 : "\(completed)/\(total)")
                                 .font(.caption2)
                                 .foregroundStyle(.secondary)
                         }
@@ -537,7 +541,7 @@ struct ExerciseFullScreenCard: View {
                         ForEach(Array(sortedSets.enumerated()), id: \.element.id) { index, setLog in
                             SetRowView(
                                 setLog: setLog,
-                                setNumber: index + 1,
+                                setNumber: workingSetNumber(for: index),
                                 onComplete: { setID in onStartTimer(setID) },
                                 onUncomplete: { setID in
                                     if restTimerAfterSetID == setID {
@@ -675,6 +679,14 @@ struct ExerciseFullScreenCard: View {
         }
     }
 
+    /// Returns the working set number for the set at the given index in sortedSets.
+    /// Warmup sets don't get a number (SetRowView shows "W" instead).
+    /// Working sets are numbered sequentially (1, 2, 3...) skipping warmups.
+    private func workingSetNumber(for index: Int) -> Int {
+        let nonWarmupBefore = sortedSets.prefix(index).filter { !$0.isWarmup }.count
+        return nonWarmupBefore + 1
+    }
+
     private func addSet() {
         let newSetNumber = exerciseLog.sets.count + 1
         let lastSet = exerciseLog.sets.last
@@ -718,11 +730,12 @@ struct ExerciseFullScreenCard: View {
 
     private func updateExerciseStatus() {
         let allSetsCompleted = exerciseLog.sets.allSatisfy { $0.isCompleted }
-        let anySetsCompleted = exerciseLog.sets.contains { $0.isCompleted }
+        let anyWorkingSetsCompleted = exerciseLog.sets.contains { $0.isCompleted && !$0.isWarmup }
+        let anyCompleted = exerciseLog.sets.contains { $0.isCompleted }
 
         if allSetsCompleted && !exerciseLog.sets.isEmpty {
             exerciseLog.status = .completed
-        } else if anySetsCompleted {
+        } else if anyWorkingSetsCompleted || anyCompleted {
             exerciseLog.status = .inProgress
         } else {
             exerciseLog.status = .planned
@@ -818,11 +831,18 @@ struct SetRowView: View {
     var body: some View {
         VStack(spacing: 2) {
         HStack(spacing: 12) {
-            // Set number
-            Text("\(setNumber)")
-                .font(.headline)
-                .foregroundStyle(setLog.isCompleted ? Color.groveSage : .secondary)
-                .frame(width: 24)
+            // Set number / warmup badge
+            if setLog.isWarmup {
+                Text("W")
+                    .font(.headline)
+                    .foregroundStyle(setLog.isCompleted ? Color.groveWarmSand : .secondary.opacity(0.6))
+                    .frame(width: 24)
+            } else {
+                Text("\(setNumber)")
+                    .font(.headline)
+                    .foregroundStyle(setLog.isCompleted ? Color.groveSage : .secondary)
+                    .frame(width: 24)
+            }
 
             // Weight input — hidden for pure bodyweight sets
             if !showBodyweightOnly {
@@ -1049,8 +1069,31 @@ struct SetRowView: View {
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 10)
-        .background(setLog.isCompleted ? Color.groveSage.opacity(0.1) : Color.groveCardBackground)
+        .background(
+            setLog.isWarmup
+                ? Color.groveWarmSand.opacity(setLog.isCompleted ? 0.15 : 0.08)
+                : (setLog.isCompleted ? Color.groveSage.opacity(0.1) : Color.groveCardBackground)
+        )
         .clipShape(RoundedRectangle(cornerRadius: 12))
+        .overlay(
+            setLog.isWarmup
+                ? RoundedRectangle(cornerRadius: 12)
+                    .stroke(Color.groveWarmSand.opacity(0.3), lineWidth: 1)
+                : nil
+        )
+        .contextMenu {
+            Button {
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                    setLog.isWarmup.toggle()
+                }
+            } label: {
+                Label(
+                    setLog.isWarmup ? "Mark as Working Set" : "Mark as Warmup",
+                    systemImage: setLog.isWarmup ? "flame.fill" : "flame"
+                )
+            }
+        }
+        .animation(.spring(response: 0.3, dampingFraction: 0.8), value: setLog.isWarmup)
         .animation(.spring(response: 0.3, dampingFraction: 0.8), value: weightFocused)
         .animation(.spring(response: 0.3, dampingFraction: 0.8), value: repsFocused)
         .onAppear {

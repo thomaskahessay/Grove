@@ -30,12 +30,12 @@ struct PRDetectionService {
             if exercise.isBodyweight {
                 // Bodyweight PR detection: track max reps from bodyweight sets
                 let bodyweightSets = exerciseLog.sets.filter {
-                    $0.isCompleted && $0.reps != nil && $0.bodyweightModifier == .bodyweight
+                    $0.isCompleted && !$0.isWarmup && $0.reps != nil && $0.bodyweightModifier == .bodyweight
                 }
 
                 // Also detect weight PRs for weighted sets (existing logic)
                 let weightedSets = exerciseLog.sets.filter {
-                    $0.isCompleted && $0.weight != nil && $0.reps != nil && $0.bodyweightModifier == .weighted
+                    $0.isCompleted && !$0.isWarmup && $0.weight != nil && $0.reps != nil && $0.bodyweightModifier == .weighted
                 }
 
                 // Skip assisted sets — no PRs
@@ -100,7 +100,7 @@ struct PRDetectionService {
                 }
             } else {
                 // Standard exercise PR detection (unchanged)
-                let completedSets = exerciseLog.sets.filter { $0.isCompleted && $0.weight != nil && $0.reps != nil }
+                let completedSets = exerciseLog.sets.filter { $0.isCompleted && !$0.isWarmup && $0.weight != nil && $0.reps != nil }
                 guard !completedSets.isEmpty else { continue }
 
                 var bestWeightSet: SetLog?

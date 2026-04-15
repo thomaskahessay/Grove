@@ -146,7 +146,7 @@ struct ProgressInsightsEngine {
                   completedAt >= weekStart && completedAt < weekEnd else { continue }
 
             for log in workout.exercises where log.status == .completed {
-                for set in log.sets where set.isCompleted && set.bodyweightModifier != .assisted {
+                for set in log.sets where set.isCompleted && !set.isWarmup && set.bodyweightModifier != .assisted {
                     if let weight = set.weight, let reps = set.reps {
                         total += weight * Double(reps)
                     }

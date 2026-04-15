@@ -21,6 +21,7 @@ struct WorkoutSummaryView: View {
         workout.exercises.reduce(0) { exerciseTotal, exerciseLog in
             exerciseTotal + exerciseLog.sets.reduce(0) { setTotal, setLog in
                 guard setLog.isCompleted,
+                      !setLog.isWarmup,
                       setLog.bodyweightModifier != .assisted,
                       let weight = setLog.weight,
                       let reps = setLog.reps else { return setTotal }
@@ -30,7 +31,11 @@ struct WorkoutSummaryView: View {
     }
 
     private var completedSetsCount: Int {
-        workout.exercises.reduce(0) { $0 + $1.sets.filter { $0.isCompleted }.count }
+        workout.exercises.reduce(0) { $0 + $1.sets.filter { $0.isCompleted && !$0.isWarmup }.count }
+    }
+
+    private var warmupSetsCount: Int {
+        workout.exercises.reduce(0) { $0 + $1.sets.filter { $0.isCompleted && $0.isWarmup }.count }
     }
 
     private var previousWorkout: Workout? {
@@ -47,6 +52,7 @@ struct WorkoutSummaryView: View {
         return prev.exercises.reduce(0) { exerciseTotal, exerciseLog in
             exerciseTotal + exerciseLog.sets.reduce(0) { setTotal, setLog in
                 guard setLog.isCompleted,
+                      !setLog.isWarmup,
                       setLog.bodyweightModifier != .assisted,
                       let weight = setLog.weight,
                       let reps = setLog.reps else { return setTotal }
@@ -196,7 +202,7 @@ struct WorkoutSummaryView: View {
             StatCard(
                 icon: "checkmark.circle.fill",
                 value: "\(completedSetsCount)",
-                label: "Sets"
+                label: warmupSetsCount > 0 ? "Sets (+\(warmupSetsCount)W)" : "Sets"
             )
         }
         .fixedSize(horizontal: false, vertical: true)
@@ -570,7 +576,11 @@ struct ExerciseSummaryRow: View {
     }
 
     private var completedSets: [SetLog] {
-        exerciseLog.sets.filter { $0.isCompleted }.sorted { $0.setNumber < $1.setNumber }
+        exerciseLog.sets.filter { $0.isCompleted && !$0.isWarmup }.sorted { $0.setNumber < $1.setNumber }
+    }
+
+    private var warmupSets: [SetLog] {
+        exerciseLog.sets.filter { $0.isCompleted && $0.isWarmup }.sorted { $0.setNumber < $1.setNumber }
     }
 
     private var totalReps: Int {
@@ -594,7 +604,7 @@ struct ExerciseSummaryRow: View {
     }
 
     private var previousBestSet: SetLog? {
-        previousExerciseLog?.sets.filter { $0.isCompleted }.max { a, b in
+        previousExerciseLog?.sets.filter { $0.isCompleted && !$0.isWarmup }.max { a, b in
             let aVolume = (a.weight ?? 0) * Double(a.reps ?? 0)
             let bVolume = (b.weight ?? 0) * Double(b.reps ?? 0)
             return aVolume < bVolume
@@ -629,7 +639,11 @@ struct ExerciseSummaryRow: View {
 
         var parts: [String] = []
         if let target = targetSetCount, target > 0 {
-            parts.append("\(completedSetCount)/\(target) target sets")
+            var label = "\(completedSetCount)/\(target) target sets"
+            if !warmupSets.isEmpty {
+                label += " (+\(warmupSets.count)W)"
+            }
+            parts.append(label)
         }
         if let targetReps = targetRepCount, targetReps > 0 {
             let actualTotalReps = completedSets.compactMap(\.reps).reduce(0, +)
@@ -727,30 +741,52 @@ struct ExerciseSummaryRow: View {
     @ViewBuilder
     private var setsSummaryLine: some View {
         let sets = completedSets
-        if sets.isEmpty {
+        if sets.isEmpty && warmupSets.isEmpty {
             Text("No sets completed")
                 .font(.caption)
                 .foregroundStyle(.secondary)
         } else {
-            HStack(spacing: 0) {
-                ForEach(Array(sets.enumerated()), id: \.element.id) { index, set in
-                    if index > 0 {
-                        Text(", ")
+            VStack(alignment: .leading, spacing: 2) {
+                if !warmupSets.isEmpty {
+                    HStack(spacing: 0) {
+                        Text("W: ")
                             .font(.caption)
-                            .foregroundStyle(.secondary)
+                            .fontWeight(.medium)
+                            .foregroundStyle(.secondary.opacity(0.6))
+                        ForEach(Array(warmupSets.enumerated()), id: \.element.id) { index, set in
+                            if index > 0 {
+                                Text(", ")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary.opacity(0.6))
+                            }
+                            Text(formatSetDescription(set))
+                                .font(.caption)
+                                .foregroundStyle(.secondary.opacity(0.6))
+                        }
                     }
-                    if isBestSet(set) {
-                        Image(systemName: "star.fill")
-                            .font(.caption2)
-                            .foregroundStyle(Color.groveTerracotta)
-                        Text(" \(formatSetDescription(set))")
-                            .font(.caption)
-                            .bold()
-                            .foregroundStyle(.secondary)
-                    } else {
-                        Text(formatSetDescription(set))
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
+                }
+                if !sets.isEmpty {
+                    HStack(spacing: 0) {
+                        ForEach(Array(sets.enumerated()), id: \.element.id) { index, set in
+                            if index > 0 {
+                                Text(", ")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                            if isBestSet(set) {
+                                Image(systemName: "star.fill")
+                                    .font(.caption2)
+                                    .foregroundStyle(Color.groveTerracotta)
+                                Text(" \(formatSetDescription(set))")
+                                    .font(.caption)
+                                    .bold()
+                                    .foregroundStyle(.secondary)
+                            } else {
+                                Text(formatSetDescription(set))
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
                     }
                 }
             }

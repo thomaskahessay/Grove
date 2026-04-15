@@ -28,7 +28,7 @@ struct WorkoutShareCardView: View {
 
     private var totalSets: Int {
         workout.exercises.reduce(0) { total, exerciseLog in
-            total + exerciseLog.sets.filter { $0.isCompleted }.count
+            total + exerciseLog.sets.filter { $0.isCompleted && !$0.isWarmup }.count
         }
     }
 
@@ -36,6 +36,7 @@ struct WorkoutShareCardView: View {
         workout.exercises.reduce(0) { exerciseTotal, exerciseLog in
             exerciseTotal + exerciseLog.sets.reduce(0) { setTotal, setLog in
                 guard setLog.isCompleted,
+                      !setLog.isWarmup,
                       setLog.bodyweightModifier != .assisted,
                       let weight = setLog.weight,
                       let reps = setLog.reps else { return setTotal }
@@ -277,15 +278,16 @@ struct WorkoutShareCardView: View {
                 VStack(alignment: .leading, spacing: 4) {
                     ForEach(completedSets, id: \.id) { setLog in
                         HStack(spacing: 4) {
-                            Text("Set \(setLog.setNumber):")
+                            Text(setLog.isWarmup ? "W:" : "Set \(setLog.setNumber):")
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
+                                .opacity(setLog.isWarmup ? 0.6 : 1)
                                 .frame(width: 46, alignment: .leading)
 
                             Text("\(formatWeight(setLog.weight ?? 0)) \(unitLabel)")
                                 .font(.caption)
                                 .fontWeight(.medium)
-                                .foregroundStyle(Color.groveText)
+                                .foregroundStyle(setLog.isWarmup ? Color.secondary : Color.groveText)
 
                             Text("×")
                                 .font(.caption)
@@ -294,7 +296,7 @@ struct WorkoutShareCardView: View {
                             Text("\(setLog.reps ?? 0) reps")
                                 .font(.caption)
                                 .fontWeight(.medium)
-                                .foregroundStyle(Color.groveText)
+                                .foregroundStyle(setLog.isWarmup ? Color.secondary : Color.groveText)
 
                             if prSetIDs.contains(setLog.id) {
                                 Image(systemName: "star.fill")
@@ -337,7 +339,7 @@ struct WorkoutShareCardView: View {
     /// Varying weights → "3 sets · 135-155 lbs"
     private func compactSummary(_ exerciseLog: ExerciseLog) -> String {
         let completed = exerciseLog.sets
-            .filter { $0.isCompleted }
+            .filter { $0.isCompleted && !$0.isWarmup }
             .sorted { $0.setNumber < $1.setNumber }
 
         if completed.isEmpty {

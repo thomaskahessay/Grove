@@ -42,7 +42,7 @@ struct AchievementService {
         let completedExerciseLogs = allExerciseLogs.filter { $0.status == .completed }
         let uniqueExerciseIDs = Set(completedExerciseLogs.compactMap { $0.exercise?.id })
         let uniqueMuscleGroups = Set(completedExerciseLogs.compactMap { $0.exercise?.muscleGroup })
-        let totalCompletedSets = completedExerciseLogs.flatMap { $0.sets }.filter { $0.isCompleted }.count
+        let totalCompletedSets = completedExerciseLogs.flatMap { $0.sets }.filter { $0.isCompleted && !$0.isWarmup }.count
 
         for type in AchievementType.allCases {
             guard !existingTypes.contains(type) else { continue }
@@ -199,7 +199,7 @@ struct AchievementService {
         let allCompletedExerciseLogs = completedWorkouts.flatMap { $0.exercises }.filter { $0.status == .completed }
         let uniqueExerciseCount = Set(allCompletedExerciseLogs.compactMap { $0.exercise?.id }).count
         let uniqueMuscleGroupCount = Set(allCompletedExerciseLogs.compactMap { $0.exercise?.muscleGroup }).count
-        let totalCompletedSets = allCompletedExerciseLogs.flatMap { $0.sets }.filter { $0.isCompleted }.count
+        let totalCompletedSets = allCompletedExerciseLogs.flatMap { $0.sets }.filter { $0.isCompleted && !$0.isWarmup }.count
 
         return AchievementType.allCases.map { type in
             let isUnlocked = unlockedMap[type] != nil

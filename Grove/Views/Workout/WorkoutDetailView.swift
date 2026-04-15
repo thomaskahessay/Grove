@@ -39,6 +39,7 @@ struct WorkoutDetailView: View {
         workoutExercises.reduce(0) { exerciseTotal, exerciseLog in
             exerciseTotal + exerciseLog.sets.reduce(0) { setTotal, setLog in
                 guard setLog.isCompleted,
+                      !setLog.isWarmup,
                       setLog.bodyweightModifier != .assisted,
                       let weight = setLog.weight,
                       let reps = setLog.reps else { return setTotal }
@@ -57,7 +58,7 @@ struct WorkoutDetailView: View {
 
     private var totalSets: Int {
         workoutExercises.reduce(0) { total, exerciseLog in
-            total + exerciseLog.sets.filter { $0.isCompleted }.count
+            total + exerciseLog.sets.filter { $0.isCompleted && !$0.isWarmup }.count
         }
     }
 
@@ -513,15 +514,16 @@ private struct SetDetailRow: View {
 
     var body: some View {
         HStack(spacing: 4) {
-            Text("Set \(setLog.setNumber):")
+            Text(setLog.isWarmup ? "W:" : "Set \(setLog.setNumber):")
                 .font(.caption)
                 .foregroundStyle(.secondary)
+                .opacity(setLog.isWarmup ? 0.6 : 1)
                 .frame(width: 50, alignment: .leading)
 
             Text("\(weightText) lbs")
                 .font(.caption)
                 .fontWeight(.medium)
-                .foregroundStyle(Color.groveText)
+                .foregroundStyle(setLog.isWarmup ? Color.secondary : Color.groveText)
 
             Text("×")
                 .font(.caption)
@@ -530,7 +532,7 @@ private struct SetDetailRow: View {
             Text("\(repsText) reps")
                 .font(.caption)
                 .fontWeight(.medium)
-                .foregroundStyle(Color.groveText)
+                .foregroundStyle(setLog.isWarmup ? Color.secondary : Color.groveText)
 
             if isPR {
                 Image(systemName: "star.fill")
