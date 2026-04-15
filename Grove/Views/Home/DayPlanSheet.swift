@@ -663,35 +663,25 @@ struct NewTemplateSheet: View {
                         } else {
                             VStack(spacing: 0) {
                                 ForEach(Array(selectedExercises.enumerated()), id: \.element.id) { index, exercise in
-                                    HStack(spacing: 12) {
-                                        Text("\(index + 1)")
-                                            .font(.headline)
-                                            .foregroundStyle(Color.groveSage)
-                                            .frame(width: 28)
-
-                                        VStack(alignment: .leading, spacing: 2) {
-                                            Text(exercise.name)
-                                                .font(.body)
-                                                .foregroundStyle(Color.groveText)
-                                            Text(exercise.muscleGroup.rawValue)
-                                                .font(.caption)
-                                                .foregroundStyle(.secondary)
-                                        }
-
-                                        Spacer()
-
-                                        Button {
+                                    SelectedExerciseRow(
+                                        exercise: exercise,
+                                        index: index + 1,
+                                        onRemove: {
                                             withAnimation {
                                                 selectedExercises.removeAll { $0.id == exercise.id }
                                             }
-                                        } label: {
-                                            Image(systemName: "xmark.circle.fill")
-                                                .foregroundStyle(Color.groveMutedRust.opacity(0.7))
-                                        }
-                                        .buttonStyle(.plain)
-                                    }
-                                    .padding(.horizontal, 16)
-                                    .padding(.vertical, 12)
+                                        },
+                                        onMoveUp: index > 0 ? {
+                                            withAnimation {
+                                                selectedExercises.swapAt(index, index - 1)
+                                            }
+                                        } : nil,
+                                        onMoveDown: index < selectedExercises.count - 1 ? {
+                                            withAnimation {
+                                                selectedExercises.swapAt(index, index + 1)
+                                            }
+                                        } : nil
+                                    )
 
                                     if index < selectedExercises.count - 1 {
                                         Divider()
@@ -914,35 +904,25 @@ struct EditTemplateSheet: View {
                         } else {
                             VStack(spacing: 0) {
                                 ForEach(Array(selectedExercises.enumerated()), id: \.element.id) { index, exercise in
-                                    HStack(spacing: 12) {
-                                        Text("\(index + 1)")
-                                            .font(.headline)
-                                            .foregroundStyle(Color.groveSage)
-                                            .frame(width: 28)
-
-                                        VStack(alignment: .leading, spacing: 2) {
-                                            Text(exercise.name)
-                                                .font(.body)
-                                                .foregroundStyle(Color.groveText)
-                                            Text(exercise.muscleGroup.rawValue)
-                                                .font(.caption)
-                                                .foregroundStyle(.secondary)
-                                        }
-
-                                        Spacer()
-
-                                        Button {
+                                    SelectedExerciseRow(
+                                        exercise: exercise,
+                                        index: index + 1,
+                                        onRemove: {
                                             withAnimation {
                                                 selectedExercises.removeAll { $0.id == exercise.id }
                                             }
-                                        } label: {
-                                            Image(systemName: "xmark.circle.fill")
-                                                .foregroundStyle(Color.groveMutedRust.opacity(0.7))
-                                        }
-                                        .buttonStyle(.plain)
-                                    }
-                                    .padding(.horizontal, 16)
-                                    .padding(.vertical, 12)
+                                        },
+                                        onMoveUp: index > 0 ? {
+                                            withAnimation {
+                                                selectedExercises.swapAt(index, index - 1)
+                                            }
+                                        } : nil,
+                                        onMoveDown: index < selectedExercises.count - 1 ? {
+                                            withAnimation {
+                                                selectedExercises.swapAt(index, index + 1)
+                                            }
+                                        } : nil
+                                    )
 
                                     if index < selectedExercises.count - 1 {
                                         Divider()
