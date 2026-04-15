@@ -3,10 +3,47 @@ import SwiftData
 import UIKit
 import BackgroundTasks
 import WidgetKit
+import CloudKit
+import UserNotifications
 
 class AppDelegate: NSObject, UIApplicationDelegate {
+    var modelContainer: ModelContainer?
+
+    func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil) -> Bool {
+        UNUserNotificationCenter.current().delegate = self
+        application.registerForRemoteNotifications()
+        return true
+    }
+
     func application(_ application: UIApplication, supportedInterfaceOrientationsFor window: UIWindow?) -> UIInterfaceOrientationMask {
         return .portrait
+    }
+
+    func application(_ application: UIApplication, didReceiveRemoteNotification userInfo: [String: AnyHashable], fetchCompletionHandler completionHandler: @escaping (UIBackgroundFetchResult) -> Void) {
+        let notification = CKNotification(fromRemoteNotificationDictionary: userInfo)
+        guard notification?.subscriptionID == CloudKitSocialService.interactionSubscriptionID else {
+            completionHandler(.noData)
+            return
+        }
+
+        if let queryNotification = notification as? CKQueryNotification,
+           let recordID = queryNotification.recordID {
+            Task {
+                await CloudKitSocialService.shared.handleIncomingInteraction(
+                    recordID: recordID, modelContainer: modelContainer)
+                completionHandler(.newData)
+            }
+        } else {
+            completionHandler(.noData)
+        }
+    }
+}
+
+extension AppDelegate: UNUserNotificationCenterDelegate {
+    func userNotificationCenter(_ center: UNUserNotificationCenter,
+                                willPresent notification: UNNotification,
+                                withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void) {
+        completionHandler([.banner, .sound])
     }
 }
 
@@ -63,7 +100,7 @@ struct GroveApp: App {
     }
 
     @State private var workoutSessionManager = WorkoutSessionManager()
-    @State private var socialService = CloudKitSocialService()
+    private var socialService: CloudKitSocialService { CloudKitSocialService.shared }
     @State private var pendingTemplate: SharedTemplate?
     @Environment(\.scenePhase) private var scenePhase
 
@@ -74,6 +111,7 @@ struct GroveApp: App {
             ContentView()
                 .environment(workoutSessionManager)
                 .environment(socialService)
+                .task { appDelegate.modelContainer = modelContainer }
                 .onOpenURL { url in
                     if let template = SharedTemplate.from(url: url) {
                         pendingTemplate = template
@@ -112,7 +150,7 @@ struct GroveApp: App {
 
     private func scheduleFeedCheckTask() {
         let request = BGAppRefreshTaskRequest(identifier: Self.feedCheckTaskID)
-        request.earliestBeginDate = Date(timeIntervalSinceNow: 30 * 60) // 30 minutes
+        request.earliestBeginDate = Date(timeIntervalSinceNow: 2 * 60 * 60) // 2 hours (fallback for missed pushes)
         try? BGTaskScheduler.shared.submit(request)
     }
 

@@ -78,6 +78,7 @@ struct ContentView: View {
                 // Preload social feed in background
                 if let user = users.first {
                     await socialService.ensureUserProfile(user: user)
+                    await socialService.registerInteractionSubscription()
                 }
                 await socialService.fetchFriends()
                 await socialService.fetchFeed()

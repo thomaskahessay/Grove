@@ -142,6 +142,8 @@ struct FriendProfileData: Sendable {
 @MainActor
 @Observable
 class CloudKitSocialService {
+    static let shared = CloudKitSocialService()
+
     // State
     var friends: [CKFriendProfile] = []
     var friendsLoaded: Bool = false
@@ -179,6 +181,80 @@ class CloudKitSocialService {
         static let friendLink = "FriendLink"
         static let sharedWorkout = "SharedWorkout"
         static let interaction = "Interaction"
+    }
+
+    // MARK: - CloudKit Subscription
+
+    static let interactionSubscriptionID = "grove-interaction-subscription"
+
+    func registerInteractionSubscription() async {
+        guard let myAppleUserID else { return }
+
+        let key = "grove_interactionSubscriptionRegistered_\(myAppleUserID)"
+        guard !UserDefaults.standard.bool(forKey: key) else { return }
+
+        let predicate = NSPredicate(format: "recipientID == %@", myAppleUserID)
+        let subscription = CKQuerySubscription(
+            recordType: RecordType.interaction,
+            predicate: predicate,
+            subscriptionID: Self.interactionSubscriptionID,
+            options: [.firesOnRecordCreation]
+        )
+
+        let notificationInfo = CKSubscription.NotificationInfo()
+        notificationInfo.shouldSendContentAvailable = true
+        subscription.notificationInfo = notificationInfo
+
+        do {
+            try await publicDB.save(subscription)
+            UserDefaults.standard.set(true, forKey: key)
+        } catch {
+            if let ckError = error as? CKError, ckError.code == .serverRejectedRequest {
+                UserDefaults.standard.set(true, forKey: key)
+            }
+        }
+    }
+
+    func handleIncomingInteraction(recordID: CKRecord.ID, modelContainer: ModelContainer?) async {
+        guard let record = try? await publicDB.record(for: recordID) else { return }
+
+        let typeStr = record["type"] as? String ?? ""
+        guard let type = InteractionType(rawValue: typeStr) else { return }
+        let senderID = record["senderID"] as? String ?? ""
+        let workoutRecordName = record["workoutRecordName"] as? String ?? ""
+
+        // Resolve sender name
+        let senderName: String
+        if let friend = friends.first(where: { $0.id == senderID }) {
+            senderName = friend.displayName
+        } else {
+            let profileID = CKRecord.ID(recordName: senderID)
+            senderName = (try? await publicDB.record(for: profileID))?["displayName"] as? String ?? "Someone"
+        }
+
+        // Resolve workout name
+        let wID = CKRecord.ID(recordName: workoutRecordName)
+        let workoutName = (try? await publicDB.record(for: wID))?["workoutName"] as? String ?? "Workout"
+
+        // Get user preferences
+        guard let modelContainer else { return }
+        let context = ModelContext(modelContainer)
+        guard let user = try? context.fetch(FetchDescriptor<User>()).first else { return }
+
+        await NotificationService.shared.checkAuthorizationStatus()
+
+        switch type {
+        case .water:
+            NotificationService.shared.scheduleWaterReceivedNotification(
+                senderName: senderName, workoutName: workoutName, user: user)
+        case .seed:
+            let message = record["message"] as? String ?? "🌱"
+            NotificationService.shared.scheduleSeedReceivedNotification(
+                senderName: senderName, message: message, user: user)
+        case .sunlight:
+            NotificationService.shared.scheduleSunlightReceivedNotification(
+                senderName: senderName, workoutName: workoutName, user: user)
+        }
     }
 
     // MARK: - iCloud Availability
