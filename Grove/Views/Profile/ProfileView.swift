@@ -59,6 +59,21 @@ struct ProfileView: View {
         screenWidth * 0.75
     }
 
+    /// Shift the plant canvas upward for early stages so small plants
+    /// aren't hidden behind the profile photo overlay.
+    private var plantVerticalOffset: CGFloat {
+        guard let user = user else { return 0 }
+        let stage = user.isStreakWilted
+            ? (PlantStage(rawValue: user.wiltedAtStage) ?? .seed)
+            : PlantStage.from(streak: user.currentStreak)
+        switch stage {
+        case .seed:       return -screenWidth * 0.35
+        case .sprout:     return -screenWidth * 0.18
+        case .seedling:   return -screenWidth * 0.08
+        default:          return 0
+        }
+    }
+
     var body: some View {
         NavigationStack {
             ScrollView {
@@ -199,6 +214,7 @@ struct ProfileView: View {
                         size: screenWidth,
                         showLabel: false
                     )
+                    .offset(y: plantVerticalOffset)
                     .frame(width: screenWidth, height: plantHeroHeight, alignment: .center)
                     .mask(
                         LinearGradient(
