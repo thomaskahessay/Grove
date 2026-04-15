@@ -3,7 +3,7 @@ import SwiftUI
 // MARK: - PreferenceKey
 
 struct CoachMarkAnchorsKey: PreferenceKey {
-    static var defaultValue: [CoachMarkManager.TourStep: CGRect] = [:]
+    nonisolated(unsafe) static var defaultValue: [CoachMarkManager.TourStep: CGRect] = [:]
 
     static func reduce(
         value: inout [CoachMarkManager.TourStep: CGRect],

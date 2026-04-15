@@ -148,12 +148,18 @@ struct ContentView: View {
                     HomeView()
                 }
 
-                Tab("Progress", systemImage: "chart.line.uptrend.xyaxis", value: 1) {
+                Tab(value: 1) {
                     ProgressView()
+                } label: {
+                    Label("Progress", systemImage: "chart.line.uptrend.xyaxis")
+                        .coachMarkAnchor(.progressTab)
                 }
 
-                Tab("Social", systemImage: "person.2.fill", value: 2) {
+                Tab(value: 2) {
                     SocialFeedView()
+                } label: {
+                    Label("Social", systemImage: "person.2.fill")
+                        .coachMarkAnchor(.socialTab)
                 }
 
                 Tab("Profile", systemImage: "person.fill", value: 3) {
@@ -161,26 +167,6 @@ struct ContentView: View {
                 }
             }
             .tint(.groveSage)
-            .background(
-                GeometryReader { geometry in
-                    Color.clear
-                        .onAppear {
-                            let tabBarHeight: CGFloat = 49
-                            let safeBottom = geometry.safeAreaInsets.bottom
-                            let tabBarY = geometry.size.height - tabBarHeight - safeBottom + geometry.safeAreaInsets.top
-                            let tabWidth = geometry.size.width / 4
-
-                            coachMarkManager.registerFrame(.progressTab, frame: CGRect(
-                                x: tabWidth * 1, y: tabBarY,
-                                width: tabWidth, height: tabBarHeight
-                            ))
-                            coachMarkManager.registerFrame(.socialTab, frame: CGRect(
-                                x: tabWidth * 2, y: tabBarY,
-                                width: tabWidth, height: tabBarHeight
-                            ))
-                        }
-                }
-            )
 
             // Floating Action Button (Home tab only, hidden when workout is active)
             if !sessionManager.hasActiveWorkout && selectedTab == 0 {
