@@ -1,5 +1,6 @@
 import SwiftUI
 import SwiftData
+import UIKit
 
 struct ContentView: View {
     @Environment(\.modelContext) private var modelContext
@@ -148,18 +149,12 @@ struct ContentView: View {
                     HomeView()
                 }
 
-                Tab(value: 1) {
+                Tab("Progress", systemImage: "chart.line.uptrend.xyaxis", value: 1) {
                     ProgressView()
-                } label: {
-                    Label("Progress", systemImage: "chart.line.uptrend.xyaxis")
-                        .coachMarkAnchor(.progressTab)
                 }
 
-                Tab(value: 2) {
+                Tab("Social", systemImage: "person.2.fill", value: 2) {
                     SocialFeedView()
-                } label: {
-                    Label("Social", systemImage: "person.2.fill")
-                        .coachMarkAnchor(.socialTab)
                 }
 
                 Tab("Profile", systemImage: "person.fill", value: 3) {
@@ -167,6 +162,19 @@ struct ContentView: View {
                 }
             }
             .tint(.groveSage)
+            .background {
+                TabBarFrameReader { tabBarFrame in
+                    let tabWidth = tabBarFrame.width / 4
+                    coachMarkManager.registerFrame(.progressTab, frame: CGRect(
+                        x: tabWidth, y: tabBarFrame.minY,
+                        width: tabWidth, height: tabBarFrame.height
+                    ))
+                    coachMarkManager.registerFrame(.socialTab, frame: CGRect(
+                        x: tabWidth * 2, y: tabBarFrame.minY,
+                        width: tabWidth, height: tabBarFrame.height
+                    ))
+                }
+            }
 
             // Floating Action Button (Home tab only, hidden when workout is active)
             if !sessionManager.hasActiveWorkout && selectedTab == 0 {
@@ -321,6 +329,39 @@ struct ContentView: View {
                 }
             }
         }
+    }
+}
+
+// MARK: - Tab Bar Frame Reader
+
+private struct TabBarFrameReader: UIViewRepresentable {
+    let onFrame: (CGRect) -> Void
+
+    func makeUIView(context: Context) -> UIView {
+        let view = UIView()
+        view.isHidden = true
+        view.isUserInteractionEnabled = false
+        return view
+    }
+
+    func updateUIView(_ uiView: UIView, context: Context) {
+        DispatchQueue.main.async {
+            guard let window = uiView.window else { return }
+            guard let tabBar = Self.findTabBar(in: window) else { return }
+            let frame = tabBar.convert(tabBar.bounds, to: nil)
+            guard frame.width > 0 && frame.height > 0 else { return }
+            MainActor.assumeIsolated {
+                onFrame(frame)
+            }
+        }
+    }
+
+    private static func findTabBar(in view: UIView) -> UITabBar? {
+        if let tabBar = view as? UITabBar { return tabBar }
+        for subview in view.subviews {
+            if let found = findTabBar(in: subview) { return found }
+        }
+        return nil
     }
 }
 
