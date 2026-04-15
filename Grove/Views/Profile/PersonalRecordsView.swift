@@ -29,7 +29,10 @@ struct PersonalRecordsView: View {
             }
         }
 
-        return bestByKey.values.sorted { $0.achievedAt > $1.achievedAt }
+        return bestByKey.values.sorted {
+            if $0.achievedAt != $1.achievedAt { return $0.achievedAt > $1.achievedAt }
+            return ($0.exercise?.name ?? "") < ($1.exercise?.name ?? "")
+        }
     }
 
     var body: some View {
