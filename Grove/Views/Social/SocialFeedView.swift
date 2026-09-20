@@ -60,7 +60,9 @@ struct SocialFeedView: View {
                         }
 
                         // Feed or empty state
-                        if socialService.friends.isEmpty && socialService.feedItems.isEmpty {
+                        if socialService.isOffline && socialService.friends.isEmpty && socialService.feedItems.isEmpty {
+                            offlineView
+                        } else if socialService.friends.isEmpty && socialService.feedItems.isEmpty {
                             noFriendsView
                         } else if socialService.feedItems.isEmpty && !socialService.isLoading {
                             noActivityView
@@ -317,6 +319,38 @@ struct SocialFeedView: View {
         .padding(12)
         .background(Color.groveCardBackground)
         .clipShape(RoundedRectangle(cornerRadius: 12))
+    }
+
+    private var offlineView: some View {
+        VStack(spacing: 16) {
+            Image(systemName: "wifi.slash")
+                .font(.system(size: 48))
+                .foregroundStyle(.secondary)
+            Text("You're Offline")
+                .font(.headline)
+                .foregroundStyle(Color.groveText)
+            Text("Connect to the internet to see friends and activity.")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+            Button {
+                Task {
+                    if let user { await socialService.refreshAll(user: user) }
+                }
+            } label: {
+                Text("Retry")
+                    .font(.subheadline)
+                    .fontWeight(.semibold)
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 20)
+                    .padding(.vertical, 8)
+                    .background(Color.groveSage)
+                    .clipShape(Capsule())
+            }
+            .padding(.top, 4)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 40)
     }
 
     private var noFriendsView: some View {

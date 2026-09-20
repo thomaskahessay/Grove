@@ -14,7 +14,6 @@ struct ContentView: View {
     @State private var showNotificationPrompt = false
     @State private var selectedTab: Int = 0
     @State private var isLaunching = true
-    @State private var preloadFinished = false
     @State private var minimumTimeElapsed = false
     @AppStorage("appearanceMode") private var appearanceMode: String = "System"
     @AppStorage("notificationPromptShown") private var notificationPromptShown = false
@@ -75,31 +74,19 @@ struct ContentView: View {
                     }
                 }
 
-                // Start minimum timer
+                // Dismiss splash after a minimum time. Deliberately does not wait on the
+                // network preload below — CloudKit calls can hang indefinitely with no
+                // network path at all, and that must never block getting into the app.
                 Task {
                     try? await Task.sleep(for: .seconds(2))
                     minimumTimeElapsed = true
                     dismissLaunchIfReady()
                 }
 
-                // Preload social feed in background
-                if let user = users.first {
-                    await socialService.ensureUserProfile(user: user)
-                }
-                await socialService.fetchFriends()
-                await socialService.fetchFeed()
-                await socialService.fetchRootConnections()
-                await socialService.checkAvailableSunlight()
-
-                preloadFinished = true
-                dismissLaunchIfReady()
-
-                // Schedule notifications on each app launch
-                let notificationService = NotificationService.shared
-                await notificationService.checkAuthorizationStatus()
-                if let user = users.first {
-                    notificationService.scheduleDailyWorkoutReminder(plans: workoutPlans, user: user)
-                    notificationService.scheduleWeeklyPlanningNudge(plans: workoutPlans, user: user)
+                // Preload social feed in the background, independent of the splash timer.
+                Task {
+                    guard let user = users.first else { return }
+                    await socialService.refreshAll(user: user)
 
                     // Schedule watering reminder if there are un-watered posts today
                     let hasUnwatered = socialService.feedItems.contains { item in
@@ -107,13 +94,21 @@ struct ContentView: View {
                         return interactions?.iWatered != true
                             && Calendar.current.isDateInToday(item.completedAt)
                     }
-                    notificationService.scheduleWateringReminder(hasUnwateredPosts: hasUnwatered, user: user)
+                    NotificationService.shared.scheduleWateringReminder(hasUnwateredPosts: hasUnwatered, user: user)
 
                     // Check for connection milestones
                     let milestones = socialService.checkForConnectionMilestones()
                     for (friendName, level) in milestones {
-                        notificationService.scheduleConnectionMilestone(friendName: friendName, level: level, user: user)
+                        NotificationService.shared.scheduleConnectionMilestone(friendName: friendName, level: level, user: user)
                     }
+                }
+
+                // Schedule notifications on each app launch (local-only, not network-dependent)
+                let notificationService = NotificationService.shared
+                await notificationService.checkAuthorizationStatus()
+                if let user = users.first {
+                    notificationService.scheduleDailyWorkoutReminder(plans: workoutPlans, user: user)
+                    notificationService.scheduleWeeklyPlanningNudge(plans: workoutPlans, user: user)
 
                     // Prompt existing users who haven't been asked yet
                     if !notificationPromptShown && !coachMarkManager.isActive && notificationService.authorizationStatus == .notDetermined {
@@ -130,7 +125,7 @@ struct ContentView: View {
     }
 
     private func dismissLaunchIfReady() {
-        guard minimumTimeElapsed && preloadFinished else { return }
+        guard minimumTimeElapsed, isLaunching else { return }
         withAnimation(.easeInOut(duration: 0.4)) {
             isLaunching = false
         }

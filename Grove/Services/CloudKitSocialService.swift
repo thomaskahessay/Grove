@@ -1,6 +1,7 @@
 import Foundation
 import CloudKit
 import SwiftUI
+import Network
 
 // MARK: - Value Types
 
@@ -152,6 +153,9 @@ class CloudKitSocialService {
     }
     var isLoading: Bool = false
     var error: String?
+    /// True once NWPathMonitor reports no usable network path. Starts optimistic
+    /// so the UI does not flash an offline state before the first path update arrives.
+    var isOffline: Bool = false
 
     // Interaction state
     var interactionsByWorkout: [String: InteractionSummary] = [:]
@@ -174,6 +178,21 @@ class CloudKitSocialService {
     private var myAppleUserID: String?
     private var myDisplayName: String?
     private var myProfileImageData: Data?
+    private let pathMonitor = NWPathMonitor()
+
+    init() {
+        pathMonitor.pathUpdateHandler = { [weak self] path in
+            let offline = path.status != .satisfied
+            Task { @MainActor in
+                self?.isOffline = offline
+            }
+        }
+        pathMonitor.start(queue: DispatchQueue(label: "com.grove.networkMonitor"))
+    }
+
+    deinit {
+        pathMonitor.cancel()
+    }
 
     // Record type constants
     private enum RecordType {
@@ -199,6 +218,15 @@ class CloudKitSocialService {
         if friends.isEmpty {
             await fetchFriends()
         }
+    }
+
+    /// Full social preload/refresh chain used on launch and for manual retry.
+    func refreshAll(user: User) async {
+        await ensureUserProfile(user: user)
+        await fetchFriends()
+        await fetchFeed()
+        await fetchRootConnections()
+        await checkAvailableSunlight()
     }
 
     // MARK: - User Profile
