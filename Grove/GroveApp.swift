@@ -3,10 +3,54 @@ import SwiftData
 import UIKit
 import BackgroundTasks
 import WidgetKit
+import CloudKit
+import UserNotifications
 
 class AppDelegate: NSObject, UIApplicationDelegate {
+    // Set by GroveApp.init() immediately after these are constructed. AppDelegate is
+    // instantiated by UIKit before GroveApp.init() runs, so these can't be passed in
+    // as constructor params — this static handoff is the simplest safe alternative.
+    static var modelContainer: ModelContainer?
+    static var socialService: CloudKitSocialService?
+
     func application(_ application: UIApplication, supportedInterfaceOrientationsFor window: UIWindow?) -> UIInterfaceOrientationMask {
         return .portrait
+    }
+
+    func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil) -> Bool {
+        UNUserNotificationCenter.current().delegate = NotificationService.shared
+        application.registerForRemoteNotifications()
+        return true
+    }
+
+    func application(_ application: UIApplication, didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data) {
+        // No-op: CKQuerySubscription push delivery doesn't require us to hand the
+        // device token to CloudKit ourselves; this callback just needs to exist.
+    }
+
+    func application(_ application: UIApplication, didFailToRegisterForRemoteNotificationsWithError error: Error) {
+        print("[Grove] Remote notification registration failed: \(error)")
+    }
+
+    func application(
+        _ application: UIApplication,
+        didReceiveRemoteNotification userInfo: [AnyHashable: Any],
+        fetchCompletionHandler completionHandler: @escaping (UIBackgroundFetchResult) -> Void
+    ) {
+        guard let notification = CKNotification(fromRemoteNotificationDictionary: userInfo) as? CKQueryNotification,
+              let container = Self.modelContainer,
+              let socialService = Self.socialService else {
+            completionHandler(.noData)
+            return
+        }
+        Task {
+            let result = await PushNotificationHandler.handle(
+                notification: notification,
+                modelContainer: container,
+                socialService: socialService
+            )
+            completionHandler(result)
+        }
     }
 }
 
@@ -14,8 +58,11 @@ class AppDelegate: NSObject, UIApplicationDelegate {
 struct GroveApp: App {
     @UIApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
     let modelContainer: ModelContainer
+    let socialService = CloudKitSocialService()
 
     init() {
+        AppDelegate.socialService = socialService
+
         let schema = Schema([
             User.self,
             Exercise.self,
@@ -40,8 +87,11 @@ struct GroveApp: App {
             } catch {
                 fatalError("[Grove] FATAL: Could not initialize any ModelContainer: \(error)")
             }
+            AppDelegate.modelContainer = modelContainer
             return // Skip migrations on fresh in-memory store
         }
+
+        AppDelegate.modelContainer = modelContainer
 
         // Seed built-in exercises on first launch
         let context = ModelContext(modelContainer)
@@ -63,7 +113,6 @@ struct GroveApp: App {
     }
 
     @State private var workoutSessionManager = WorkoutSessionManager()
-    @State private var socialService = CloudKitSocialService()
     @State private var pendingTemplate: SharedTemplate?
     @Environment(\.scenePhase) private var scenePhase
 

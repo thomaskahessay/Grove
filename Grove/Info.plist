@@ -6,10 +6,6 @@
 	<array>
 		<string>com.grove.feedCheck</string>
 	</array>
-	<key>UIBackgroundModes</key>
-	<array>
-		<string>fetch</string>
-	</array>
 	<key>CFBundleURLTypes</key>
 	<array>
 		<dict>
@@ -21,13 +17,10 @@
 			</array>
 		</dict>
 	</array>
-	<key>NSHealthShareUsageDescription</key>
-	<string>Grove reads your workout data to track heart rate and calories during your strength training sessions.</string>
-	<key>NSPhotoLibraryAddUsageDescription</key>
-	<string>Grove needs access to save your workout summary images to your photo library.</string>
-	<key>UISupportedInterfaceOrientations</key>
+	<key>UIBackgroundModes</key>
 	<array>
-		<string>UIInterfaceOrientationPortrait</string>
+		<string>fetch</string>
+		<string>remote-notification</string>
 	</array>
 </dict>
 </plist>

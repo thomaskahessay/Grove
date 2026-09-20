@@ -1,6 +1,7 @@
 import Foundation
 import CloudKit
 import SwiftUI
+import SwiftData
 import Network
 
 // MARK: - Value Types
@@ -165,9 +166,6 @@ class CloudKitSocialService {
         didSet { UserDefaults.standard.set(Array(usedSunlightSources), forKey: "grove_usedSunlightSources") }
     }
 
-    // Track previous root levels for milestone detection
-    private var previousRootLevels: [String: RootLevel] = [:]
-
     /// The current user's Apple User ID (for checking if a post is your own)
     var currentUserID: String? { myAppleUserID }
 
@@ -283,6 +281,8 @@ class CloudKitSocialService {
 
                 try await publicDB.save(record)
             }
+
+            await CloudKitSubscriptionManager.ensureSubscriptions(myAppleUserID: appleUserID, database: publicDB)
         } catch {
             self.error = "Could not sync profile: \(error.localizedDescription)"
         }
@@ -1219,9 +1219,6 @@ class CloudKitSocialService {
     func fetchRootConnections() async {
         guard let myAppleUserID else { return }
 
-        // Save previous levels for milestone detection
-        previousRootLevels = Dictionary(uniqueKeysWithValues: rootConnections.map { ($0.friendID, $0.level) })
-
         // Fetch interactions where I'm the sender
         let sentPred = NSPredicate(format: "senderID == %@", myAppleUserID)
         let sentQuery = CKQuery(recordType: RecordType.interaction, predicate: sentPred)
@@ -1313,19 +1310,69 @@ class CloudKitSocialService {
         return breakdown
     }
 
-    /// Check if any root connections leveled up since last fetch
-    func checkForConnectionMilestones() -> [(friendName: String, newLevel: RootLevel)] {
-        var milestones: [(String, RootLevel)] = []
+    /// Recomputes root connections, diffs against the persisted last-notified levels
+    /// on `user`, schedules a milestone notification for each newly-crossed threshold,
+    /// then persists the new levels. Callable from both the foreground launch path and
+    /// the push handler — since the diff is against persisted state saved immediately
+    /// after scheduling, whichever caller runs first prevents the other from re-notifying.
+    func checkAndNotifyMilestones(user: User, context: ModelContext) async {
+        await fetchRootConnections()
+
+        var updatedLevels = user.lastNotifiedRootLevels
+        var didChange = false
+
         for connection in rootConnections {
-            let previousLevel = previousRootLevels[connection.friendID]
-            if let prev = previousLevel, connection.level != prev,
+            let previousLevel = user.lastNotifiedRootLevels[connection.friendID].flatMap(RootLevel.init(rawValue:))
+
+            if let previousLevel,
                let currentIdx = RootLevel.allCases.firstIndex(of: connection.level),
-               let prevIdx = RootLevel.allCases.firstIndex(of: prev),
+               let prevIdx = RootLevel.allCases.firstIndex(of: previousLevel),
                currentIdx > prevIdx {
-                milestones.append((connection.friendName, connection.level))
+                await NotificationService.shared.checkAuthorizationStatus()
+                NotificationService.shared.scheduleConnectionMilestone(
+                    friendName: connection.friendName, level: connection.level, user: user
+                )
+            }
+
+            if updatedLevels[connection.friendID] != connection.level.rawValue {
+                updatedLevels[connection.friendID] = connection.level.rawValue
+                didChange = true
             }
         }
-        return milestones
+
+        if didChange {
+            user.lastNotifiedRootLevels = updatedLevels
+            try? context.save()
+        }
+    }
+
+    /// Fetches a single CloudKit record by ID — used by the push handler to resolve
+    /// fields that were truncated/omitted from a notification's `desiredKeys` payload.
+    func fetchRecord(_ recordID: CKRecord.ID) async -> CKRecord? {
+        try? await publicDB.record(for: recordID)
+    }
+
+    /// Lightweight catch-up for seeds received while the app was closed and no push
+    /// arrived (silent push delivery isn't guaranteed — e.g. Low Power Mode, or the
+    /// app was force-quit, which Apple never wakes for silent push). Not a primary
+    /// delivery mechanism; the CKQuerySubscription push is.
+    func checkForMissedSeeds(since lastCheck: Date, user: User) async -> [(senderName: String, message: String, recordName: String)] {
+        guard let myAppleUserID else { return [] }
+
+        let pred = NSPredicate(format: "type == %@ AND recipientID == %@ AND createdAt > %@",
+                                InteractionType.seed.rawValue, myAppleUserID, lastCheck as NSDate)
+        let query = CKQuery(recordType: RecordType.interaction, predicate: pred)
+        guard let (results, _) = try? await publicDB.records(matching: query, resultsLimit: 10) else { return [] }
+
+        let friendLookup = Dictionary(uniqueKeysWithValues: friends.map { ($0.id, $0) })
+
+        return results.compactMap { (_, result) -> (String, String, String)? in
+            guard let record = try? result.get(),
+                  let senderID = record["senderID"] as? String,
+                  let message = record["message"] as? String else { return nil }
+            let senderName = friendLookup[senderID]?.displayName ?? "A friend"
+            return (senderName, message, record.recordID.recordName)
+        }
     }
 
     // MARK: - Debug

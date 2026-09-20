@@ -2,7 +2,7 @@ import Foundation
 import UserNotifications
 
 @MainActor @Observable
-class NotificationService {
+class NotificationService: NSObject {
     static let shared = NotificationService()
 
     var authorizationStatus: UNAuthorizationStatus = .notDetermined
@@ -18,7 +18,7 @@ class NotificationService {
     private static let seedReceivedID = "grove.social.seed"
     private static let connectionMilestoneID = "grove.social.milestone"
 
-    private init() {}
+    private override init() {}
 
     // MARK: - Authorization
 
@@ -281,7 +281,7 @@ class NotificationService {
 
     // MARK: - Seed Received Notification
 
-    func scheduleSeedReceivedNotification(senderName: String, message: String, user: User) {
+    func scheduleSeedReceivedNotification(senderName: String, message: String, recordName: String, user: User) {
         let center = UNUserNotificationCenter.current()
 
         guard authorizationStatus == .authorized,
@@ -297,7 +297,9 @@ class NotificationService {
         // Fire immediately (1 second delay)
         let trigger = UNTimeIntervalNotificationTrigger(timeInterval: 1, repeats: false)
 
-        let id = "\(Self.seedReceivedID).\(UUID().uuidString.prefix(8))"
+        // Stable per-record identifier so a push-triggered call and the foreground
+        // catch-up can't both schedule a duplicate for the same seed.
+        let id = "\(Self.seedReceivedID).\(recordName)"
         let request = UNNotificationRequest(identifier: id, content: content, trigger: trigger)
         center.add(request)
     }
@@ -387,5 +389,19 @@ class NotificationService {
             // Overnight range (e.g. 22:00 - 07:00)
             return checkMinutes >= startMinutes || checkMinutes < endMinutes
         }
+    }
+}
+
+// MARK: - UNUserNotificationCenterDelegate
+
+extension NotificationService: UNUserNotificationCenterDelegate {
+    /// Without a delegate, iOS silently drops notifications delivered while the app
+    /// is in the foreground. This is what makes foreground-fired notifications visible.
+    nonisolated func userNotificationCenter(
+        _ center: UNUserNotificationCenter,
+        willPresent notification: UNNotification,
+        withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
+    ) {
+        completionHandler([.banner, .sound, .badge])
     }
 }

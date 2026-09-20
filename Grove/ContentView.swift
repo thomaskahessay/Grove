@@ -96,11 +96,24 @@ struct ContentView: View {
                     }
                     NotificationService.shared.scheduleWateringReminder(hasUnwateredPosts: hasUnwatered, user: user)
 
-                    // Check for connection milestones
-                    let milestones = socialService.checkForConnectionMilestones()
-                    for (friendName, level) in milestones {
-                        NotificationService.shared.scheduleConnectionMilestone(friendName: friendName, level: level, user: user)
+                    // Check for connection milestones (persisted diff — safe to also run
+                    // from the push handler without double-notifying, see checkAndNotifyMilestones)
+                    await socialService.checkAndNotifyMilestones(user: user, context: modelContext)
+
+                    // Catch up on any seeds received while the app was closed and no
+                    // push arrived (silent push delivery isn't guaranteed).
+                    let seedCheckStart = user.lastSeedCheckDate ?? Date(timeIntervalSinceNow: -86400)
+                    let missedSeeds = await socialService.checkForMissedSeeds(since: seedCheckStart, user: user)
+                    if !missedSeeds.isEmpty {
+                        await NotificationService.shared.checkAuthorizationStatus()
+                        for seed in missedSeeds {
+                            NotificationService.shared.scheduleSeedReceivedNotification(
+                                senderName: seed.senderName, message: seed.message, recordName: seed.recordName, user: user
+                            )
+                        }
                     }
+                    user.lastSeedCheckDate = Date()
+                    try? modelContext.save()
                 }
 
                 // Schedule notifications on each app launch (local-only, not network-dependent)

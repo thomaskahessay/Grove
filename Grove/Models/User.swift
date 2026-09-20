@@ -29,8 +29,10 @@ class User {
     // Social
     var inviteCode: String?
 
-    // Feed check
+    // Feed / social notification bookkeeping
     var lastFeedCheckDate: Date?
+    var lastSeedCheckDate: Date?
+    var lastNotifiedRootLevels: [String: String] = [:]  // friendID -> RootLevel.rawValue
 
     // Sharing preferences (defaults)
     var autoShareWorkouts: Bool = false
