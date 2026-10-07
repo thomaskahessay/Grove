@@ -4,14 +4,38 @@ import SwiftData
 struct AddExerciseView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
+    @Query private var users: [User]
+    @Query private var existingExercises: [Exercise]
 
-    @State private var name = ""
-    @State private var muscleGroup: MuscleGroup = .chest
+    /// Called with the newly created exercise just before the sheet dismisses.
+    var onCreated: ((Exercise) -> Void)?
+
+    @State private var name: String
+    @State private var muscleGroup: MuscleGroup
     @State private var muscleSubgroup = ""
     @State private var isBodyweight = false
+    @State private var isCompound = false
+
+    init(
+        prefillName: String = "",
+        initialMuscleGroup: MuscleGroup = .chest,
+        onCreated: ((Exercise) -> Void)? = nil
+    ) {
+        _name = State(initialValue: prefillName)
+        _muscleGroup = State(initialValue: initialMuscleGroup)
+        self.onCreated = onCreated
+    }
+
+    private var trimmedName: String {
+        name.trimmingCharacters(in: .whitespaces)
+    }
+
+    private var isDuplicate: Bool {
+        existingExercises.contains { $0.name.caseInsensitiveCompare(trimmedName) == .orderedSame }
+    }
 
     private var isValid: Bool {
-        !name.trimmingCharacters(in: .whitespaces).isEmpty
+        !trimmedName.isEmpty && !isDuplicate
     }
 
     var body: some View {
@@ -29,10 +53,17 @@ struct AddExerciseView: View {
                     TextField("Subgroup (optional)", text: $muscleSubgroup)
 
                     Toggle("Bodyweight exercise", isOn: $isBodyweight)
+
+                    Toggle("Compound lift", isOn: $isCompound)
                 } header: {
                     Text("Exercise Details")
                 } footer: {
-                    Text("Bodyweight exercises track reps only by default, with options for weighted or assisted variants.")
+                    if isDuplicate {
+                        Text("An exercise named \"\(trimmedName)\" already exists.")
+                            .foregroundStyle(Color.groveMutedRust)
+                    } else {
+                        Text("Bodyweight exercises track reps only by default, with options for weighted or assisted variants. Compound lifts are placed first when Grove builds a workout.")
+                    }
                 }
 
                 Section {
@@ -65,19 +96,24 @@ struct AddExerciseView: View {
     }
 
     private func addExercise() {
+        let subgroup = muscleSubgroup.trimmingCharacters(in: .whitespaces)
         let exercise = Exercise(
-            name: name.trimmingCharacters(in: .whitespaces),
+            name: trimmedName,
             muscleGroup: muscleGroup,
-            muscleSubgroup: muscleSubgroup.isEmpty ? nil : muscleSubgroup.trimmingCharacters(in: .whitespaces),
+            muscleSubgroup: subgroup.isEmpty ? nil : subgroup,
             isBuiltIn: false,
+            isCompound: isCompound,
+            sortPriority: isCompound ? 30 : 60,
             isBodyweight: isBodyweight
         )
+        exercise.createdBy = users.first
         modelContext.insert(exercise)
+        onCreated?(exercise)
         dismiss()
     }
 }
 
 #Preview {
     AddExerciseView()
-        .modelContainer(for: [Exercise.self])
+        .modelContainer(for: [Exercise.self, User.self])
 }

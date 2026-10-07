@@ -10,6 +10,7 @@ struct ExercisePickerView: View {
 
     @State private var searchText = ""
     @State private var selectedMuscleGroup: MuscleGroup?
+    @State private var showingAddExercise = false
 
     private var filteredExercises: [Exercise] {
         var result = exercises
@@ -97,6 +98,13 @@ struct ExercisePickerView: View {
             .navigationTitle("Add Exercises")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button {
+                        showingAddExercise = true
+                    } label: {
+                        Label("New Exercise", systemImage: "plus")
+                    }
+                }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Done") {
                         dismiss()
@@ -104,9 +112,28 @@ struct ExercisePickerView: View {
                     .fontWeight(.semibold)
                 }
             }
+            .sheet(isPresented: $showingAddExercise) {
+                AddExerciseView(
+                    prefillName: searchText,
+                    initialMuscleGroup: selectedMuscleGroup ?? relevantMuscleGroups.first ?? .chest
+                ) { exercise in
+                    selectedExercises.append(exercise)
+                    searchText = ""
+                }
+            }
             .overlay {
                 if filteredExercises.isEmpty && !searchText.isEmpty {
-                    ContentUnavailableView.search(text: searchText)
+                    ContentUnavailableView {
+                        Label("No Results for \"\(searchText)\"", systemImage: "magnifyingglass")
+                    } description: {
+                        Text("Check the spelling or create it as a new exercise.")
+                    } actions: {
+                        Button("Create \"\(searchText)\"") {
+                            showingAddExercise = true
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .tint(Color.groveSage)
+                    }
                 }
             }
         }

@@ -487,6 +487,18 @@ private struct ExerciseDetailRow: View {
                     .foregroundStyle(.tertiary)
                     .padding(.leading, 28)
             }
+
+            if let note = exerciseLog.notes, !note.isEmpty {
+                HStack(alignment: .top, spacing: 6) {
+                    Image(systemName: "note.text")
+                        .font(.caption)
+                        .foregroundStyle(Color.groveTerracotta)
+                    Text(note)
+                        .font(.caption)
+                        .foregroundStyle(Color.groveTextSecondary)
+                }
+                .padding(.leading, 28)
+            }
         }
         .padding(16)
     }

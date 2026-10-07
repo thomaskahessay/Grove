@@ -19,6 +19,9 @@ class ExerciseLog {
     var lastWeight: Double?
     var lastReps: Int?
 
+    // Free-form note the user writes during the workout for this exercise
+    var notes: String?
+
     var hasLastSessionData: Bool {
         sets.contains { $0.lastSessionWeight != nil || $0.lastSessionReps != nil }
     }

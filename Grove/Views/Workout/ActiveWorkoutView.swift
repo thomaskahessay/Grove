@@ -438,9 +438,40 @@ struct ExerciseFullScreenCard: View {
     @State private var focusedSetID: UUID?
     @State private var exercisePR: PersonalRecord?
     @State private var bodyweightMode: BodyweightModifier = .bodyweight
+    @State private var previousNotes: [ExerciseNoteEntry] = []
+    @State private var showingNotesHistory = false
 
     private var isBodyweightExercise: Bool {
         exerciseLog.exercise?.isBodyweight ?? false
+    }
+
+    /// Stores an empty note as nil so it doesn't count as a note in history.
+    private var noteBinding: Binding<String> {
+        Binding(
+            get: { exerciseLog.notes ?? "" },
+            set: { exerciseLog.notes = $0.isEmpty ? nil : $0 }
+        )
+    }
+
+    /// Non-empty notes from completed workouts for this exercise, newest first.
+    private func loadPreviousNotes() {
+        guard let exerciseID = exerciseLog.exercise?.id else {
+            previousNotes = []
+            return
+        }
+        let currentLogID = exerciseLog.id
+        let descriptor = FetchDescriptor<ExerciseLog>(
+            predicate: #Predicate<ExerciseLog> { $0.exercise?.id == exerciseID }
+        )
+        let logs = (try? modelContext.fetch(descriptor)) ?? []
+        previousNotes = logs
+            .compactMap { log -> ExerciseNoteEntry? in
+                guard log.id != currentLogID,
+                      let date = log.workout?.completedAt,
+                      let text = log.notes, !text.isEmpty else { return nil }
+                return ExerciseNoteEntry(id: log.id, text: text, date: date)
+            }
+            .sorted { $0.date > $1.date }
     }
 
     private var sortedSets: [SetLog] {
@@ -515,6 +546,41 @@ struct ExerciseFullScreenCard: View {
                         .padding(.top, 4)
                     }
                     .padding(.top, 20)
+
+                    // Note from the last workout with this exercise
+                    if let latest = previousNotes.first {
+                        VStack(alignment: .leading, spacing: 4) {
+                            HStack {
+                                Label("Last time · \(latest.date.formatted(.dateTime.month(.abbreviated).day()))",
+                                      systemImage: "note.text")
+                                    .font(.caption)
+                                    .fontWeight(.medium)
+                                    .foregroundStyle(Color.groveTerracotta)
+                                Spacer()
+                                if previousNotes.count > 1 {
+                                    Button {
+                                        showingNotesHistory = true
+                                    } label: {
+                                        HStack(spacing: 2) {
+                                            Text("+\(previousNotes.count - 1) more")
+                                            Image(systemName: "chevron.right")
+                                        }
+                                        .font(.caption)
+                                        .foregroundStyle(Color.groveSage)
+                                    }
+                                    .buttonStyle(.plain)
+                                }
+                            }
+                            Text(latest.text)
+                                .font(.subheadline)
+                                .foregroundStyle(Color.groveText)
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(12)
+                        .background(Color.groveWarmSand.opacity(0.25))
+                        .clipShape(RoundedRectangle(cornerRadius: 10))
+                        .padding(.horizontal)
+                    }
 
                     // Bodyweight mode picker
                     if isBodyweightExercise {
@@ -605,6 +671,21 @@ struct ExerciseFullScreenCard: View {
                     }
                     .padding(.horizontal)
 
+                    // Note for this workout
+                    VStack(alignment: .leading, spacing: 6) {
+                        Label("Note", systemImage: "note.text")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        TextField("Add a note for this exercise", text: noteBinding, axis: .vertical)
+                            .lineLimit(1...5)
+                            .font(.subheadline)
+                    }
+                    .padding(12)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(Color.groveCardBackground)
+                    .clipShape(RoundedRectangle(cornerRadius: 10))
+                    .padding(.horizontal)
+
                     // Exercise actions
                     HStack(spacing: 24) {
                         Button {
@@ -658,7 +739,14 @@ struct ExerciseFullScreenCard: View {
                 }
             }
         }
+        .sheet(isPresented: $showingNotesHistory) {
+            ExerciseNotesHistorySheet(
+                exerciseName: exerciseLog.exercise?.name ?? "Exercise",
+                notes: previousNotes
+            )
+        }
         .task(id: exerciseLog.exercise?.id) {
+            loadPreviousNotes()
             guard let exerciseID = exerciseLog.exercise?.id else { return }
             let descriptor = FetchDescriptor<PersonalRecord>(
                 predicate: #Predicate<PersonalRecord> { $0.exercise?.id == exerciseID }
@@ -742,6 +830,55 @@ struct ExerciseFullScreenCard: View {
         }
     }
 
+}
+
+// MARK: - Exercise Notes History
+
+struct ExerciseNoteEntry: Identifiable {
+    let id: UUID
+    let text: String
+    let date: Date
+}
+
+struct ExerciseNotesHistorySheet: View {
+    @Environment(\.dismiss) private var dismiss
+    let exerciseName: String
+    let notes: [ExerciseNoteEntry]
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                LazyVStack(alignment: .leading, spacing: 12) {
+                    ForEach(notes) { note in
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text(note.date.formatted(.dateTime.month(.wide).day().year()))
+                                .font(.caption)
+                                .fontWeight(.medium)
+                                .foregroundStyle(Color.groveTerracotta)
+                            Text(note.text)
+                                .font(.subheadline)
+                                .foregroundStyle(Color.groveText)
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(14)
+                        .background(Color.groveCardBackground)
+                        .clipShape(RoundedRectangle(cornerRadius: 12))
+                    }
+                }
+                .padding()
+            }
+            .background(Color.groveBackground)
+            .navigationTitle(exerciseName)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Done") { dismiss() }
+                        .fontWeight(.semibold)
+                }
+            }
+        }
+        .presentationDetents([.medium, .large])
+    }
 }
 
 // MARK: - Set Row View
@@ -1469,6 +1606,7 @@ struct AddExerciseToWorkoutView: View {
     let workout: Workout
 
     @State private var searchText = ""
+    @State private var showingCreateExercise = false
 
     private var existingExerciseIDs: Set<UUID> {
         Set(workout.exercises.compactMap { $0.exercise?.id })
@@ -1512,6 +1650,33 @@ struct AddExerciseToWorkoutView: View {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Done") {
                         dismiss()
+                    }
+                }
+                ToolbarItem(placement: .primaryAction) {
+                    Button {
+                        showingCreateExercise = true
+                    } label: {
+                        Label("New Exercise", systemImage: "plus")
+                    }
+                }
+            }
+            .sheet(isPresented: $showingCreateExercise) {
+                AddExerciseView(prefillName: searchText) { exercise in
+                    addExercise(exercise)
+                }
+            }
+            .overlay {
+                if filteredExercises.isEmpty && !searchText.isEmpty {
+                    ContentUnavailableView {
+                        Label("No Results for \"\(searchText)\"", systemImage: "magnifyingglass")
+                    } description: {
+                        Text("Check the spelling or create it as a new exercise.")
+                    } actions: {
+                        Button("Create \"\(searchText)\"") {
+                            showingCreateExercise = true
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .tint(Color.groveSage)
                     }
                 }
             }
@@ -1575,6 +1740,7 @@ struct ReplaceExerciseView: View {
     let exerciseLog: ExerciseLog
 
     @State private var searchText = ""
+    @State private var showingCreateExercise = false
 
     private var filteredExercises: [Exercise] {
         let workoutExerciseIDs = Set(workout.exercises.compactMap { $0.exercise?.id })
@@ -1610,6 +1776,36 @@ struct ReplaceExerciseView: View {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") {
                         dismiss()
+                    }
+                }
+                ToolbarItem(placement: .primaryAction) {
+                    Button {
+                        showingCreateExercise = true
+                    } label: {
+                        Label("New Exercise", systemImage: "plus")
+                    }
+                }
+            }
+            .sheet(isPresented: $showingCreateExercise) {
+                AddExerciseView(
+                    prefillName: searchText,
+                    initialMuscleGroup: exerciseLog.exercise?.muscleGroup ?? .chest
+                ) { exercise in
+                    replaceWith(exercise)
+                }
+            }
+            .overlay {
+                if filteredExercises.isEmpty && !searchText.isEmpty {
+                    ContentUnavailableView {
+                        Label("No Results for \"\(searchText)\"", systemImage: "magnifyingglass")
+                    } description: {
+                        Text("Check the spelling or create it as a new exercise.")
+                    } actions: {
+                        Button("Create \"\(searchText)\"") {
+                            showingCreateExercise = true
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .tint(Color.groveSage)
                     }
                 }
             }

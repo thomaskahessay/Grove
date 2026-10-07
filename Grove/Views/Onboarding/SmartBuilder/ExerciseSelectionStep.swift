@@ -8,6 +8,7 @@ struct ExerciseSelectionStep: View {
     @State private var showMoreExercises = false
     @State private var searchText = ""
     @State private var appeared = false
+    @State private var showingCreateExercise = false
 
     private var dayLabels: [String] { state.dayLabels }
 
@@ -248,6 +249,30 @@ struct ExerciseSelectionStep: View {
                 // Available exercises
                 ForEach(availableExercises) { exercise in
                     exerciseRow(exercise: exercise, isSelected: false, index: nil)
+                }
+
+                Button {
+                    showingCreateExercise = true
+                } label: {
+                    HStack {
+                        Image(systemName: "plus.circle.fill")
+                            .foregroundStyle(Color.groveSage)
+                        Text(searchText.isEmpty ? "Create new exercise" : "Create \"\(searchText)\"")
+                            .font(.subheadline.weight(.medium))
+                            .foregroundStyle(Color.groveSage)
+                        Spacer()
+                    }
+                    .padding(.vertical, 12)
+                    .padding(.horizontal, 4)
+                }
+                .sheet(isPresented: $showingCreateExercise) {
+                    AddExerciseView(
+                        prefillName: searchText,
+                        initialMuscleGroup: muscleGroupsForDay.first ?? .chest
+                    ) { exercise in
+                        toggleExercise(exercise)
+                        searchText = ""
+                    }
                 }
             }
         }
