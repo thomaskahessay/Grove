@@ -7,7 +7,7 @@ Grove is a native iOS 26 workout tracking app built exclusively on Apple framewo
 ## Tech Stack (No Third-Party Dependencies)
 
 - **UI**: SwiftUI + iOS 26 Liquid Glass
-- **Data**: SwiftData (with CloudKit sync via iCloud)
+- **Data**: SwiftData, local-only (`cloudKitDatabase: .none` in `GroveApp.swift`; no CloudKit schema for models). CloudKit is used only by `CloudKitSocialService` for the social feed.
 - **Auth**: Sign in with Apple (AuthenticationServices)
 - **Health**: HealthKit + HealthKitUI (read-only from Apple Watch)
 - **Charts**: Swift Charts
