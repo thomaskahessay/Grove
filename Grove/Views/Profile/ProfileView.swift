@@ -158,7 +158,7 @@ struct ProfileView: View {
             Task {
                 if let data = try? await newItem?.loadTransferable(type: Data.self),
                    let image = UIImage(data: data) {
-                    user?.profileImageData = processImage(image)
+                    user?.profileImageData = ProfilePhoto.jpegData(from: image)
                     if let user = user {
                         await socialService.ensureUserProfile(user: user)
                     }
@@ -171,7 +171,7 @@ struct ProfileView: View {
         }
         .onChange(of: cameraImage) { _, newImage in
             if let image = newImage {
-                user?.profileImageData = processImage(image)
+                user?.profileImageData = ProfilePhoto.jpegData(from: image)
                 cameraImage = nil
                 if let user = user {
                     Task {
@@ -940,25 +940,6 @@ struct ProfileView: View {
         let formatter = DateFormatter()
         formatter.dateFormat = "MMMM yyyy"
         return formatter.string(from: date)
-    }
-
-    private func processImage(_ image: UIImage) -> Data? {
-        let maxSize: CGFloat = 512
-        let ratio = min(maxSize / image.size.width, maxSize / image.size.height)
-        let targetSize: CGSize
-        if ratio >= 1 {
-            targetSize = image.size
-        } else {
-            targetSize = CGSize(
-                width: image.size.width * ratio,
-                height: image.size.height * ratio
-            )
-        }
-        let renderer = UIGraphicsImageRenderer(size: targetSize)
-        let resized = renderer.image { _ in
-            image.draw(in: CGRect(origin: .zero, size: targetSize))
-        }
-        return resized.jpegData(compressionQuality: 0.7)
     }
 }
 

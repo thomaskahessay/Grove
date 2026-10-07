@@ -3,6 +3,7 @@ import CloudKit
 import SwiftUI
 import SwiftData
 import Network
+import CryptoKit
 
 // MARK: - Value Types
 
@@ -239,59 +240,54 @@ class CloudKitSocialService {
 
     func ensureUserProfile(user: User) async {
         let appleUserID = user.appleUserID
+        // Photos saved by older builds were rendered at screen scale (up to 1536px).
+        if let data = user.profileImageData, let smaller = ProfilePhoto.downscaledIfOversized(data) {
+            user.profileImageData = smaller
+        }
         self.myAppleUserID = appleUserID
         self.myDisplayName = user.displayName
         self.myProfileImageData = user.profileImageData
         updatePushPreferences(from: user)
 
-        do {
-            let recordID = CKRecord.ID(recordName: appleUserID)
-            self.myUserRecordID = recordID
+        let recordID = CKRecord.ID(recordName: appleUserID)
+        self.myUserRecordID = recordID
+        var imageUpload: ProfileImageUpload?
 
-            // Try to fetch existing profile
-            if let existing = try? await publicDB.record(for: recordID) {
+        do {
+            let record: CKRecord
+            if let existing = try await fetchProfileRecord(recordID) {
                 // Read invite code immediately — before save which can fail
                 if let code = existing["inviteCode"] as? String, !code.isEmpty {
                     self.myInviteCode = code
                     user.inviteCode = code
                 }
-
-                // Update mutable fields
-                existing["displayName"] = (user.displayName ?? "Athlete") as CKRecordValue
-                existing["workoutCount"] = Int64(user.workouts.count) as CKRecordValue
-                existing["currentStreak"] = Int64(user.currentStreak) as CKRecordValue
-
-                if let imageData = user.profileImageData {
-                    let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent("\(appleUserID)_profile.jpg")
-                    try? imageData.write(to: tempURL)
-                    existing["profileImage"] = CKAsset(fileURL: tempURL)
-                }
-
-                Self.writeProgramFields(to: existing, user: user)
-
-                try await publicDB.save(existing)
+                record = existing
             } else {
-                // Create new profile — include all fields so schema gets created
-                let record = CKRecord(recordType: RecordType.userProfile, recordID: recordID)
+                record = CKRecord(recordType: RecordType.userProfile, recordID: recordID)
                 record["appleUserID"] = appleUserID as CKRecordValue
-                record["displayName"] = (user.displayName ?? "Athlete") as CKRecordValue
-                record["workoutCount"] = Int64(user.workouts.count) as CKRecordValue
-                record["currentStreak"] = Int64(user.currentStreak) as CKRecordValue
                 record["memberSince"] = user.createdAt as CKRecordValue
-                record["inviteCode"] = "" as CKRecordValue  // Placeholder so field exists in schema
+            }
 
-                if let imageData = user.profileImageData {
-                    let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent("\(appleUserID)_profile.jpg")
-                    try? imageData.write(to: tempURL)
-                    record["profileImage"] = CKAsset(fileURL: tempURL)
-                }
+            Self.setIfChanged(record, "displayName", user.displayName ?? "Athlete")
+            Self.setIfChanged(record, "workoutCount", Int64(Self.completedWorkoutCount(for: user)))
+            Self.setIfChanged(record, "currentStreak", Int64(user.currentStreak))
+            Self.writeProgramFields(to: record, user: user)
+            imageUpload = prepareProfileImage(user.profileImageData, on: record)
 
-                Self.writeProgramFields(to: record, user: user)
+            // Skip no-op saves: every save bumps modificationDate, which invalidates
+            // friends' cached copy of this profile's photo.
+            guard !record.changedKeys().isEmpty else { return }
 
-                try await publicDB.save(record)
+            let saved = try await saveProfileRecord(record)
+            if let marker = imageUpload?.marker(for: saved) {
+                UserDefaults.standard.set(marker, forKey: Self.profileImageUploadKey)
             }
         } catch {
             self.error = "Could not sync profile: \(error.localizedDescription)"
+        }
+
+        if let tempURL = imageUpload?.tempURL {
+            try? FileManager.default.removeItem(at: tempURL)
         }
     }
 
@@ -332,7 +328,7 @@ class CloudKitSocialService {
 
             // Save to user profile — fetch existing or create new
             let record: CKRecord
-            if let existing = try? await publicDB.record(for: myUserRecordID) {
+            if let existing = try await fetchProfileRecord(myUserRecordID) {
                 record = existing
             } else {
                 record = CKRecord(recordType: RecordType.userProfile, recordID: myUserRecordID)
@@ -343,7 +339,7 @@ class CloudKitSocialService {
                 record["currentStreak"] = Int64(0) as CKRecordValue
             }
             record["inviteCode"] = code as CKRecordValue
-            try await publicDB.save(record)
+            _ = try await saveProfileRecord(record)
 
             self.myInviteCode = code
             self.error = nil
@@ -448,6 +444,7 @@ class CloudKitSocialService {
         // Any failure means the list may be incomplete, which must not be pushed into the
         // per-friend push subscriptions (it would delete subscriptions for real friends).
         var fetchComplete = true
+        var linksFetched = true
         let results1: [(CKRecord.ID, Result<CKRecord, Error>)]
         let results2: [(CKRecord.ID, Result<CKRecord, Error>)]
         do {
@@ -455,12 +452,14 @@ class CloudKitSocialService {
         } catch {
             results1 = []
             fetchComplete = false
+            linksFetched = false
         }
         do {
             results2 = try await publicDB.records(matching: query2).matchResults
         } catch {
             results2 = []
             fetchComplete = false
+            linksFetched = false
         }
 
         // Extract friend user IDs
@@ -478,18 +477,35 @@ class CloudKitSocialService {
             }
         }
 
-        // Batch fetch friend profiles
-        var profiles: [CKFriendProfile] = []
-        for friendID in friendIDs {
-            let recordID = CKRecord.ID(recordName: friendID)
-            if let record = try? await publicDB.record(for: recordID) {
-                profiles.append(profileFromRecord(record))
-            } else {
+        // Batch fetch friend profiles without photos, then fill photos from the cache
+        // and download only the ones whose profile changed since they were cached.
+        var profileRecords: [CKRecord] = []
+        let recordIDs = friendIDs.map { CKRecord.ID(recordName: $0) }
+        if !recordIDs.isEmpty {
+            do {
+                let results = try await publicDB.records(for: recordIDs, desiredKeys: Self.profileKeysWithoutImage)
+                for recordID in recordIDs {
+                    if let record = try? results[recordID]?.get() {
+                        profileRecords.append(record)
+                    } else {
+                        fetchComplete = false
+                    }
+                }
+            } catch {
                 fetchComplete = false
             }
         }
 
-        self.friends = profiles.sorted { $0.displayName < $1.displayName }
+        let images = await profileImages(for: profileRecords)
+        let profiles = profileRecords.map { profileFromRecord($0, imageData: images[$0.recordID.recordName]) }
+
+        // Keep previously loaded friends whose profile couldn't be fetched this time,
+        // rather than dropping them (and their avatars) from the UI on a flaky network.
+        let fetchedIDs = Set(profiles.map(\.id))
+        let retained = friends.filter { friend in
+            !fetchedIDs.contains(friend.id) && (!linksFetched || friendIDs.contains(friend.id))
+        }
+        self.friends = (profiles + retained).sorted { $0.displayName < $1.displayName }
         self.friendsLoaded = true
         self.error = nil
 
@@ -497,6 +513,40 @@ class CloudKitSocialService {
         if fetchComplete {
             Task { await syncPushSubscriptions() }
         }
+    }
+
+    /// Photo data keyed by record name, served from `ProfileImageCache` when the profile
+    /// is unchanged and batch-downloaded otherwise. A failed download falls back to
+    /// nothing; the next refresh retries since the cache wasn't updated.
+    private func profileImages(for records: [CKRecord]) async -> [String: Data] {
+        var images: [String: Data] = [:]
+        var missing: [CKRecord.ID: Date] = [:]
+
+        for record in records {
+            let id = record.recordID.recordName
+            guard let modified = record.modificationDate else { continue }
+            if let cached = ProfileImageCache.image(for: id, modifiedAt: modified) {
+                images[id] = cached
+            } else {
+                missing[record.recordID] = modified
+            }
+        }
+
+        guard !missing.isEmpty,
+              let results = try? await publicDB.records(for: Array(missing.keys), desiredKeys: ["profileImage"]) else {
+            return images
+        }
+
+        for (recordID, modified) in missing {
+            guard let record = try? results[recordID]?.get() else { continue }
+            var data: Data?
+            if let asset = record["profileImage"] as? CKAsset, let url = asset.fileURL {
+                data = try? Data(contentsOf: url)
+            }
+            ProfileImageCache.store(data, for: recordID.recordName, modifiedAt: modified)
+            images[recordID.recordName] = data
+        }
+        return images
     }
 
     // MARK: - Push Subscriptions
@@ -644,13 +694,16 @@ class CloudKitSocialService {
             freshSummaries[id] = .empty(for: id)
         }
 
+        // Interaction records don't carry sender names or photos — resolve from friends.
+        let friendLookup = Dictionary(uniqueKeysWithValues: friends.map { ($0.id, $0) })
+
         for (_, interResult) in interResults {
             guard let record = try? interResult.get() else { continue }
             let workoutRecordName = record["workoutRecordName"] as? String ?? ""
             let type = record["type"] as? String ?? ""
             let senderID = record["senderID"] as? String ?? ""
-            let senderName = record["senderName"] as? String ?? ""
-            let senderImage = record["senderProfileImage"] as? Data
+            let senderName = senderID == myAppleUserID ? "You" : (friendLookup[senderID]?.displayName ?? "Friend")
+            let senderImage = senderID == myAppleUserID ? myProfileImageData : friendLookup[senderID]?.profileImageData
             let createdAt = record["createdAt"] as? Date
 
             guard var summary = freshSummaries[workoutRecordName] else { continue }
@@ -762,11 +815,12 @@ class CloudKitSocialService {
         self.myProfileImageData = user.profileImageData
 
         do {
-            let record = try await publicDB.record(for: myUserRecordID)
-            record["workoutCount"] = Int64(user.workouts.filter { $0.completedAt != nil }.count) as CKRecordValue
-            record["currentStreak"] = Int64(user.currentStreak) as CKRecordValue
-            record["displayName"] = (user.displayName ?? "Athlete") as CKRecordValue
-            try await publicDB.save(record)
+            guard let record = try await fetchProfileRecord(myUserRecordID) else { return }
+            Self.setIfChanged(record, "workoutCount", Int64(Self.completedWorkoutCount(for: user)))
+            Self.setIfChanged(record, "currentStreak", Int64(user.currentStreak))
+            Self.setIfChanged(record, "displayName", user.displayName ?? "Athlete")
+            guard !record.changedKeys().isEmpty else { return }
+            _ = try await saveProfileRecord(record)
         } catch {
             // Non-critical — stats will sync on next profile ensure
         }
@@ -1596,22 +1650,110 @@ class CloudKitSocialService {
     // MARK: - Program Sync Helpers
 
     private static func writeProgramFields(to record: CKRecord, user: User) {
-        if user.shareProgram {
-            record["splitName"] = user.preferredSplit.rawValue as CKRecordValue
-            record["daysPerWeek"] = Int64(user.preferredDaysPerWeek) as CKRecordValue
-            record["repRange"] = user.preferredRepRange.rawValue as CKRecordValue
-            record["sessionMinutes"] = Int64(user.preferredWorkoutMinutes) as CKRecordValue
-        } else {
-            record["splitName"] = nil
-            record["daysPerWeek"] = nil
-            record["repRange"] = nil
-            record["sessionMinutes"] = nil
+        let share = user.shareProgram
+        setIfChanged(record, "splitName", share ? user.preferredSplit.rawValue : nil)
+        setIfChanged(record, "daysPerWeek", share ? Int64(user.preferredDaysPerWeek) : nil)
+        setIfChanged(record, "repRange", share ? user.preferredRepRange.rawValue : nil)
+        setIfChanged(record, "sessionMinutes", share ? Int64(user.preferredWorkoutMinutes) : nil)
+    }
+
+    // MARK: - Profile Record Helpers
+
+    /// UserProfile fields other than `profileImage`, so fetching a profile for its
+    /// metadata doesn't also download the photo asset.
+    private static let profileKeysWithoutImage: [CKRecord.FieldKey] = [
+        "appleUserID", "displayName", "inviteCode", "workoutCount", "currentStreak",
+        "memberSince", "splitName", "daysPerWeek", "repRange", "sessionMinutes"
+    ]
+
+    /// Fetches a UserProfile without its photo. Returns nil only when the record doesn't
+    /// exist; network and other errors throw, so callers never mistake an outage for
+    /// "no profile yet" and try to create a duplicate.
+    private func fetchProfileRecord(_ recordID: CKRecord.ID) async throws -> CKRecord? {
+        let results = try await publicDB.records(for: [recordID], desiredKeys: Self.profileKeysWithoutImage)
+        guard let result = results[recordID] else { return nil }
+        do {
+            return try result.get()
+        } catch let error as CKError where error.code == .unknownItem {
+            return nil
         }
     }
 
-    private func profileFromRecord(_ record: CKRecord) -> CKFriendProfile {
-        var imageData: Data?
-        if let asset = record["profileImage"] as? CKAsset,
+    /// Saves only the keys changed on `record`, ignoring the server change tag. A
+    /// profile is only written by its owner, so per-field last-writer-wins is correct,
+    /// and it stops overlapping saves (launch sync + photo change + stats update) from
+    /// failing with serverRecordChanged.
+    private func saveProfileRecord(_ record: CKRecord) async throws -> CKRecord {
+        let (saveResults, _) = try await publicDB.modifyRecords(
+            saving: [record], deleting: [], savePolicy: .changedKeys, atomically: false
+        )
+        guard let result = saveResults[record.recordID] else { throw CKError(.internalError) }
+        return try result.get()
+    }
+
+    /// Only assigns when the value differs, so unchanged fields don't count as changed
+    /// keys and an unchanged profile isn't re-saved.
+    private static func setIfChanged<T: CKRecordValueProtocol & Equatable>(_ record: CKRecord, _ key: CKRecord.FieldKey, _ value: T?) {
+        if record[key] as? T != value {
+            record[key] = value
+        }
+    }
+
+    private static func completedWorkoutCount(for user: User) -> Int {
+        user.workouts.filter { $0.completedAt != nil }.count
+    }
+
+    private static let profileImageUploadKey = "grove_profileImageUpload"
+
+    /// A photo change staged on a profile record, plus what to remember once it saves.
+    private struct ProfileImageUpload {
+        let imageHash: String
+        let tempURL: URL?
+
+        /// Identifies "this photo is on this record". Includes the record's creation
+        /// date so a different CloudKit environment (dev build → TestFlight) or a
+        /// recreated record gets a fresh upload instead of trusting a stale marker.
+        func marker(for record: CKRecord) -> String? {
+            guard let created = record.creationDate else { return nil }
+            return "\(record.recordID.recordName)|\(created.timeIntervalSince1970)|\(imageHash)"
+        }
+    }
+
+    /// Stages the photo on `record` only if it differs from what this device last
+    /// uploaded there — otherwise every launch re-uploaded the same asset.
+    private func prepareProfileImage(_ imageData: Data?, on record: CKRecord) -> ProfileImageUpload {
+        let hash = imageData.map { SHA256.hash(data: $0).map { String(format: "%02x", $0) }.joined() } ?? "none"
+        var upload = ProfileImageUpload(imageHash: hash, tempURL: nil)
+
+        let stored = UserDefaults.standard.string(forKey: Self.profileImageUploadKey)
+        if let current = upload.marker(for: record), current == stored {
+            return upload
+        }
+
+        if let imageData {
+            // Unique name so overlapping saves never share (or delete) each other's file.
+            let tempURL = FileManager.default.temporaryDirectory
+                .appendingPathComponent("profile_\(UUID().uuidString).jpg")
+            do {
+                try imageData.write(to: tempURL)
+                record["profileImage"] = CKAsset(fileURL: tempURL)
+                upload = ProfileImageUpload(imageHash: hash, tempURL: tempURL)
+            } catch {
+                // Leave the photo out of this save; the marker won't match next time.
+                return ProfileImageUpload(imageHash: "unwritten", tempURL: nil)
+            }
+        } else if record.creationDate != nil {
+            record["profileImage"] = nil
+        }
+        return upload
+    }
+
+    /// Builds a profile from a UserProfile record. Pass `imageData` when the photo was
+    /// resolved separately (records fetched without `profileImage`).
+    private func profileFromRecord(_ record: CKRecord, imageData providedImage: Data? = nil) -> CKFriendProfile {
+        var imageData = providedImage
+        if imageData == nil,
+           let asset = record["profileImage"] as? CKAsset,
            let url = asset.fileURL {
             imageData = try? Data(contentsOf: url)
         }
