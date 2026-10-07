@@ -122,7 +122,7 @@ struct CreatineCalendarSheet: View {
     private var calendarGrid: some View {
         LazyVGrid(columns: columns, spacing: 8) {
             // Leading blank cells
-            ForEach(0..<firstWeekday, id: \.self) { _ in
+            ForEach((0..<max(firstWeekday, 0)).map { "blank-\($0)" }, id: \.self) { _ in
                 Color.clear.frame(height: 40)
             }
 
