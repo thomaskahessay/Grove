@@ -1,0 +1,8 @@
+/* Visible CloudKit push bodies (see CloudKitSubscriptionManager). The title is the
+   friend's display name; %@ is filled from the record field named in alertLocalizationArgs. */
+
+/* Friend shared a workout. %@ = workoutName */
+"GROVE_PUSH_FRIEND_WORKOUT" = "Just crushed %@ 💪";
+
+/* Friend planted a seed on your post. %@ = message */
+"GROVE_PUSH_SEED" = "Planted a seed: “%@”";

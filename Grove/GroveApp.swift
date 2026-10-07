@@ -116,7 +116,7 @@ struct GroveApp: App {
     @State private var pendingTemplate: SharedTemplate?
     @Environment(\.scenePhase) private var scenePhase
 
-    private static let feedCheckTaskID = "com.grove.feedCheck"
+    nonisolated private static let feedCheckTaskID = "com.grove.feedCheck"
 
     var body: some Scene {
         WindowGroup {
@@ -143,7 +143,6 @@ struct GroveApp: App {
                         NotificationService.shared.scheduleAbandonedWorkoutReminder()
                     }
                 }
-                scheduleFeedCheckTask()
             case .active:
                 Task { @MainActor in
                     NotificationService.shared.cancelAbandonedWorkoutReminder()
@@ -154,54 +153,11 @@ struct GroveApp: App {
                 break
             }
         }
+        // Retired: friend-activity notifications are now visible CloudKit pushes.
+        // Kept registered as a no-op so refresh requests already queued by older
+        // builds still find a handler. Nothing submits new requests anymore.
         .backgroundTask(.appRefresh(Self.feedCheckTaskID)) {
-            await handleFeedCheck()
+            BGTaskScheduler.shared.cancel(taskRequestWithIdentifier: Self.feedCheckTaskID)
         }
-    }
-
-    private func scheduleFeedCheckTask() {
-        let request = BGAppRefreshTaskRequest(identifier: Self.feedCheckTaskID)
-        request.earliestBeginDate = Date(timeIntervalSinceNow: 30 * 60) // 30 minutes
-        try? BGTaskScheduler.shared.submit(request)
-    }
-
-    @Sendable
-    private func handleFeedCheck() async {
-        let context = ModelContext(modelContainer)
-        guard let user = try? context.fetch(FetchDescriptor<User>()).first,
-              user.notifyFriendActivity else { return }
-
-        let lastCheck = user.lastFeedCheckDate ?? Date(timeIntervalSinceNow: -3600)
-
-        // Ensure friends list is loaded before querying
-        await socialService.bootstrapIfNeeded(appleUserID: user.appleUserID)
-
-        let newWorkouts = await socialService.checkForNewFriendWorkouts(since: lastCheck, user: user)
-
-        if !newWorkouts.isEmpty {
-            await NotificationService.shared.checkAuthorizationStatus()
-            let items = Array(newWorkouts.prefix(3))
-            await MainActor.run {
-                for item in items {
-                    NotificationService.shared.scheduleFriendActivityNotification(
-                        friendName: item.friendName,
-                        workoutName: item.workoutName,
-                        duration: item.duration,
-                        workoutID: item.id,
-                        user: user
-                    )
-                }
-            }
-        }
-
-        user.lastFeedCheckDate = Date()
-        do {
-            try context.save()
-        } catch {
-            print("[Grove] ERROR: Failed to save feed check date: \(error)")
-        }
-
-        // Reschedule for next check
-        scheduleFeedCheckTask()
     }
 }

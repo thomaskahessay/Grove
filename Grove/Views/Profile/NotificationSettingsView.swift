@@ -3,7 +3,7 @@ import SwiftData
 
 struct NotificationSettingsView: View {
     @Query private var users: [User]
-    @Query(sort: \WorkoutPlan.date, order: .reverse) private var workoutPlans: [WorkoutPlan]
+    @Environment(CloudKitSocialService.self) private var socialService
 
     private var user: User? { users.first }
     private var notificationService: NotificationService { NotificationService.shared }
@@ -29,7 +29,6 @@ struct NotificationSettingsView: View {
                         Button("Enable") {
                             Task {
                                 _ = await notificationService.requestAuthorization()
-                                reschedule()
                             }
                         }
                     default:
@@ -55,7 +54,6 @@ struct NotificationSettingsView: View {
                             user.preferredReminderMinute = cal.component(.minute, from: newDate)
                             user.preferredCreatineReminderHour = cal.component(.hour, from: newDate)
                             user.preferredCreatineReminderMinute = cal.component(.minute, from: newDate)
-                            reschedule()
                         }
                     ), displayedComponents: .hourAndMinute)
 
@@ -65,7 +63,6 @@ struct NotificationSettingsView: View {
                             let cal = Calendar.current
                             user.preferredEveningReminderHour = cal.component(.hour, from: newDate)
                             user.preferredEveningReminderMinute = cal.component(.minute, from: newDate)
-                            reschedule()
                         }
                     ), displayedComponents: .hourAndMinute)
                 }
@@ -81,7 +78,6 @@ struct NotificationSettingsView: View {
                         get: { user.notifyWorkoutReminder },
                         set: {
                             user.notifyWorkoutReminder = $0
-                            reschedule()
                         }
                     ))
                     Toggle("Streak at Risk", isOn: Binding(
@@ -94,13 +90,15 @@ struct NotificationSettingsView: View {
                     ))
                     Toggle("Friend Activity", isOn: Binding(
                         get: { user.notifyFriendActivity },
-                        set: { user.notifyFriendActivity = $0 }
+                        set: {
+                            user.notifyFriendActivity = $0
+                            socialService.updatePushPreferences(from: user)
+                        }
                     ))
                     Toggle("Weekly Summary", isOn: Binding(
                         get: { user.notifyWeeklySummary },
                         set: {
                             user.notifyWeeklySummary = $0
-                            reschedule()
                         }
                     ))
 
@@ -109,7 +107,6 @@ struct NotificationSettingsView: View {
                             get: { user.notifyCreatineReminder },
                             set: {
                                 user.notifyCreatineReminder = $0
-                                reschedule()
                             }
                         ))
                     }
@@ -126,7 +123,10 @@ struct NotificationSettingsView: View {
                     ))
                     Toggle("Seed Received", isOn: Binding(
                         get: { user.notifySeedReceived },
-                        set: { user.notifySeedReceived = $0 }
+                        set: {
+                            user.notifySeedReceived = $0
+                            socialService.updatePushPreferences(from: user)
+                        }
                     ))
                     Toggle("Connection Milestones", isOn: Binding(
                         get: { user.notifyConnectionMilestone },
@@ -139,7 +139,7 @@ struct NotificationSettingsView: View {
                 Text("Watering Reminders notify you when friends share workouts. Seed Received alerts you when someone plants a seed on your post. Connection Milestones celebrate when your roots grow deeper.")
             }
 
-            Section("Quiet Hours") {
+            Section {
                 if let user = user {
                     Toggle("Enable Quiet Hours", isOn: Binding(
                         get: { user.quietHoursStart != nil },
@@ -158,7 +158,6 @@ struct NotificationSettingsView: View {
                                 user.quietHoursStart = nil
                                 user.quietHoursEnd = nil
                             }
-                            reschedule()
                         }
                     ))
 
@@ -167,7 +166,6 @@ struct NotificationSettingsView: View {
                             get: { user.quietHoursStart ?? Date() },
                             set: {
                                 user.quietHoursStart = $0
-                                reschedule()
                             }
                         ), displayedComponents: .hourAndMinute)
 
@@ -175,11 +173,14 @@ struct NotificationSettingsView: View {
                             get: { user.quietHoursEnd ?? Date() },
                             set: {
                                 user.quietHoursEnd = $0
-                                reschedule()
                             }
                         ), displayedComponents: .hourAndMinute)
                     }
                 }
+            } header: {
+                Text("Quiet Hours")
+            } footer: {
+                Text("Friend Activity and Seed Received are delivered instantly by iCloud, so quiet hours don't apply to them. Use a Focus mode to silence them.")
             }
         }
         .navigationTitle("Notifications")
@@ -202,15 +203,11 @@ struct NotificationSettingsView: View {
         components.minute = user.preferredEveningReminderMinute
         return Calendar.current.date(from: components) ?? Date()
     }
-
-    private func reschedule() {
-        guard let user = user else { return }
-        notificationService.rescheduleAll(plans: workoutPlans, user: user)
-    }
 }
 
 #Preview {
     NavigationStack {
         NotificationSettingsView()
     }
+    .environment(CloudKitSocialService())
 }

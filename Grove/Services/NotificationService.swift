@@ -15,7 +15,6 @@ class NotificationService: NSObject {
     private static let abandonedWorkoutID = "grove.abandoned.workout"
     private static let creatineReminderID = "grove.creatine.reminder"
     private static let wateringReminderID = "grove.social.watering"
-    private static let seedReceivedID = "grove.social.seed"
     private static let connectionMilestoneID = "grove.social.milestone"
 
     private override init() {}
@@ -38,68 +37,105 @@ class NotificationService: NSObject {
         authorizationStatus = settings.authorizationStatus
     }
 
-    // MARK: - Daily Workout Reminder (8 AM)
+    /// Provisional and ephemeral authorization can also deliver notifications.
+    private var canDeliver: Bool {
+        [.authorized, .provisional, .ephemeral].contains(authorizationStatus)
+    }
 
-    func scheduleDailyWorkoutReminder(plans: [WorkoutPlan], user: User) {
+    // MARK: - Refresh Scheduled Reminders
+
+    /// How many days ahead workout and creatine reminders are scheduled. Covering a week
+    /// means reminders keep firing even if the app isn't opened every day.
+    private static let reminderHorizonDays = 7
+
+    /// Single entry point for (re)scheduling the plan-driven reminders. Always refreshes
+    /// the authorization status first, so a stale `.notDetermined` can't make a scheduler
+    /// bail out after it has already removed the pending requests.
+    func refreshReminders(plans: [WorkoutPlan], user: User, hasLoggedCreatineToday: Bool) async {
+        await checkAuthorizationStatus()
+        await scheduleWorkoutReminders(plans: plans, user: user)
+        scheduleWeeklyPlanningNudge(plans: plans, user: user)
+        await scheduleCreatineReminders(hasLoggedToday: hasLoggedCreatineToday, user: user)
+    }
+
+    /// Removes every pending request whose identifier starts with `prefix` (covers both
+    /// the per-day identifiers and the legacy single-identifier requests).
+    private func removePendingRequests(withPrefix prefix: String) async {
         let center = UNUserNotificationCenter.current()
-        center.removePendingNotificationRequests(withIdentifiers: [Self.dailyWorkoutID])
+        let ids = await center.pendingNotificationRequests()
+            .map(\.identifier)
+            .filter { $0.hasPrefix(prefix) }
+        center.removePendingNotificationRequests(withIdentifiers: ids)
+    }
 
-        guard authorizationStatus == .authorized,
-              user.notifyWorkoutReminder else { return }
-
+    /// Upcoming reminder times at `hour:minute` for today and the next days, skipping
+    /// times already passed or inside quiet hours. `dayOffset` 0 is today.
+    private func upcomingReminderDates(hour: Int, minute: Int, user: User) -> [(dayOffset: Int, date: Date)] {
         let calendar = Calendar.current
         let today = calendar.startOfDay(for: Date())
+        let now = Date()
+        return (0..<Self.reminderHorizonDays).compactMap { offset in
+            guard let day = calendar.date(byAdding: .day, value: offset, to: today),
+                  let date = calendar.date(bySettingHour: hour, minute: minute, second: 0, of: day),
+                  date > now,
+                  !isInQuietHours(date, user: user) else { return nil }
+            return (offset, date)
+        }
+    }
 
-        // Find today's actionable plan
-        guard let todaysPlan = plans.first(where: {
-            calendar.isDate($0.date, inSameDayAs: today)
-            && !$0.isRestDay
-            && $0.completedWorkout == nil
-            && $0.template != nil
-        }) else { return }
+    private func dayIdentifier(_ prefix: String, for date: Date) -> String {
+        let c = Calendar.current.dateComponents([.year, .month, .day], from: date)
+        return "\(prefix).\(c.year ?? 0)-\(c.month ?? 0)-\(c.day ?? 0)"
+    }
 
-        let templateName = todaysPlan.template?.name ?? "Workout"
-
-        // Check if preferred time today is in quiet hours
-        var triggerComponents = calendar.dateComponents([.year, .month, .day], from: today)
-        triggerComponents.hour = user.preferredReminderHour
-        triggerComponents.minute = user.preferredReminderMinute
-        guard let triggerDate = calendar.date(from: triggerComponents) else { return }
-
-        if isInQuietHours(triggerDate, user: user) { return }
-
-        // If preferred time already passed today, skip
-        if triggerDate < Date() { return }
-
-        let content = UNMutableNotificationContent()
-        content.title = "Grove"
-        content.body = "Today's workout: \(templateName). Let's grow!"
-        content.sound = .default
-
-        let trigger = UNCalendarNotificationTrigger(
-            dateMatching: DateComponents(hour: user.preferredReminderHour, minute: user.preferredReminderMinute),
+    private func calendarTrigger(for date: Date) -> UNCalendarNotificationTrigger {
+        UNCalendarNotificationTrigger(
+            dateMatching: Calendar.current.dateComponents([.year, .month, .day, .hour, .minute], from: date),
             repeats: false
         )
+    }
 
-        let request = UNNotificationRequest(
-            identifier: Self.dailyWorkoutID,
-            content: content,
-            trigger: trigger
-        )
+    // MARK: - Daily Workout Reminders
 
-        center.add(request)
+    private func scheduleWorkoutReminders(plans: [WorkoutPlan], user: User) async {
+        await removePendingRequests(withPrefix: Self.dailyWorkoutID)
+
+        guard canDeliver, user.notifyWorkoutReminder else { return }
+
+        let calendar = Calendar.current
+        let center = UNUserNotificationCenter.current()
+
+        for (_, date) in upcomingReminderDates(hour: user.preferredReminderHour, minute: user.preferredReminderMinute, user: user) {
+            guard let plan = plans.first(where: {
+                calendar.isDate($0.date, inSameDayAs: date)
+                && !$0.isRestDay
+                && $0.completedWorkout == nil
+                && $0.template != nil
+            }) else { continue }
+
+            let content = UNMutableNotificationContent()
+            content.title = "Grove"
+            content.body = "Today's workout: \(plan.template?.name ?? "Workout"). Let's grow!"
+            content.sound = .default
+
+            try? await center.add(UNNotificationRequest(
+                identifier: dayIdentifier(Self.dailyWorkoutID, for: date),
+                content: content,
+                trigger: calendarTrigger(for: date)
+            ))
+        }
     }
 
     // MARK: - Weekly Planning Nudge (Sunday 6 PM + Monday 8 AM)
 
-    func scheduleWeeklyPlanningNudge(plans: [WorkoutPlan], user: User) {
+    private func scheduleWeeklyPlanningNudge(plans: [WorkoutPlan], user: User) {
         let center = UNUserNotificationCenter.current()
         center.removePendingNotificationRequests(withIdentifiers: [
             Self.weeklyPlanSundayID,
             Self.weeklyPlanMondayID
         ])
 
-        guard authorizationStatus == .authorized,
+        guard canDeliver,
               user.notifyWeeklySummary else { return }
 
         let calendar = Calendar.current
@@ -176,7 +212,7 @@ class NotificationService: NSObject {
         let center = UNUserNotificationCenter.current()
         center.removePendingNotificationRequests(withIdentifiers: [Self.abandonedWorkoutID])
 
-        guard authorizationStatus == .authorized else { return }
+        guard canDeliver else { return }
 
         let content = UNMutableNotificationContent()
         content.title = "Grove"
@@ -202,43 +238,31 @@ class NotificationService: NSObject {
             .removePendingNotificationRequests(withIdentifiers: [Self.abandonedWorkoutID])
     }
 
-    // MARK: - Creatine Reminder (9 AM)
+    // MARK: - Creatine Reminders
 
-    func scheduleCreatineReminder(hasLoggedToday: Bool, user: User) {
-        let center = UNUserNotificationCenter.current()
-        center.removePendingNotificationRequests(withIdentifiers: [Self.creatineReminderID])
+    private func scheduleCreatineReminders(hasLoggedToday: Bool, user: User) async {
+        await removePendingRequests(withPrefix: Self.creatineReminderID)
 
-        guard authorizationStatus == .authorized,
+        guard canDeliver,
               user.trackCreatine,
-              user.notifyCreatineReminder,
-              !hasLoggedToday else { return }
+              user.notifyCreatineReminder else { return }
 
-        let calendar = Calendar.current
-        var components = calendar.dateComponents([.year, .month, .day], from: Date())
-        components.hour = user.preferredCreatineReminderHour
-        components.minute = user.preferredCreatineReminderMinute
+        let center = UNUserNotificationCenter.current()
 
-        guard let triggerDate = calendar.date(from: components),
-              triggerDate > Date(),
-              !isInQuietHours(triggerDate, user: user) else { return }
+        for (offset, date) in upcomingReminderDates(hour: user.preferredCreatineReminderHour, minute: user.preferredCreatineReminderMinute, user: user) {
+            if offset == 0 && hasLoggedToday { continue }
 
-        let content = UNMutableNotificationContent()
-        content.title = "Grove"
-        content.body = "Don't forget your creatine today!"
-        content.sound = .default
+            let content = UNMutableNotificationContent()
+            content.title = "Grove"
+            content.body = "Don't forget your creatine today!"
+            content.sound = .default
 
-        let trigger = UNCalendarNotificationTrigger(
-            dateMatching: DateComponents(hour: user.preferredCreatineReminderHour, minute: user.preferredCreatineReminderMinute),
-            repeats: false
-        )
-
-        let request = UNNotificationRequest(
-            identifier: Self.creatineReminderID,
-            content: content,
-            trigger: trigger
-        )
-
-        center.add(request)
+            try? await center.add(UNNotificationRequest(
+                identifier: dayIdentifier(Self.creatineReminderID, for: date),
+                content: content,
+                trigger: calendarTrigger(for: date)
+            ))
+        }
     }
 
     // MARK: - Watering Reminder (7 PM)
@@ -247,7 +271,7 @@ class NotificationService: NSObject {
         let center = UNUserNotificationCenter.current()
         center.removePendingNotificationRequests(withIdentifiers: [Self.wateringReminderID])
 
-        guard authorizationStatus == .authorized,
+        guard canDeliver,
               user.notifyWateringReminder,
               hasUnwateredPosts else { return }
 
@@ -279,37 +303,12 @@ class NotificationService: NSObject {
         center.add(request)
     }
 
-    // MARK: - Seed Received Notification
-
-    func scheduleSeedReceivedNotification(senderName: String, message: String, recordName: String, user: User) {
-        let center = UNUserNotificationCenter.current()
-
-        guard authorizationStatus == .authorized,
-              user.notifySeedReceived else { return }
-
-        if isInQuietHours(Date(), user: user) { return }
-
-        let content = UNMutableNotificationContent()
-        content.title = "Grove"
-        content.body = "\(senderName) planted a seed: \"\(message)\""
-        content.sound = .default
-
-        // Fire immediately (1 second delay)
-        let trigger = UNTimeIntervalNotificationTrigger(timeInterval: 1, repeats: false)
-
-        // Stable per-record identifier so a push-triggered call and the foreground
-        // catch-up can't both schedule a duplicate for the same seed.
-        let id = "\(Self.seedReceivedID).\(recordName)"
-        let request = UNNotificationRequest(identifier: id, content: content, trigger: trigger)
-        center.add(request)
-    }
-
     // MARK: - Connection Milestone Notification
 
     func scheduleConnectionMilestone(friendName: String, level: RootLevel, user: User) {
         let center = UNUserNotificationCenter.current()
 
-        guard authorizationStatus == .authorized,
+        guard canDeliver,
               user.notifyConnectionMilestone else { return }
 
         if isInQuietHours(Date(), user: user) { return }
@@ -324,43 +323,6 @@ class NotificationService: NSObject {
         let id = "\(Self.connectionMilestoneID).\(UUID().uuidString.prefix(8))"
         let request = UNNotificationRequest(identifier: id, content: content, trigger: trigger)
         center.add(request)
-    }
-
-    // MARK: - Friend Activity Notification
-
-    private static let friendActivityID = "grove.social.friendActivity"
-
-    func scheduleFriendActivityNotification(friendName: String, workoutName: String, duration: TimeInterval, workoutID: String, user: User) {
-        let center = UNUserNotificationCenter.current()
-
-        guard authorizationStatus == .authorized,
-              user.notifyFriendActivity else { return }
-
-        if isInQuietHours(Date(), user: user) { return }
-
-        let content = UNMutableNotificationContent()
-        content.title = "Grove"
-        let minutes = Int(duration / 60)
-        if minutes > 0 {
-            content.body = "\(friendName) just crushed \(workoutName) — \(minutes) min"
-        } else {
-            content.body = "\(friendName) just crushed \(workoutName)"
-        }
-        content.sound = .default
-
-        let trigger = UNTimeIntervalNotificationTrigger(timeInterval: 1, repeats: false)
-
-        let id = "\(Self.friendActivityID).\(workoutID)"
-        let request = UNNotificationRequest(identifier: id, content: content, trigger: trigger)
-        center.add(request)
-    }
-
-    // MARK: - Reschedule All (called from settings toggle changes)
-
-    func rescheduleAll(plans: [WorkoutPlan], user: User, hasLoggedCreatineToday: Bool = false) {
-        scheduleDailyWorkoutReminder(plans: plans, user: user)
-        scheduleWeeklyPlanningNudge(plans: plans, user: user)
-        scheduleCreatineReminder(hasLoggedToday: hasLoggedCreatineToday, user: user)
     }
 
     // MARK: - Quiet Hours

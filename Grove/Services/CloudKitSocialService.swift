@@ -178,6 +178,14 @@ class CloudKitSocialService {
     private var myProfileImageData: Data?
     private let pathMonitor = NWPathMonitor()
 
+    private struct PushPreferences {
+        let friendActivity: Bool
+        let seeds: Bool
+    }
+    private var pushPreferences: PushPreferences?
+    private var friendsListIsComplete = false
+    private var subscriptionSyncTask: Task<Void, Never>?
+
     init() {
         pathMonitor.pathUpdateHandler = { [weak self] path in
             let offline = path.status != .satisfied
@@ -234,6 +242,7 @@ class CloudKitSocialService {
         self.myAppleUserID = appleUserID
         self.myDisplayName = user.displayName
         self.myProfileImageData = user.profileImageData
+        updatePushPreferences(from: user)
 
         do {
             let recordID = CKRecord.ID(recordName: appleUserID)
@@ -281,8 +290,6 @@ class CloudKitSocialService {
 
                 try await publicDB.save(record)
             }
-
-            await CloudKitSubscriptionManager.ensureSubscriptions(myAppleUserID: appleUserID, database: publicDB)
         } catch {
             self.error = "Could not sync profile: \(error.localizedDescription)"
         }
@@ -417,6 +424,7 @@ class CloudKitSocialService {
             // Remove from local state
             friends.removeAll { $0.id == theirUserID }
             feedItems.removeAll { $0.userID == theirUserID }
+            Task { await syncPushSubscriptions() }
             return true
         } catch {
             self.error = "Could not remove friend: \(error.localizedDescription)"
@@ -436,9 +444,24 @@ class CloudKitSocialService {
         let query1 = CKQuery(recordType: RecordType.friendLink, predicate: pred1)
         let query2 = CKQuery(recordType: RecordType.friendLink, predicate: pred2)
 
-        // These may fail if FriendLink record type doesn't exist yet — that's fine
-        let results1 = (try? await publicDB.records(matching: query1))?.0 ?? []
-        let results2 = (try? await publicDB.records(matching: query2))?.0 ?? []
+        // These may fail if FriendLink record type doesn't exist yet — that's fine.
+        // Any failure means the list may be incomplete, which must not be pushed into the
+        // per-friend push subscriptions (it would delete subscriptions for real friends).
+        var fetchComplete = true
+        let results1: [(CKRecord.ID, Result<CKRecord, Error>)]
+        let results2: [(CKRecord.ID, Result<CKRecord, Error>)]
+        do {
+            results1 = try await publicDB.records(matching: query1).matchResults
+        } catch {
+            results1 = []
+            fetchComplete = false
+        }
+        do {
+            results2 = try await publicDB.records(matching: query2).matchResults
+        } catch {
+            results2 = []
+            fetchComplete = false
+        }
 
         // Extract friend user IDs
         var friendIDs: Set<String> = []
@@ -461,12 +484,53 @@ class CloudKitSocialService {
             let recordID = CKRecord.ID(recordName: friendID)
             if let record = try? await publicDB.record(for: recordID) {
                 profiles.append(profileFromRecord(record))
+            } else {
+                fetchComplete = false
             }
         }
 
         self.friends = profiles.sorted { $0.displayName < $1.displayName }
         self.friendsLoaded = true
         self.error = nil
+
+        friendsListIsComplete = fetchComplete
+        if fetchComplete {
+            Task { await syncPushSubscriptions() }
+        }
+    }
+
+    // MARK: - Push Subscriptions
+
+    /// Updates the notification toggles that decide which push subscriptions exist, then
+    /// syncs. Call after changing `notifyFriendActivity` / `notifySeedReceived`.
+    func updatePushPreferences(from user: User) {
+        pushPreferences = PushPreferences(
+            friendActivity: user.notifyFriendActivity,
+            seeds: user.notifySeedReceived
+        )
+        Task { await syncPushSubscriptions() }
+    }
+
+    /// Reconciles server-side push subscriptions with the current friends list and
+    /// toggles. Waits until both are known — preferences come from the foreground `User`
+    /// and the friends list must have loaded completely — so a background push launch
+    /// or a failed fetch never deletes subscriptions for real friends. Serialized so
+    /// overlapping callers don't race each other's diffs.
+    private func syncPushSubscriptions() async {
+        let previous = subscriptionSyncTask
+        let task = Task {
+            await previous?.value
+            guard let myAppleUserID, let pushPreferences, friendsListIsComplete else { return }
+            let configuration = CloudKitSubscriptionManager.Configuration(
+                myAppleUserID: myAppleUserID,
+                friends: friends.map { .init(id: $0.id, name: $0.displayName) },
+                friendActivityEnabled: pushPreferences.friendActivity,
+                seedsEnabled: pushPreferences.seeds
+            )
+            await CloudKitSubscriptionManager.sync(configuration, database: publicDB)
+        }
+        subscriptionSyncTask = task
+        await task.value
     }
 
     // MARK: - Social Feed
@@ -1352,29 +1416,6 @@ class CloudKitSocialService {
         try? await publicDB.record(for: recordID)
     }
 
-    /// Lightweight catch-up for seeds received while the app was closed and no push
-    /// arrived (silent push delivery isn't guaranteed — e.g. Low Power Mode, or the
-    /// app was force-quit, which Apple never wakes for silent push). Not a primary
-    /// delivery mechanism; the CKQuerySubscription push is.
-    func checkForMissedSeeds(since lastCheck: Date, user: User) async -> [(senderName: String, message: String, recordName: String)] {
-        guard let myAppleUserID else { return [] }
-
-        let pred = NSPredicate(format: "type == %@ AND recipientID == %@ AND createdAt > %@",
-                                InteractionType.seed.rawValue, myAppleUserID, lastCheck as NSDate)
-        let query = CKQuery(recordType: RecordType.interaction, predicate: pred)
-        guard let (results, _) = try? await publicDB.records(matching: query, resultsLimit: 10) else { return [] }
-
-        let friendLookup = Dictionary(uniqueKeysWithValues: friends.map { ($0.id, $0) })
-
-        return results.compactMap { (_, result) -> (String, String, String)? in
-            guard let record = try? result.get(),
-                  let senderID = record["senderID"] as? String,
-                  let message = record["message"] as? String else { return nil }
-            let senderName = friendLookup[senderID]?.displayName ?? "A friend"
-            return (senderName, message, record.recordID.recordName)
-        }
-    }
-
     // MARK: - Debug
 
     #if DEBUG
@@ -1550,52 +1591,6 @@ class CloudKitSocialService {
             return []
         }
         return array
-    }
-
-    // MARK: - Background Feed Check
-
-    func checkForNewFriendWorkouts(since lastCheck: Date, user: User) async -> [SharedWorkoutItem] {
-        guard let myAppleUserID else { return [] }
-
-        let friendIDs = friends.map { $0.id }
-        guard !friendIDs.isEmpty else { return [] }
-
-        let pred = NSPredicate(format: "userID IN %@ AND completedAt > %@", friendIDs, lastCheck as NSDate)
-        let query = CKQuery(recordType: RecordType.sharedWorkout, predicate: pred)
-        query.sortDescriptors = [NSSortDescriptor(key: "completedAt", ascending: false)]
-
-        guard let (results, _) = try? await publicDB.records(matching: query, resultsLimit: 10) else {
-            return []
-        }
-
-        let friendLookup = Dictionary(uniqueKeysWithValues: friends.map { ($0.id, $0) })
-
-        var items: [SharedWorkoutItem] = []
-        for (_, result) in results {
-            if let record = try? result.get() {
-                let userID = record["userID"] as? String ?? ""
-                guard userID != myAppleUserID else { continue }
-                let friend = friendLookup[userID]
-
-                items.append(SharedWorkoutItem(
-                    id: record.recordID.recordName,
-                    userID: userID,
-                    friendName: friend?.displayName ?? "Friend",
-                    friendProfileImageData: friend?.profileImageData,
-                    workoutName: record["workoutName"] as? String ?? "Workout",
-                    templateCategory: record["templateCategory"] as? String,
-                    duration: record["duration"] as? TimeInterval ?? 0,
-                    exerciseCount: Int(record["exerciseCount"] as? Int64 ?? 0),
-                    totalSets: Int(record["totalSets"] as? Int64 ?? 0),
-                    completedAt: record["completedAt"] as? Date ?? Date(),
-                    exercisesJSON: record["exercisesJSON"] as? String,
-                    prCount: Int(record["prCount"] as? Int64 ?? 0),
-                    prExerciseNames: Self.parsePRExerciseNames(record["prExerciseNamesJSON"] as? String)
-                ))
-            }
-        }
-
-        return items
     }
 
     // MARK: - Program Sync Helpers

@@ -6,9 +6,11 @@ struct ContentView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(WorkoutSessionManager.self) private var sessionManager
     @Environment(CloudKitSocialService.self) private var socialService
+    @Environment(\.scenePhase) private var scenePhase
     @Query private var users: [User]
     @Query(sort: \WorkoutPlan.date, order: .reverse) private var workoutPlans: [WorkoutPlan]
     @Query(sort: \Exercise.name) private var allExercises: [Exercise]
+    @Query private var creatineLogs: [CreatineLog]
     @State private var showingWorkoutCreation = false
     @State private var showingDayPlanSheet = false
     @State private var showNotificationPrompt = false
@@ -37,6 +39,40 @@ struct ContentView: View {
             && plan.completedWorkout == nil
             && plan.template != nil
         }
+    }
+
+    private var hasLoggedCreatineToday: Bool {
+        creatineLogs.contains { Calendar.current.isDateInToday($0.date) }
+    }
+
+    /// Everything the scheduled reminders depend on. Reminders are rescheduled whenever
+    /// this changes — plan edits, workout completion, creatine logging, settings,
+    /// permission changes, a new day, or the app returning to the foreground.
+    private var reminderScheduleKey: String {
+        guard let user = users.first else { return "" }
+        let calendar = Calendar.current
+        let today = calendar.startOfDay(for: Date())
+        let upcomingPlans = workoutPlans
+            .filter { $0.date >= today }
+            .map { plan in
+                "\(plan.date.timeIntervalSince1970)|\(plan.isRestDay)|\(plan.template?.name ?? "")|\(plan.completedWorkout != nil)"
+            }
+            .joined(separator: ",")
+        let quietHours = [user.quietHoursStart, user.quietHoursEnd]
+            .map { $0.map { "\(calendar.component(.hour, from: $0)):\(calendar.component(.minute, from: $0))" } ?? "-" }
+            .joined(separator: "-")
+        return [
+            "\(scenePhase == .active)",
+            "\(today.timeIntervalSince1970)",
+            "\(NotificationService.shared.authorizationStatus.rawValue)",
+            "\(user.notifyWorkoutReminder)|\(user.notifyWeeklySummary)|\(user.trackCreatine)|\(user.notifyCreatineReminder)",
+            "\(user.preferredReminderHour):\(user.preferredReminderMinute)",
+            "\(user.preferredEveningReminderHour):\(user.preferredEveningReminderMinute)",
+            "\(user.preferredCreatineReminderHour):\(user.preferredCreatineReminderMinute)",
+            quietHours,
+            "\(hasLoggedCreatineToday)",
+            upcomingPlans
+        ].joined(separator: "#")
     }
 
     private var isOnboardingComplete: Bool {
@@ -99,35 +135,22 @@ struct ContentView: View {
                     // Check for connection milestones (persisted diff — safe to also run
                     // from the push handler without double-notifying, see checkAndNotifyMilestones)
                     await socialService.checkAndNotifyMilestones(user: user, context: modelContext)
-
-                    // Catch up on any seeds received while the app was closed and no
-                    // push arrived (silent push delivery isn't guaranteed).
-                    let seedCheckStart = user.lastSeedCheckDate ?? Date(timeIntervalSinceNow: -86400)
-                    let missedSeeds = await socialService.checkForMissedSeeds(since: seedCheckStart, user: user)
-                    if !missedSeeds.isEmpty {
-                        await NotificationService.shared.checkAuthorizationStatus()
-                        for seed in missedSeeds {
-                            NotificationService.shared.scheduleSeedReceivedNotification(
-                                senderName: seed.senderName, message: seed.message, recordName: seed.recordName, user: user
-                            )
-                        }
-                    }
-                    user.lastSeedCheckDate = Date()
-                    try? modelContext.save()
                 }
 
-                // Schedule notifications on each app launch (local-only, not network-dependent)
+                // Prompt existing users who haven't been asked yet
                 let notificationService = NotificationService.shared
                 await notificationService.checkAuthorizationStatus()
-                if let user = users.first {
-                    notificationService.scheduleDailyWorkoutReminder(plans: workoutPlans, user: user)
-                    notificationService.scheduleWeeklyPlanningNudge(plans: workoutPlans, user: user)
-
-                    // Prompt existing users who haven't been asked yet
-                    if !notificationPromptShown && !coachMarkManager.isActive && notificationService.authorizationStatus == .notDetermined {
-                        showNotificationPrompt = true
-                    }
+                if users.first != nil, !notificationPromptShown && !coachMarkManager.isActive && notificationService.authorizationStatus == .notDetermined {
+                    showNotificationPrompt = true
                 }
+            }
+            .task(id: reminderScheduleKey) {
+                guard scenePhase == .active, let user = users.first else { return }
+                await NotificationService.shared.refreshReminders(
+                    plans: workoutPlans,
+                    user: user,
+                    hasLoggedCreatineToday: hasLoggedCreatineToday
+                )
             }
             .onChange(of: users.first?.appleUserID) {
                 sessionManager.user = users.first
@@ -306,12 +329,9 @@ struct ContentView: View {
         .alert("Enable Notifications?", isPresented: $showNotificationPrompt) {
             Button("Enable") {
                 notificationPromptShown = true
+                // Granting updates authorizationStatus, which reschedules via reminderScheduleKey.
                 Task {
-                    let granted = await NotificationService.shared.requestAuthorization()
-                    if granted, let user = users.first {
-                        NotificationService.shared.scheduleDailyWorkoutReminder(plans: workoutPlans, user: user)
-                        NotificationService.shared.scheduleWeeklyPlanningNudge(plans: workoutPlans, user: user)
-                    }
+                    _ = await NotificationService.shared.requestAuthorization()
                 }
             }
             Button("Not Now", role: .cancel) {

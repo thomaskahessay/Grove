@@ -303,14 +303,6 @@ struct HomeView: View {
                         existingPlans: workoutPlans,
                         context: modelContext
                     )
-
-                    // Schedule creatine reminder if tracking
-                    if user.trackCreatine {
-                        NotificationService.shared.scheduleCreatineReminder(
-                            hasLoggedToday: todaysCreatineLog != nil,
-                            user: user
-                        )
-                    }
                 }
             }
         }
