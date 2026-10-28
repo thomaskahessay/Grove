@@ -16,6 +16,7 @@ struct SettingsView: View {
     @State private var showingSignOutConfirm = false
     @State private var isConnectingHealthKit = false
     @State private var showingPlanEditor = false
+    @State private var showingTrainingDaysEditor = false
 
     private var user: User? { users.first }
 
@@ -104,6 +105,13 @@ struct SettingsView: View {
                             Button("Cancel") { showingPlanEditor = false }
                         }
                     }
+                }
+            }
+        }
+        .sheet(isPresented: $showingTrainingDaysEditor) {
+            if let user = user {
+                NavigationStack {
+                    TrainingDaysView(user: user, onComplete: { showingTrainingDaysEditor = false })
                 }
             }
         }
@@ -240,7 +248,34 @@ struct SettingsView: View {
                 }
                 .contentShape(Rectangle())
             }
+
+            Button {
+                showingTrainingDaysEditor = true
+            } label: {
+                HStack {
+                    Label("Training Days", systemImage: "calendar")
+                        .foregroundStyle(Color.groveText)
+                    Spacer()
+                    if let user = user {
+                        Text(trainingDaysSummary(for: user))
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    Image(systemName: "chevron.right")
+                        .font(.caption)
+                        .foregroundStyle(.tertiary)
+                }
+                .contentShape(Rectangle())
+            }
         }
+    }
+
+    private func trainingDaysSummary(for user: User) -> String {
+        let abbreviations = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+        return user.preferredTrainingSlots.sorted()
+            .filter { abbreviations.indices.contains($0) }
+            .map { abbreviations[$0] }
+            .joined(separator: ", ")
     }
 
     // MARK: - Sharing Defaults

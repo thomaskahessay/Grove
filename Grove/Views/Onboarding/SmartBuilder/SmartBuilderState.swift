@@ -68,8 +68,11 @@ class SmartBuilderState {
             && customDayConfigs.allSatisfy { !$0.name.trimmingCharacters(in: .whitespaces).isEmpty && !$0.muscleGroups.isEmpty }
     }
 
-    /// Auto-distribution of training days across a week (Mon=0 .. Sun=6)
-    var trainingDaySlots: [Int] {
+    /// Selected training days (Mon=0 .. Sun=6), always sorted. Count matches daysPerWeek.
+    var trainingDaySlots: [Int] = SmartBuilderState.defaultTrainingSlots(for: 3)
+
+    /// Default distribution of training days across a week (Mon=0 .. Sun=6)
+    static func defaultTrainingSlots(for daysPerWeek: Int) -> [Int] {
         switch daysPerWeek {
         case 1: return [2]              // Wed
         case 2: return [0, 3]           // Mon, Thu
@@ -79,6 +82,28 @@ class SmartBuilderState {
         case 6: return [0, 1, 2, 3, 4, 5] // Mon-Sat
         default: return [0, 2, 4]
         }
+    }
+
+    /// Sets the day count and resets training days to the default distribution
+    func setDaysPerWeek(_ count: Int) {
+        daysPerWeek = count
+        trainingDaySlots = Self.defaultTrainingSlots(for: count)
+        validateSplit()
+    }
+
+    /// Toggles a weekday on or off; the day count follows the selection (1...6 days)
+    func toggleTrainingDay(_ day: Int) {
+        var slots = Set(trainingDaySlots)
+        if slots.contains(day) {
+            guard slots.count > 1 else { return }
+            slots.remove(day)
+        } else {
+            guard slots.count < 6 else { return }
+            slots.insert(day)
+        }
+        trainingDaySlots = slots.sorted()
+        daysPerWeek = trainingDaySlots.count
+        validateSplit()
     }
 
     /// Available splits for the current day count
@@ -113,6 +138,10 @@ class SmartBuilderState {
     convenience init(from user: User) {
         self.init()
         self.daysPerWeek = user.preferredDaysPerWeek
+        let savedSlots = user.preferredTrainingSlots.sorted()
+        self.trainingDaySlots = savedSlots.count == user.preferredDaysPerWeek
+            ? savedSlots
+            : Self.defaultTrainingSlots(for: user.preferredDaysPerWeek)
         self.minutesPerWorkout = user.preferredWorkoutMinutes
         self.selectedSplit = user.preferredSplit
         self.repRange = user.preferredRepRange

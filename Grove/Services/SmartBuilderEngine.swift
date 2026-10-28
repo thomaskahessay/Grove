@@ -158,6 +158,38 @@ struct SmartBuilderEngine {
         savePreferences(state: state, templates: templates, user: user)
     }
 
+    /// Moves the user's existing workouts onto new weekdays without rebuilding templates.
+    /// Deletes future unstarted plans and regenerates them on the new days (used from Settings).
+    static func updateTrainingDays(
+        _ slots: [Int],
+        user: User,
+        context: ModelContext
+    ) {
+        let sortedSlots = slots.sorted()
+        guard sortedSlots.count == user.preferredDaysPerWeek else { return }
+
+        let calendar = Calendar.current
+        let today = calendar.startOfDay(for: Date())
+
+        let allPlans: [WorkoutPlan]
+        do {
+            allPlans = try context.fetch(FetchDescriptor<WorkoutPlan>())
+        } catch { return }
+
+        var remainingPlans: [WorkoutPlan] = []
+        for plan in allPlans {
+            let planDate = calendar.startOfDay(for: plan.date)
+            if planDate >= today && plan.completedWorkout == nil {
+                context.delete(plan)
+            } else {
+                remainingPlans.append(plan)
+            }
+        }
+
+        user.preferredTrainingSlots = sortedSlots
+        extendPlansIfNeeded(user: user, existingPlans: remainingPlans, context: context)
+    }
+
     // MARK: - Shared Helpers
 
     /// Creates workout templates from the builder state
