@@ -16,6 +16,7 @@ class NotificationService: NSObject {
     private static let creatineReminderID = "grove.creatine.reminder"
     private static let wateringReminderID = "grove.social.watering"
     private static let connectionMilestoneID = "grove.social.milestone"
+    nonisolated private static let restTimerID = "grove.workout.restTimer"
 
     private override init() {}
 
@@ -238,6 +239,34 @@ class NotificationService: NSObject {
             .removePendingNotificationRequests(withIdentifiers: [Self.abandonedWorkoutID])
     }
 
+    // MARK: - Rest Timer
+
+    /// Alerts the user when rest ends while Grove is in the background. Ignores quiet
+    /// hours since the user is mid-workout. Suppressed in the foreground (see delegate),
+    /// where WorkoutSessionManager plays a haptic instead.
+    func scheduleRestTimerNotification(at date: Date, exerciseName: String?) {
+        let center = UNUserNotificationCenter.current()
+        center.removePendingNotificationRequests(withIdentifiers: [Self.restTimerID])
+
+        let interval = date.timeIntervalSinceNow
+        guard canDeliver, interval > 0 else { return }
+
+        let content = UNMutableNotificationContent()
+        content.title = "Rest complete"
+        content.body = exerciseName.map { "Time for your next set of \($0)." } ?? "Time for your next set."
+        content.sound = .default
+        content.interruptionLevel = .active
+
+        let trigger = UNTimeIntervalNotificationTrigger(timeInterval: interval, repeats: false)
+        center.add(UNNotificationRequest(identifier: Self.restTimerID, content: content, trigger: trigger))
+    }
+
+    func cancelRestTimerNotification() {
+        let center = UNUserNotificationCenter.current()
+        center.removePendingNotificationRequests(withIdentifiers: [Self.restTimerID])
+        center.removeDeliveredNotifications(withIdentifiers: [Self.restTimerID])
+    }
+
     // MARK: - Creatine Reminders
 
     private func scheduleCreatineReminders(hasLoggedToday: Bool, user: User) async {
@@ -364,6 +393,11 @@ extension NotificationService: UNUserNotificationCenterDelegate {
         willPresent notification: UNNotification,
         withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
     ) {
+        // The in-app timer handles rest completion while Grove is open.
+        if notification.request.identifier == Self.restTimerID {
+            completionHandler([])
+            return
+        }
         completionHandler([.banner, .sound, .badge])
     }
 }

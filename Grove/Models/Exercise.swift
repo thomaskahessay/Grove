@@ -20,6 +20,14 @@ class Exercise {
     // Bodyweight exercises show a mode picker (Bodyweight / Weighted / Assisted) instead of always requiring weight
     var isBodyweight: Bool = false
 
+    // Rest timer length chosen by the user; nil falls back to a compound/isolation default
+    var restSeconds: Int?
+
+    /// Compounds get longer rest by default since they tax more muscle.
+    var effectiveRestSeconds: Int {
+        restSeconds ?? (isCompound ? 120 : 90)
+    }
+
     init(
         name: String,
         muscleGroup: MuscleGroup,

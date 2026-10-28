@@ -12,10 +12,6 @@ struct ActiveWorkoutView: View {
     @State private var showingCardView = false
     @State private var showingAddExercise = false
     @State private var replacingExerciseLog: ExerciseLog?
-    @State private var restTimerSeconds: Int = 0
-    @State private var restTimerAfterSetID: UUID? = nil
-    @State private var restTimerDuration: Int = 90 // Default 90 seconds
-    @State private var timerTask: Task<Void, Never>?
     @State private var exerciseNameVisible = true
     @State private var keyboardVisible = false
     @State private var dragOffset: CGFloat = 0
@@ -189,10 +185,11 @@ struct ActiveWorkoutView: View {
                     ForEach(Array(activeExercises.enumerated()), id: \.element.id) { index, exerciseLog in
                         ExerciseFullScreenCard(
                             exerciseLog: exerciseLog,
-                            onStartTimer: { setID in startRestTimer(afterSetID: setID) },
-                            restTimerAfterSetID: restTimerAfterSetID,
-                            restTimerSeconds: restTimerSeconds,
-                            onAdjustTimer: { delta in restTimerSeconds = max(0, restTimerSeconds + delta) },
+                            onStartTimer: { setID in startRestTimer(afterSetID: setID, for: exerciseLog) },
+                            restTimerAfterSetID: sessionManager.restTimerSetID,
+                            restTimerEndDate: sessionManager.restTimerEndDate,
+                            restTimerTotalSeconds: sessionManager.restTimerTotalSeconds,
+                            onAdjustTimer: { delta in sessionManager.adjustRestTimer(by: delta) },
                             onSkipTimer: { dismissRestTimer() },
                             onSkip: { skipExercise(exerciseLog) },
                             onReplace: { requestReplace(exerciseLog) },
@@ -345,32 +342,19 @@ struct ActiveWorkoutView: View {
 
     // MARK: - Rest Timer
 
-    private func startRestTimer(afterSetID: UUID) {
-        timerTask?.cancel()
-        restTimerSeconds = restTimerDuration
+    private func startRestTimer(afterSetID: UUID, for exerciseLog: ExerciseLog) {
         withAnimation(.easeInOut(duration: 0.3)) {
-            restTimerAfterSetID = afterSetID
-        }
-        timerTask = Task { @MainActor in
-            while !Task.isCancelled && restTimerAfterSetID != nil && restTimerSeconds > 0 {
-                do {
-                    try await Task.sleep(for: .seconds(1))
-                } catch {
-                    break
-                }
-                guard !Task.isCancelled, restTimerAfterSetID != nil else { break }
-                restTimerSeconds -= 1
-            }
-            if !Task.isCancelled && restTimerSeconds <= 0 {
-                dismissRestTimer()
-            }
+            sessionManager.startRestTimer(
+                afterSetID: afterSetID,
+                seconds: exerciseLog.exercise?.effectiveRestSeconds ?? 90,
+                exerciseName: exerciseLog.exercise?.name
+            )
         }
     }
 
     private func dismissRestTimer() {
-        timerTask?.cancel()
         withAnimation(.easeInOut(duration: 0.3)) {
-            restTimerAfterSetID = nil
+            sessionManager.cancelRestTimer()
         }
     }
 
@@ -427,7 +411,8 @@ struct ExerciseFullScreenCard: View {
     @Bindable var exerciseLog: ExerciseLog
     let onStartTimer: (UUID) -> Void
     var restTimerAfterSetID: UUID? = nil
-    var restTimerSeconds: Int = 0
+    var restTimerEndDate: Date? = nil
+    var restTimerTotalSeconds: Int = 0
     var onAdjustTimer: ((Int) -> Void)? = nil
     var onSkipTimer: (() -> Void)? = nil
     var onSkip: (() -> Void)? = nil
@@ -638,10 +623,17 @@ struct ExerciseFullScreenCard: View {
                             .id(setLog.id)
 
                             // Inline rest timer appears after the set that triggered it
-                            if restTimerAfterSetID == setLog.id {
+                            if restTimerAfterSetID == setLog.id, let restTimerEndDate {
                                 RestTimerRowView(
-                                    seconds: restTimerSeconds,
+                                    endDate: restTimerEndDate,
+                                    totalSeconds: restTimerTotalSeconds,
+                                    defaultSeconds: exerciseLog.exercise?.effectiveRestSeconds ?? 90,
                                     onAdjust: { delta in onAdjustTimer?(delta) },
+                                    onSetDefault: { seconds in
+                                        // Save for this exercise and restart the current rest with it
+                                        exerciseLog.exercise?.restSeconds = seconds
+                                        onStartTimer(setLog.id)
+                                    },
                                     onSkip: { onSkipTimer?() }
                                 )
                                 .transition(.asymmetric(
@@ -1330,55 +1322,56 @@ struct SetRowView: View {
 // MARK: - Rest Timer Row (inline)
 
 struct RestTimerRowView: View {
-    let seconds: Int
+    let endDate: Date
+    let totalSeconds: Int
+    let defaultSeconds: Int
     let onAdjust: (Int) -> Void
+    let onSetDefault: (Int) -> Void
     let onSkip: () -> Void
 
+    private static let presetSeconds = [60, 90, 120, 180, 240, 300]
+
     var body: some View {
-        HStack(spacing: 12) {
-            Image(systemName: "timer")
-                .font(.headline)
-                .foregroundStyle(Color.groveSage)
+        TimelineView(.periodic(from: .now, by: 1)) { context in
+            let remaining = max(0, Int(endDate.timeIntervalSince(context.date).rounded(.up)))
+            VStack(spacing: 8) {
+                HStack(spacing: 12) {
+                    durationMenu
 
-            Text(formatTime(seconds))
-                .font(.system(size: 28, weight: .bold, design: .rounded))
-                .foregroundStyle(Color.groveText)
-                .monospacedDigit()
-                .frame(minWidth: 60)
+                    Text(formatTime(remaining))
+                        .font(.system(size: 28, weight: .bold, design: .rounded))
+                        .foregroundStyle(Color.groveText)
+                        .monospacedDigit()
+                        .contentTransition(.numericText(countsDown: true))
+                        .lineLimit(1)
+                        .fixedSize()
+                        .frame(minWidth: 60, alignment: .leading)
 
-            Spacer()
+                    Spacer()
 
-            Button { onAdjust(-30) } label: {
-                Text("-30s")
-                    .font(.caption)
-                    .fontWeight(.semibold)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 6)
-                    .background(Color.groveWarmSand.opacity(0.2))
-                    .clipShape(Capsule())
+                    adjustButton("-30s", delta: -30)
+                    adjustButton("+30s", delta: 30)
+
+                    Button { onSkip() } label: {
+                        Text("Skip")
+                            .font(.caption)
+                            .fontWeight(.semibold)
+                            .foregroundStyle(Color.groveMutedRust)
+                    }
+                    .buttonStyle(.plain)
+                }
+
+                // Remaining rest
+                GeometryReader { geo in
+                    Capsule()
+                        .fill(Color.groveSage)
+                        .frame(width: geo.size.width * fraction(remaining))
+                        .animation(.linear(duration: 1), value: remaining)
+                }
+                .frame(height: 3)
+                .background(Color.groveSage.opacity(0.15))
+                .clipShape(Capsule())
             }
-            .buttonStyle(.plain)
-            .foregroundStyle(Color.groveText)
-
-            Button { onAdjust(30) } label: {
-                Text("+30s")
-                    .font(.caption)
-                    .fontWeight(.semibold)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 6)
-                    .background(Color.groveWarmSand.opacity(0.2))
-                    .clipShape(Capsule())
-            }
-            .buttonStyle(.plain)
-            .foregroundStyle(Color.groveText)
-
-            Button { onSkip() } label: {
-                Text("Skip")
-                    .font(.caption)
-                    .fontWeight(.semibold)
-                    .foregroundStyle(Color.groveMutedRust)
-            }
-            .buttonStyle(.plain)
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 10)
@@ -1388,6 +1381,53 @@ struct RestTimerRowView: View {
             RoundedRectangle(cornerRadius: 12)
                 .stroke(Color.groveSage.opacity(0.3), lineWidth: 1)
         )
+    }
+
+    /// Picks the default rest for this exercise; remembered for future sets and workouts.
+    private var durationMenu: some View {
+        Menu {
+            Section("Rest for this exercise") {
+                ForEach(Self.presetSeconds, id: \.self) { seconds in
+                    Button {
+                        onSetDefault(seconds)
+                    } label: {
+                        if seconds == defaultSeconds {
+                            Label(formatTime(seconds), systemImage: "checkmark")
+                        } else {
+                            Text(formatTime(seconds))
+                        }
+                    }
+                }
+            }
+        } label: {
+            Image(systemName: "timer")
+                .font(.headline)
+                .foregroundStyle(Color.groveSage)
+                .frame(width: 28, height: 28)
+                .contentShape(Rectangle())
+        }
+        .menuStyle(.button)
+        .buttonStyle(.plain)
+        .accessibilityLabel("Rest duration, \(formatTime(defaultSeconds))")
+    }
+
+    private func adjustButton(_ title: String, delta: Int) -> some View {
+        Button { onAdjust(delta) } label: {
+            Text(title)
+                .font(.caption)
+                .fontWeight(.semibold)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
+                .background(Color.groveWarmSand.opacity(0.2))
+                .clipShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .foregroundStyle(Color.groveText)
+    }
+
+    private func fraction(_ remaining: Int) -> CGFloat {
+        guard totalSeconds > 0 else { return 0 }
+        return min(1, CGFloat(remaining) / CGFloat(totalSeconds))
     }
 
     private func formatTime(_ seconds: Int) -> String {

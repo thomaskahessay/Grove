@@ -33,6 +33,20 @@ struct MinimizedWorkoutCardView: View {
 
                 Spacer()
 
+                // Rest countdown keeps running while minimized
+                if let endDate = sessionManager.restTimerEndDate {
+                    Label {
+                        Text(timerInterval: Date()...max(Date(), endDate), countsDown: true)
+                            .monospacedDigit()
+                    } icon: {
+                        Image(systemName: "timer")
+                    }
+                    .font(.subheadline)
+                    .fontWeight(.semibold)
+                    .foregroundStyle(Color.groveSage)
+                    .transition(.opacity)
+                }
+
                 // Expand indicator
                 Image(systemName: "chevron.up")
                     .font(.caption)

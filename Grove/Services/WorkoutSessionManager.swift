@@ -27,6 +27,14 @@ class WorkoutSessionManager {
     var user: User?
     var onWorkoutCompleted: ((Workout) -> Void)?
 
+    // Rest timer — tracked as a wall-clock end date so it stays accurate while the
+    // app is backgrounded or the workout is minimized.
+    private(set) var restTimerEndDate: Date?
+    private(set) var restTimerSetID: UUID?
+    private(set) var restTimerTotalSeconds: Int = 0
+    private var restTimerExerciseName: String?
+    private var restTimerTask: Task<Void, Never>?
+
     var hasActiveWorkout: Bool {
         activeWorkout != nil && activeWorkout?.completedAt == nil
     }
@@ -100,7 +108,58 @@ class WorkoutSessionManager {
         isFullScreenPresented = true
     }
 
+    // MARK: - Rest Timer
+
+    var isRestTimerRunning: Bool { restTimerEndDate != nil }
+
+    func restTimerRemaining(at date: Date = Date()) -> Int {
+        guard let end = restTimerEndDate else { return 0 }
+        return max(0, Int(end.timeIntervalSince(date).rounded(.up)))
+    }
+
+    func startRestTimer(afterSetID setID: UUID, seconds: Int, exerciseName: String?) {
+        restTimerSetID = setID
+        restTimerTotalSeconds = seconds
+        restTimerExerciseName = exerciseName
+        setRestTimerEnd(Date().addingTimeInterval(TimeInterval(seconds)))
+    }
+
+    func adjustRestTimer(by delta: Int) {
+        guard let end = restTimerEndDate else { return }
+        let newEnd = max(Date(), end.addingTimeInterval(TimeInterval(delta)))
+        restTimerTotalSeconds = max(0, restTimerTotalSeconds + delta)
+        setRestTimerEnd(newEnd)
+    }
+
+    func cancelRestTimer() {
+        restTimerTask?.cancel()
+        restTimerTask = nil
+        restTimerEndDate = nil
+        restTimerSetID = nil
+        restTimerExerciseName = nil
+        NotificationService.shared.cancelRestTimerNotification()
+    }
+
+    private func setRestTimerEnd(_ end: Date) {
+        restTimerEndDate = end
+        NotificationService.shared.scheduleRestTimerNotification(at: end, exerciseName: restTimerExerciseName)
+
+        restTimerTask?.cancel()
+        restTimerTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .seconds(max(0, end.timeIntervalSinceNow)))
+            guard !Task.isCancelled, let self, self.restTimerEndDate == end else { return }
+            // If the app was suspended past the end, the notification already alerted the user.
+            if Date().timeIntervalSince(end) < 2 {
+                UINotificationFeedbackGenerator().notificationOccurred(.success)
+            }
+            withAnimation(.easeInOut(duration: 0.3)) {
+                self.cancelRestTimer()
+            }
+        }
+    }
+
     func endWorkout(context: ModelContext? = nil) {
+        cancelRestTimer()
         activeWorkout?.completedAt = Date()
 
         // Link workout to user (needed for achievement/PR tracking via user.workouts)
@@ -406,6 +465,7 @@ class WorkoutSessionManager {
 
     func discardWorkout(context: ModelContext) {
         guard let workout = activeWorkout else { return }
+        cancelRestTimer()
 
         // Dismiss the UI first so SwiftUI stops reading from the model objects.
         // Deleting data while the fullScreenCover is still presented causes a
