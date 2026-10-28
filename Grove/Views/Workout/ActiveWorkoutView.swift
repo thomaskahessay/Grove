@@ -16,8 +16,15 @@ struct ActiveWorkoutView: View {
     @State private var keyboardVisible = false
     @State private var dragOffset: CGFloat = 0
 
+    /// True once the workout is deleted (discard) while SwiftUI is still tearing this view down.
+    private var isWorkoutGone: Bool {
+        workout.isDeleted || workout.modelContext == nil
+    }
+
     private var exercises: [ExerciseLog] {
-        workout.exercises.sorted { $0.orderIndex < $1.orderIndex }
+        // Deleted logs crash SwiftData if their attributes are read, so expose none
+        guard !isWorkoutGone else { return [] }
+        return workout.exercises.sorted { $0.orderIndex < $1.orderIndex }
     }
 
     /// Non-skipped exercises shown in full-screen swipe view
@@ -40,7 +47,11 @@ struct ActiveWorkoutView: View {
                 Color.groveBackground
                     .ignoresSafeArea()
 
-                if showingCardView {
+                // Discarding deletes the workout while the dismissing cover can still re-render
+                // this view; reading the deleted logs' attributes then crashes SwiftData.
+                if isWorkoutGone {
+                    EmptyView()
+                } else if showingCardView {
                     cardView
                 } else {
                     fullScreenView
@@ -64,7 +75,8 @@ struct ActiveWorkoutView: View {
                 }
 
                 ToolbarItem(placement: .principal) {
-                    Text(!exerciseNameVisible && !showingCardView
+                    Text(isWorkoutGone ? ""
+                         : !exerciseNameVisible && !showingCardView
                          ? (currentExercise?.exercise?.name ?? workout.name)
                          : workout.name)
                         .font(.headline)
@@ -129,6 +141,9 @@ struct ActiveWorkoutView: View {
                     currentExerciseIndex = activeExercises.count - 1
                 }
             }
+            // Keep the screen on between sets; minimizing or ending the workout restores auto-lock
+            .onAppear { UIApplication.shared.isIdleTimerDisabled = true }
+            .onDisappear { UIApplication.shared.isIdleTimerDisabled = false }
             .onChange(of: currentExerciseIndex) {
                 exerciseNameVisible = true
                 UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
@@ -425,6 +440,7 @@ struct ExerciseFullScreenCard: View {
     @State private var bodyweightMode: BodyweightModifier = .bodyweight
     @State private var previousNotes: [ExerciseNoteEntry] = []
     @State private var showingNotesHistory = false
+    @State private var deletedSet: DeletedSetSnapshot?
 
     private var isBodyweightExercise: Bool {
         exerciseLog.exercise?.isBodyweight ?? false
@@ -478,6 +494,7 @@ struct ExerciseFullScreenCard: View {
                             .fontWeight(.bold)
                             .foregroundStyle(Color.groveText)
                             .multilineTextAlignment(.center)
+                            .padding(.horizontal, 48) // Clear the actions menu
                             .onScrollVisibilityChange { visible in
                                 onNameVisibilityChanged?(visible)
                             }
@@ -530,7 +547,25 @@ struct ExerciseFullScreenCard: View {
                         }
                         .padding(.top, 4)
                     }
+                    .frame(maxWidth: .infinity)
+                    .overlay(alignment: .topTrailing) {
+                        exerciseActionsMenu
+                            .padding(.trailing)
+                    }
                     .padding(.top, 20)
+
+                    if let deloadWeight = exerciseLog.deloadSuggestedWeight,
+                       !sortedSets.contains(where: { $0.isCompleted && !$0.isWarmup }) {
+                        PlateauBannerView(
+                            deloadWeight: deloadWeight,
+                            onAccept: { applyDeload(deloadWeight) },
+                            onDismiss: {
+                                withAnimation { exerciseLog.deloadSuggestedWeight = nil }
+                            }
+                        )
+                        .padding(.horizontal)
+                        .transition(.opacity)
+                    }
 
                     // Note from the last workout with this exercise
                     if let latest = previousNotes.first {
@@ -678,39 +713,6 @@ struct ExerciseFullScreenCard: View {
                     .clipShape(RoundedRectangle(cornerRadius: 10))
                     .padding(.horizontal)
 
-                    // Exercise actions
-                    HStack(spacing: 24) {
-                        Button {
-                            if let onSkip {
-                                onSkip()
-                            } else {
-                                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                                    exerciseLog.status = .skipped
-                                }
-                            }
-                        } label: {
-                            Label("Skip", systemImage: "forward.fill")
-                                .font(.subheadline)
-                                .foregroundStyle(Color.groveMutedRust)
-                        }
-
-                        Button {
-                            onReplace?()
-                        } label: {
-                            Label("Replace", systemImage: "arrow.triangle.2.circlepath")
-                                .font(.subheadline)
-                                .foregroundStyle(Color.groveTextSecondary)
-                        }
-
-                        Button {
-                            onRemove?()
-                        } label: {
-                            Label("Remove", systemImage: "trash")
-                                .font(.subheadline)
-                                .foregroundStyle(Color.groveMutedRust.opacity(0.7))
-                        }
-                    }
-
                 }
                 .padding(.bottom, 16)
             }
@@ -728,6 +730,20 @@ struct ExerciseFullScreenCard: View {
                     withAnimation(.easeInOut(duration: 0.3)) {
                         proxy.scrollTo("timer-\(newID)", anchor: .center)
                     }
+                }
+            }
+        }
+        .overlay(alignment: .bottom) {
+            if let deletedSet {
+                UndoToastView(message: "Set \(deletedSet.setNumber) deleted") {
+                    restoreDeletedSet()
+                }
+                .padding(.bottom, 12)
+                .transition(.move(edge: .bottom).combined(with: .opacity))
+                .task(id: deletedSet.id) {
+                    try? await Task.sleep(for: .seconds(6))
+                    guard !Task.isCancelled else { return }
+                    withAnimation { self.deletedSet = nil }
                 }
             }
         }
@@ -782,8 +798,59 @@ struct ExerciseFullScreenCard: View {
         modelContext.insert(newSet)
     }
 
+    private var exerciseActionsMenu: some View {
+        Menu {
+            Button {
+                if let onSkip {
+                    onSkip()
+                } else {
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                        exerciseLog.status = .skipped
+                    }
+                }
+            } label: {
+                Label("Skip Exercise", systemImage: "forward.fill")
+            }
+
+            Button {
+                onReplace?()
+            } label: {
+                Label("Replace Exercise", systemImage: "arrow.triangle.2.circlepath")
+            }
+
+            Button(role: .destructive) {
+                onRemove?()
+            } label: {
+                Label("Remove Exercise", systemImage: "trash")
+            }
+        } label: {
+            Image(systemName: "ellipsis")
+                .font(.headline)
+                .foregroundStyle(Color.groveTextSecondary)
+                .frame(width: 36, height: 36)
+                .background(Color.groveWarmSand.opacity(0.2))
+                .clipShape(Circle())
+        }
+        .menuStyle(.button)
+        .buttonStyle(.plain)
+        .accessibilityLabel("Exercise options")
+    }
+
+    /// Fills incomplete working sets with the lighter-week weight and drops the "add weight" nudges.
+    private func applyDeload(_ weight: Double) {
+        withAnimation {
+            for set in sortedSets where !set.isCompleted && !set.isWarmup {
+                set.weight = weight
+                set.suggestedWeight = nil
+                set.suggestedReps = nil
+            }
+            exerciseLog.deloadSuggestedWeight = nil
+        }
+    }
+
     private func removeSet(_ setLog: SetLog) {
         withAnimation {
+            deletedSet = DeletedSetSnapshot(setLog)
             exerciseLog.sets.removeAll { $0.id == setLog.id }
             modelContext.delete(setLog)
 
@@ -791,6 +858,21 @@ struct ExerciseFullScreenCard: View {
             for (index, set) in exerciseLog.sets.sorted(by: { $0.setNumber < $1.setNumber }).enumerated() {
                 set.setNumber = index + 1
             }
+        }
+    }
+
+    private func restoreDeletedSet() {
+        guard let snapshot = deletedSet else { return }
+        withAnimation {
+            // Shift later sets down to reopen the deleted set's slot
+            for set in exerciseLog.sets where set.setNumber >= snapshot.setNumber {
+                set.setNumber += 1
+            }
+            let restored = snapshot.makeSetLog()
+            restored.exerciseLog = exerciseLog
+            exerciseLog.sets.append(restored)
+            modelContext.insert(restored)
+            deletedSet = nil
         }
     }
 
@@ -994,7 +1076,7 @@ struct SetRowView: View {
                             .transition(.opacity.combined(with: .scale(scale: 0.5)))
                         }
 
-                        TextField("0", text: $weightText)
+                        TextField("–", text: $weightText)
                             .font(.headline)
                             .multilineTextAlignment(.center)
                             .keyboardType(.decimalPad)
@@ -1068,7 +1150,7 @@ struct SetRowView: View {
                         .transition(.opacity.combined(with: .scale(scale: 0.5)))
                     }
 
-                    TextField("0", text: $repsText)
+                    TextField("–", text: $repsText)
                         .font(.headline)
                         .multilineTextAlignment(.center)
                         .keyboardType(.numberPad)
@@ -1114,15 +1196,6 @@ struct SetRowView: View {
             }
             .buttonStyle(.plain)
 
-            // Remove set button
-            if let onRemove = onRemove {
-                Button(action: onRemove) {
-                    Image(systemName: "trash")
-                        .font(.subheadline)
-                        .foregroundStyle(Color.groveMutedRust.opacity(0.7))
-                }
-                .buttonStyle(.plain)
-            }
         }
 
         if setLog.isCompleted, lastSessionWeight != nil || lastSessionReps != nil {
@@ -1221,6 +1294,12 @@ struct SetRowView: View {
                     systemImage: setLog.isWarmup ? "flame.fill" : "flame"
                 )
             }
+
+            if let onRemove {
+                Button(role: .destructive, action: onRemove) {
+                    Label("Delete Set", systemImage: "trash")
+                }
+            }
         }
         .animation(.spring(response: 0.3, dampingFraction: 0.8), value: setLog.isWarmup)
         .animation(.spring(response: 0.3, dampingFraction: 0.8), value: weightFocused)
@@ -1316,6 +1395,127 @@ struct SetRowView: View {
             onUncomplete?(setLog.id)
         }
         onSetStatusChanged?()
+    }
+}
+
+// MARK: - Deleted Set Undo
+
+/// Values of a deleted set, kept briefly so the delete can be undone.
+struct DeletedSetSnapshot {
+    let id = UUID()
+    let setNumber: Int
+    let weight: Double?
+    let reps: Int?
+    let isCompleted: Bool
+    let isWarmup: Bool
+    let completedAt: Date?
+    let lastSessionWeight: Double?
+    let lastSessionReps: Int?
+    let bodyweightModifier: BodyweightModifier?
+    let suggestedWeight: Double?
+    let suggestedReps: Int?
+
+    init(_ set: SetLog) {
+        setNumber = set.setNumber
+        weight = set.weight
+        reps = set.reps
+        isCompleted = set.isCompleted
+        isWarmup = set.isWarmup
+        completedAt = set.completedAt
+        lastSessionWeight = set.lastSessionWeight
+        lastSessionReps = set.lastSessionReps
+        bodyweightModifier = set.bodyweightModifier
+        suggestedWeight = set.suggestedWeight
+        suggestedReps = set.suggestedReps
+    }
+
+    func makeSetLog() -> SetLog {
+        let set = SetLog(setNumber: setNumber, weight: weight, reps: reps, bodyweightModifier: bodyweightModifier)
+        set.isCompleted = isCompleted
+        set.isWarmup = isWarmup
+        set.completedAt = completedAt
+        set.lastSessionWeight = lastSessionWeight
+        set.lastSessionReps = lastSessionReps
+        set.suggestedWeight = suggestedWeight
+        set.suggestedReps = suggestedReps
+        return set
+    }
+}
+
+struct UndoToastView: View {
+    let message: String
+    let onUndo: () -> Void
+
+    var body: some View {
+        HStack(spacing: 16) {
+            Text(message)
+                .font(.subheadline)
+                .foregroundStyle(Color.groveText)
+            Button("Undo", action: onUndo)
+                .font(.subheadline)
+                .fontWeight(.semibold)
+                .foregroundStyle(Color.groveSage)
+        }
+        .padding(.horizontal, 18)
+        .padding(.vertical, 12)
+        .glassEffect(.regular, in: Capsule())
+        .shadow(color: .black.opacity(0.1), radius: 8, y: 4)
+    }
+}
+
+// MARK: - Plateau Banner
+
+/// Suggests a lighter week when an exercise's best set hasn't improved in three sessions.
+struct PlateauBannerView: View {
+    let deloadWeight: Double
+    let onAccept: () -> Void
+    let onDismiss: () -> Void
+
+    private var weightString: String {
+        deloadWeight.truncatingRemainder(dividingBy: 1) == 0
+            ? String(Int(deloadWeight))
+            : String(format: "%.1f", deloadWeight)
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Label("Plateau — no progress in 3 sessions", systemImage: "chart.line.flattrend.xyaxis")
+                .font(.subheadline)
+                .fontWeight(.semibold)
+                .foregroundStyle(Color.groveTerracotta)
+
+            Text("A lighter week at about 90% lets you recover and often breaks the stall.")
+                .font(.caption)
+                .foregroundStyle(Color.groveTextSecondary)
+                .fixedSize(horizontal: false, vertical: true)
+
+            HStack(spacing: 12) {
+                Button(action: onAccept) {
+                    Text("Use \(weightString) lbs")
+                        .font(.subheadline)
+                        .fontWeight(.semibold)
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 8)
+                        .background(Color.groveSage)
+                        .clipShape(Capsule())
+                }
+                .buttonStyle(.plain)
+
+                Button("Not now", action: onDismiss)
+                    .font(.subheadline)
+                    .foregroundStyle(Color.groveTextSecondary)
+                    .buttonStyle(.plain)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(14)
+        .background(Color.groveTerracotta.opacity(0.08))
+        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .overlay(
+            RoundedRectangle(cornerRadius: 12)
+                .stroke(Color.groveTerracotta.opacity(0.25), lineWidth: 1)
+        )
     }
 }
 

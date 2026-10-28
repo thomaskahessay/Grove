@@ -5,6 +5,7 @@ struct WorkoutDetailView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.displayScale) private var displayScale
+    @Environment(WorkoutSessionManager.self) private var sessionManager
     let workout: Workout
 
     @State private var shareData: ShareableData?
@@ -112,6 +113,21 @@ struct WorkoutDetailView: View {
 
                 // Exercises
                 exercisesSection
+
+                if workout.completedAt != nil {
+                    Button {
+                        WorkoutSessionManager.repeatWorkout(
+                            workout,
+                            context: modelContext,
+                            sessionManager: sessionManager
+                        )
+                    } label: {
+                        Label("Do This Workout Again", systemImage: "arrow.counterclockwise")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.primary)
+                    .disabled(sessionManager.hasActiveWorkout)
+                }
 
                 Spacer(minLength: 40)
             }

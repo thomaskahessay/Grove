@@ -325,10 +325,69 @@ class WorkoutSessionManager {
         }
         guard !exercises.isEmpty else { return }
 
-        let defaultSets = template.defaultSets
-        let defaultReps = template.defaultReps
+        let workout = buildWorkout(
+            name: template.name,
+            template: template,
+            exercises: exercises,
+            defaultSets: template.defaultSets,
+            defaultReps: template.defaultReps,
+            context: context
+        )
 
-        let workout = Workout(name: template.name, templateUsed: template)
+        template.usageCount += 1
+        template.lastUsedDate = Date()
+
+        do {
+            try context.save()
+        } catch {
+            print("[Grove] ERROR: Failed to save new workout: \(error)")
+        }
+
+        sessionManager.startWorkout(workout)
+    }
+
+    /// Starts a new workout with the same exercises, in the same order, as a past one.
+    /// Skipped exercises are left out; sets and weights auto-fill from each exercise's latest session.
+    static func repeatWorkout(
+        _ past: Workout,
+        context: ModelContext,
+        sessionManager: WorkoutSessionManager
+    ) {
+        let pastLogs = past.exercises
+            .filter { $0.status != .skipped }
+            .sorted { $0.orderIndex < $1.orderIndex }
+        let exercises = pastLogs.compactMap(\.exercise)
+        guard !exercises.isEmpty else { return }
+
+        let workout = buildWorkout(
+            name: past.name,
+            template: past.templateUsed,
+            exercises: exercises,
+            defaultSets: past.templateUsed?.defaultSets ?? 3,
+            defaultReps: pastLogs.first?.targetReps ?? past.templateUsed?.defaultReps ?? 10,
+            context: context
+        )
+
+        do {
+            try context.save()
+        } catch {
+            print("[Grove] ERROR: Failed to save repeated workout: \(error)")
+        }
+
+        sessionManager.startWorkout(workout)
+    }
+
+    /// Inserts a new workout with exercise and set logs pre-filled from each exercise's last
+    /// session, plus progression nudges or a plateau deload suggestion. Does not save.
+    static func buildWorkout(
+        name: String,
+        template: WorkoutTemplate?,
+        exercises: [Exercise],
+        defaultSets: Int,
+        defaultReps: Int,
+        context: ModelContext
+    ) -> Workout {
+        let workout = Workout(name: name, templateUsed: template)
         context.insert(workout)
 
         for (index, exercise) in exercises.enumerated() {
@@ -343,11 +402,14 @@ class WorkoutSessionManager {
                 targetReps: defaultReps
             )
             exerciseLog.workout = workout
+            // A plateau replaces the usual "add weight" nudge with a lighter-week suggestion
+            exerciseLog.deloadSuggestedWeight = stallDeloadWeight(for: exercise, context: context)
             context.insert(exerciseLog)
 
             let isBodyweight = exercise.isBodyweight
             for setNumber in 1...numberOfSets {
                 let lastSetData = lastSets.indices.contains(setNumber - 1) ? lastSets[setNumber - 1] : nil
+                // For bodyweight exercises: use last session's modifier if available, otherwise default to .bodyweight
                 let modifier: BodyweightModifier = {
                     if !isBodyweight { return .none }
                     if let lastMod = lastSetData?.modifier, lastMod != .none { return lastMod }
@@ -361,29 +423,63 @@ class WorkoutSessionManager {
                 )
                 setLog.lastSessionWeight = lastSetData?.weight
                 setLog.lastSessionReps = lastSetData?.reps
-                let nudge = computeNudge(
-                    forSetPosition: setNumber - 1,
-                    history: history,
-                    isCompound: exercise.isCompound
-                )
-                setLog.suggestedWeight = nudge.weight
-                setLog.suggestedReps = nudge.reps
+                if exerciseLog.deloadSuggestedWeight == nil {
+                    let nudge = computeNudge(
+                        forSetPosition: setNumber - 1,
+                        history: history,
+                        isCompound: exercise.isCompound
+                    )
+                    setLog.suggestedWeight = nudge.weight
+                    setLog.suggestedReps = nudge.reps
+                }
                 setLog.exerciseLog = exerciseLog
                 exerciseLog.sets.append(setLog)
                 context.insert(setLog)
             }
         }
 
-        template.usageCount += 1
-        template.lastUsedDate = Date()
+        return workout
+    }
 
-        do {
-            try context.save()
-        } catch {
-            print("[Grove] ERROR: Failed to save new workout: \(error)")
-        }
+    // MARK: - Plateau Detection
 
-        sessionManager.startWorkout(workout)
+    /// Returns a ~90% "lighter week" weight when an exercise's best working set hasn't
+    /// improved across its last three sessions, or nil if it's still progressing.
+    static func stallDeloadWeight(for exercise: Exercise, context: ModelContext) -> Double? {
+        guard !exercise.isBodyweight else { return nil }
+
+        let bests = completedLogs(for: exercise, context: context)
+            .prefix(3)
+            .map(bestWorkingSet(in:))
+        guard bests.count == 3,
+              let recent = bests[0], let middle = bests[1], let oldest = bests[2] else { return nil }
+
+        // Stalled: neither of the last two sessions beat the one before them
+        let baseline = estimatedOneRM(oldest)
+        guard estimatedOneRM(recent) <= baseline, estimatedOneRM(middle) <= baseline else { return nil }
+
+        // Already went lighter — don't keep suggesting deloads on top of a deload
+        guard recent.weight >= oldest.weight * 0.95 else { return nil }
+
+        let increment = exercise.isCompound ? 5.0 : 2.5
+        let deload = (recent.weight * 0.9 / increment).rounded() * increment
+        return deload > 0 && deload < recent.weight ? deload : nil
+    }
+
+    /// Heaviest completed working set (ties broken by reps).
+    private static func bestWorkingSet(in log: ExerciseLog) -> (weight: Double, reps: Int)? {
+        log.sets
+            .filter { $0.isCompleted && !$0.isWarmup && $0.bodyweightModifier != .assisted }
+            .compactMap { set -> (weight: Double, reps: Int)? in
+                guard let weight = set.weight, weight > 0, let reps = set.reps, reps > 0 else { return nil }
+                return (weight, reps)
+            }
+            .max { $0.weight != $1.weight ? $0.weight < $1.weight : $0.reps < $1.reps }
+    }
+
+    /// Epley estimate — only used to compare sessions, never stored or shown.
+    private static func estimatedOneRM(_ set: (weight: Double, reps: Int)) -> Double {
+        set.weight * (1 + Double(set.reps) / 30)
     }
 
     /// Gets the most recent completed sets for an exercise from prior workouts.
@@ -398,6 +494,16 @@ class WorkoutSessionManager {
         context: ModelContext,
         sessionCount: Int = 2
     ) -> [[(weight: Double?, reps: Int?, modifier: BodyweightModifier)]] {
+        completedLogs(for: exercise, context: context).prefix(sessionCount).map { log in
+            log.sets
+                .filter { $0.isCompleted }
+                .sorted { $0.setNumber < $1.setNumber }
+                .map { (weight: $0.weight, reps: $0.reps, modifier: $0.bodyweightModifier ?? .none) }
+        }
+    }
+
+    /// Logs for an exercise from completed workouts, most recent first.
+    private static func completedLogs(for exercise: Exercise, context: ModelContext) -> [ExerciseLog] {
         let exerciseID = exercise.id
         let descriptor = FetchDescriptor<ExerciseLog>(
             predicate: #Predicate<ExerciseLog> { log in
@@ -409,17 +515,9 @@ class WorkoutSessionManager {
 
         // Sort in memory — SortDescriptor through optional relationships
         // (\.workout?.completedAt) crashes SwiftData's schema validation.
-        let completedLogs = logs
+        return logs
             .filter { $0.workout?.completedAt != nil }
             .sorted { ($0.workout?.completedAt ?? .distantPast) > ($1.workout?.completedAt ?? .distantPast) }
-        let sessionsToUse = completedLogs.prefix(sessionCount)
-
-        return sessionsToUse.map { log in
-            log.sets
-                .filter { $0.isCompleted }
-                .sorted { $0.setNumber < $1.setNumber }
-                .map { (weight: $0.weight, reps: $0.reps, modifier: $0.bodyweightModifier ?? .none) }
-        }
     }
 
     /// Computes a progressive nudge suggestion for a specific set position.

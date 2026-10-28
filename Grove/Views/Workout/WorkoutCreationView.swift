@@ -351,54 +351,14 @@ struct WorkoutCreationView: View {
     private func startWorkout() {
         let name = workoutName.isEmpty ? (selectedCategory?.rawValue ?? "Workout") : workoutName
 
-        let workout = Workout(name: name)
-        modelContext.insert(workout)
-
-        // Create ExerciseLogs for each selected exercise
-        for (index, exercise) in selectedExercises.enumerated() {
-            let history = getExerciseHistory(exercise)
-            let lastSets = history.first ?? []
-            let numberOfSets = lastSets.isEmpty ? defaultSets : lastSets.count
-
-            let exerciseLog = ExerciseLog(
-                exercise: exercise,
-                orderIndex: index,
-                targetSets: numberOfSets,
-                targetReps: defaultReps
-            )
-            exerciseLog.workout = workout
-            modelContext.insert(exerciseLog)
-
-            // Create SetLogs for each set, pre-filled with last values if available
-            let isBodyweight = exercise.isBodyweight
-            for setNumber in 1...numberOfSets {
-                let lastSetData = lastSets.indices.contains(setNumber - 1) ? lastSets[setNumber - 1] : nil
-                // For bodyweight exercises: use last session's modifier if available, otherwise default to .bodyweight
-                let modifier: BodyweightModifier = {
-                    if !isBodyweight { return .none }
-                    if let lastMod = lastSetData?.modifier, lastMod != .none { return lastMod }
-                    return .bodyweight
-                }()
-                let setLog = SetLog(
-                    setNumber: setNumber,
-                    weight: modifier == .bodyweight ? nil : lastSetData?.weight,
-                    reps: lastSetData?.reps,
-                    bodyweightModifier: modifier
-                )
-                setLog.lastSessionWeight = lastSetData?.weight
-                setLog.lastSessionReps = lastSetData?.reps
-                let nudge = Self.computeNudge(
-                    forSetPosition: setNumber - 1,
-                    history: history,
-                    isCompound: exercise.isCompound
-                )
-                setLog.suggestedWeight = nudge.weight
-                setLog.suggestedReps = nudge.reps
-                setLog.exerciseLog = exerciseLog
-                exerciseLog.sets.append(setLog)
-                modelContext.insert(setLog)
-            }
-        }
+        let workout = WorkoutSessionManager.buildWorkout(
+            name: name,
+            template: nil,
+            exercises: selectedExercises,
+            defaultSets: defaultSets,
+            defaultReps: defaultReps,
+            context: modelContext
+        )
 
         do {
             try modelContext.save()
@@ -412,70 +372,6 @@ struct WorkoutCreationView: View {
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
             sessionManager.startWorkout(workout)
         }
-    }
-
-    /// Gets completed sets from the last N sessions for an exercise, most recent first.
-    private func getExerciseHistory(_ exercise: Exercise, sessionCount: Int = 2) -> [[(weight: Double?, reps: Int?, modifier: BodyweightModifier)]] {
-        let exerciseID = exercise.id
-        let descriptor = FetchDescriptor<ExerciseLog>(
-            predicate: #Predicate<ExerciseLog> { log in
-                log.exercise?.id == exerciseID
-            }
-        )
-
-        guard let logs = try? modelContext.fetch(descriptor) else { return [] }
-
-        // Sort in memory — SortDescriptor through optional relationships
-        // (\.workout?.completedAt) crashes SwiftData's schema validation.
-        let completedLogs = logs
-            .filter { $0.workout?.completedAt != nil }
-            .sorted { ($0.workout?.completedAt ?? .distantPast) > ($1.workout?.completedAt ?? .distantPast) }
-        let sessionsToUse = completedLogs.prefix(sessionCount)
-
-        return sessionsToUse.map { log in
-            log.sets
-                .filter { $0.isCompleted }
-                .sorted { $0.setNumber < $1.setNumber }
-                .map { (weight: $0.weight, reps: $0.reps, modifier: $0.bodyweightModifier ?? .none) }
-        }
-    }
-
-    /// Computes a progressive nudge suggestion for a specific set position.
-    private static func computeNudge(
-        forSetPosition index: Int,
-        history: [[(weight: Double?, reps: Int?, modifier: BodyweightModifier)]],
-        isCompound: Bool
-    ) -> (weight: Double?, reps: Int?) {
-        guard history.count >= 2 else { return (nil, nil) }
-
-        let session1 = history[0]
-        let session2 = history[1]
-
-        guard index < session1.count, index < session2.count else { return (nil, nil) }
-
-        let set1 = session1[index]
-        let set2 = session2[index]
-
-        let weight1 = set1.weight
-        let weight2 = set2.weight
-        let reps1 = set1.reps
-        let reps2 = set2.reps
-
-        let isBodyweight1 = weight1 == nil || weight1 == 0
-        let isBodyweight2 = weight2 == nil || weight2 == 0
-
-        if isBodyweight1 && isBodyweight2 {
-            if let r1 = reps1, let r2 = reps2, r1 == r2 {
-                return (nil, r1 + 1)
-            }
-        } else if let w1 = weight1, let w2 = weight2, w1 > 0, w2 > 0, w1 == w2 {
-            if reps1 != nil && reps2 != nil {
-                let increment = isCompound ? 5.0 : 2.5
-                return (w1 + increment, nil)
-            }
-        }
-
-        return (nil, nil)
     }
 
     private func selectTemplate(_ template: WorkoutTemplate) {

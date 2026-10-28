@@ -76,6 +76,7 @@ struct ProgressView: View {
                         emptyStateView
                     } else {
                         weeklySummaryCard
+                        muscleBalanceCard
                         prShowcase
                         exerciseProgressSection
                         consistencySection
@@ -308,6 +309,108 @@ struct ProgressView: View {
         .padding(16)
         .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 16))
         .shadow(color: .black.opacity(0.07), radius: 10, y: 3)
+    }
+
+    // MARK: - Section 1b: Sets per Muscle
+
+    /// Completed working sets per muscle group over the last 7 days.
+    private var weeklySetsByMuscle: [(group: MuscleGroup, sets: Int)] {
+        let cutoff = Calendar.current.date(byAdding: .day, value: -7, to: Date()) ?? Date()
+        var counts: [MuscleGroup: Int] = [:]
+        for workout in completedWorkouts {
+            guard let date = workout.completedAt, date >= cutoff else { continue }
+            for log in workout.exercises {
+                guard let group = log.exercise?.muscleGroup else { continue }
+                counts[group, default: 0] += log.sets.filter { $0.isCompleted && !$0.isWarmup }.count
+            }
+        }
+        // Full Body only shows when it was trained; every other group shows so gaps stand out
+        return MuscleGroup.allCases
+            .filter { $0 != .fullBody || counts[$0, default: 0] > 0 }
+            .map { (group: $0, sets: counts[$0, default: 0]) }
+            .sorted { $0.sets != $1.sets ? $0.sets > $1.sets : $0.group.rawValue < $1.group.rawValue }
+    }
+
+    private var muscleBalanceCard: some View {
+        let rows = weeklySetsByMuscle
+        let maxSets = max(rows.map(\.sets).max() ?? 0, Self.weeklySetTarget.upperBound)
+        let untrained = rows.filter { $0.sets == 0 }.map(\.group.rawValue)
+
+        return VStack(alignment: .leading, spacing: 14) {
+            HStack {
+                Text("Sets per Muscle")
+                    .font(.headline)
+                    .foregroundStyle(Color.groveText)
+                Spacer()
+                Text("Last 7 days")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            VStack(spacing: 10) {
+                ForEach(rows, id: \.group) { row in
+                    HStack(spacing: 10) {
+                        Text(row.group.rawValue)
+                            .font(.caption)
+                            .foregroundStyle(Color.groveText)
+                            .frame(width: 70, alignment: .leading)
+
+                        GeometryReader { geo in
+                            let width = geo.size.width
+                            ZStack(alignment: .leading) {
+                                Capsule()
+                                    .fill(Color.groveWarmSand.opacity(0.2))
+                                // Shaded target range
+                                Rectangle()
+                                    .fill(Color.groveSage.opacity(0.1))
+                                    .frame(width: width * CGFloat(Self.weeklySetTarget.upperBound - Self.weeklySetTarget.lowerBound) / CGFloat(maxSets))
+                                    .offset(x: width * CGFloat(Self.weeklySetTarget.lowerBound) / CGFloat(maxSets))
+                                Capsule()
+                                    .fill(muscleBarColor(sets: row.sets))
+                                    .frame(width: row.sets > 0 ? max(6, width * CGFloat(row.sets) / CGFloat(maxSets)) : 0)
+                            }
+                        }
+                        .frame(height: 10)
+                        .clipShape(Capsule())
+
+                        Text("\(row.sets)")
+                            .font(.caption)
+                            .fontWeight(.semibold)
+                            .monospacedDigit()
+                            .foregroundStyle(row.sets == 0 ? .secondary : Color.groveText)
+                            .frame(width: 24, alignment: .trailing)
+                    }
+                    .accessibilityElement(children: .combine)
+                    .accessibilityLabel("\(row.group.rawValue), \(row.sets) sets")
+                }
+            }
+
+            Group {
+                if !untrained.isEmpty {
+                    Text("Not trained in the last 7 days: \(untrained.joined(separator: ", ")).")
+                } else {
+                    Text("Every muscle group got work in the last 7 days.")
+                }
+            }
+            .font(.caption)
+            .foregroundStyle(Color.groveTextSecondary)
+
+            Text("The shaded band is \(Self.weeklySetTarget.lowerBound)–\(Self.weeklySetTarget.upperBound) sets, a common weekly range for building muscle.")
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(16)
+        .background(Color.groveCardBackground)
+        .clipShape(RoundedRectangle(cornerRadius: 16))
+        .shadow(color: .black.opacity(0.07), radius: 10, y: 3)
+    }
+
+    private static let weeklySetTarget = 10...20
+
+    private func muscleBarColor(sets: Int) -> Color {
+        if sets >= Self.weeklySetTarget.lowerBound { return Color.groveSage }
+        return Color.groveTerracotta.opacity(0.8)
     }
 
     // MARK: - Section 2: Personal Records

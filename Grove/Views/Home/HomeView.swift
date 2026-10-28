@@ -171,17 +171,10 @@ struct HomeView: View {
                     }
                     .coachMarkAnchor(.todaysWorkout)
 
-                    // Streak Plant
+                    // Streak Plant — the hero of the home screen
                     if let user = currentUser {
                         NavigationLink(destination: StreakDetailView(user: user)) {
-                            StreakPlantView(
-                                streak: user.currentStreak,
-                                isWilted: user.isStreakWilted,
-                                wiltedAtStage: PlantStage(rawValue: user.wiltedAtStage) ?? .seed,
-                                size: 120,
-                                showLabel: true
-                            )
-                            .frame(maxWidth: .infinity)
+                            plantHero(for: user)
                         }
                         .buttonStyle(.plain)
                         .coachMarkAnchor(.streakPlant)
@@ -194,13 +187,11 @@ struct HomeView: View {
                                     .foregroundStyle(Color.groveWarmSand)
 
                                 VStack(alignment: .leading, spacing: 2) {
-                                    Text("Your plant could use some sunlight")
+                                    Text("Your plant's ready when you are")
                                         .font(.subheadline)
                                         .fontWeight(.medium)
                                         .foregroundStyle(Color.groveText)
-                                    Text((!user.weeklyTemplateIDs.isEmpty && !user.preferredTrainingSlots.isEmpty)
-                                        ? "\(user.consecutiveRestDays) missed sessions — your grove misses you"
-                                        : "\(user.consecutiveRestDays) rest days — your grove misses you")
+                                    Text("Even a short session today helps it keep growing.")
                                         .font(.caption)
                                         .foregroundStyle(.secondary)
                                 }
@@ -309,6 +300,68 @@ struct HomeView: View {
     }
 
     // MARK: - Start Today's Workout
+
+    private func plantHero(for user: User) -> some View {
+        let stage = PlantStage.from(streak: user.currentStreak)
+        let drawnStage = user.isStreakWilted ? (PlantStage(rawValue: user.wiltedAtStage) ?? .seed) : stage
+        let plantSize: CGFloat = 150
+        // Early stages only draw near the soil, so trim the empty sky above them
+        let visibleFraction: CGFloat = switch drawnStage {
+        case .seed: 0.5
+        case .sprout, .seedling: 0.75
+        default: 1
+        }
+
+        return VStack(spacing: 12) {
+            StreakPlantView(
+                streak: user.currentStreak,
+                isWilted: user.isStreakWilted,
+                wiltedAtStage: PlantStage(rawValue: user.wiltedAtStage) ?? .seed,
+                size: plantSize,
+                showLabel: false
+            )
+            .frame(height: plantSize * visibleFraction, alignment: .bottom)
+            .clipped()
+
+            Text(user.isStreakWilted ? "Streak broken" : "\(user.currentStreak)-day streak")
+                .font(.subheadline)
+                .fontWeight(.medium)
+                .foregroundStyle(user.isStreakWilted ? Color.groveMutedRust : Color.groveSage)
+
+            // Progress toward the next growth stage
+            if !user.isStreakWilted, let next = stage.nextStage,
+               let days = stage.daysUntilNext(currentStreak: user.currentStreak) {
+                VStack(spacing: 6) {
+                    GeometryReader { geo in
+                        Capsule()
+                            .fill(Color.groveWarmSand.opacity(0.35))
+                            .overlay(alignment: .leading) {
+                                Capsule()
+                                    .fill(Color.groveSage)
+                                    .frame(width: geo.size.width * stage.progressToNext(currentStreak: user.currentStreak))
+                            }
+                    }
+                    .frame(width: 120, height: 4)
+
+                    Text("\(days) more \(days == 1 ? "day" : "days") to \(next.displayName)")
+                        .font(.caption)
+                        .foregroundStyle(Color.groveTextSecondary)
+                }
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 20)
+        .background(
+            RadialGradient(
+                colors: [Color.groveSage.opacity(0.12), Color.groveWarmSand.opacity(0.06)],
+                center: .bottom,
+                startRadius: 10,
+                endRadius: 260
+            )
+        )
+        .clipShape(RoundedRectangle(cornerRadius: 24))
+        .contentShape(RoundedRectangle(cornerRadius: 24))
+    }
 
     private func toggleCreatine() {
         if let existing = todaysCreatineLog {

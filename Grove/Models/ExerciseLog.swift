@@ -22,6 +22,9 @@ class ExerciseLog {
     // Free-form note the user writes during the workout for this exercise
     var notes: String?
 
+    // Set when the exercise has plateaued; cleared once the user accepts or dismisses it
+    var deloadSuggestedWeight: Double?
+
     var hasLastSessionData: Bool {
         sets.contains { $0.lastSessionWeight != nil || $0.lastSessionReps != nil }
     }

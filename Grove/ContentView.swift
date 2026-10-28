@@ -11,6 +11,7 @@ struct ContentView: View {
     @Query(sort: \WorkoutPlan.date, order: .reverse) private var workoutPlans: [WorkoutPlan]
     @Query(sort: \Exercise.name) private var allExercises: [Exercise]
     @Query private var creatineLogs: [CreatineLog]
+    @Query(Self.lastWorkoutDescriptor) private var lastCompletedWorkouts: [Workout]
     @State private var showingWorkoutCreation = false
     @State private var showingDayPlanSheet = false
     @State private var showNotificationPrompt = false
@@ -27,6 +28,15 @@ struct ContentView: View {
         case "Dark": return .dark
         default: return nil
         }
+    }
+
+    private static var lastWorkoutDescriptor: FetchDescriptor<Workout> {
+        var descriptor = FetchDescriptor<Workout>(
+            predicate: #Predicate { $0.completedAt != nil },
+            sortBy: [SortDescriptor(\.completedAt, order: .reverse)]
+        )
+        descriptor.fetchLimit = 1
+        return descriptor
     }
 
     /// Today's plan that has an unstarted workout template (not rest, not completed).
@@ -222,6 +232,18 @@ struct ContentView: View {
                                 )
                             } label: {
                                 Label("Start \(template.name)", systemImage: "play.fill")
+                            }
+                        }
+
+                        if let lastWorkout = lastCompletedWorkouts.first {
+                            Button {
+                                WorkoutSessionManager.repeatWorkout(
+                                    lastWorkout,
+                                    context: modelContext,
+                                    sessionManager: sessionManager
+                                )
+                            } label: {
+                                Label("Repeat \(lastWorkout.name)", systemImage: "arrow.counterclockwise")
                             }
                         }
 
