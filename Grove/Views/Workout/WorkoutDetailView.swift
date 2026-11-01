@@ -11,6 +11,7 @@ struct WorkoutDetailView: View {
     @State private var shareData: ShareableData?
     @State private var showingHealthKitConnect = false
     @State private var showingShareToFeed = false
+    @State private var showingNoteEditor = false
 
     private var workoutExercises: [ExerciseLog] {
         workout.exercises
@@ -90,20 +91,31 @@ struct WorkoutDetailView: View {
                 // Header Stats
                 headerSection
 
-                // Notes (if any)
-                if let notes = workout.notes, !notes.isEmpty {
-                    VStack(alignment: .leading, spacing: 8) {
-                        Label("Notes", systemImage: "note.text")
-                            .font(.headline)
-                            .foregroundStyle(Color.groveText)
-                        Text(notes)
-                            .font(.subheadline)
-                            .foregroundStyle(Color.groveText)
-                            .padding(12)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .background(Color.groveCardBackground)
-                            .clipShape(RoundedRectangle(cornerRadius: 12))
+                // Notes
+                VStack(alignment: .leading, spacing: 8) {
+                    Label("Notes", systemImage: "note.text")
+                        .font(.headline)
+                        .foregroundStyle(Color.groveText)
+                    Button {
+                        showingNoteEditor = true
+                    } label: {
+                        Group {
+                            if let notes = workout.notes, !notes.isEmpty {
+                                Text(notes)
+                                    .foregroundStyle(Color.groveText)
+                            } else {
+                                Text("Add a note")
+                                    .foregroundStyle(Color.groveSage)
+                            }
+                        }
+                        .font(.subheadline)
+                        .multilineTextAlignment(.leading)
+                        .padding(12)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(Color.groveCardBackground)
+                        .clipShape(RoundedRectangle(cornerRadius: 12))
                     }
+                    .buttonStyle(.plain)
                 }
 
                 // Personal Records (if any)
@@ -166,6 +178,11 @@ struct WorkoutDetailView: View {
         }
         .sheet(item: $shareData) { data in
             WorkoutShareSheet(data: data)
+        }
+        .sheet(isPresented: $showingNoteEditor) {
+            NoteEditorSheet(title: "Workout Note", text: workout.notes ?? "") { newNote in
+                workout.notes = newNote
+            }
         }
         .sheet(isPresented: $showingShareToFeed) {
             ShareToFeedSheet(workout: workout)
@@ -432,6 +449,8 @@ private struct ExerciseDetailRow: View {
     let exerciseLog: ExerciseLog
     var prSetIDs: Set<UUID> = []
 
+    @State private var showingNoteEditor = false
+
     private var exerciseName: String {
         exerciseLog.exercise?.name ?? "Unknown Exercise"
     }
@@ -504,19 +523,89 @@ private struct ExerciseDetailRow: View {
                     .padding(.leading, 28)
             }
 
-            if let note = exerciseLog.notes, !note.isEmpty {
+            Button {
+                showingNoteEditor = true
+            } label: {
                 HStack(alignment: .top, spacing: 6) {
                     Image(systemName: "note.text")
                         .font(.caption)
                         .foregroundStyle(Color.groveTerracotta)
-                    Text(note)
-                        .font(.caption)
-                        .foregroundStyle(Color.groveTextSecondary)
+                    if let note = exerciseLog.notes, !note.isEmpty {
+                        Text(note)
+                            .font(.caption)
+                            .foregroundStyle(Color.groveTextSecondary)
+                            .multilineTextAlignment(.leading)
+                    } else {
+                        Text("Add a note")
+                            .font(.caption)
+                            .foregroundStyle(Color.groveSage)
+                    }
                 }
-                .padding(.leading, 28)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .contentShape(Rectangle())
             }
+            .buttonStyle(.plain)
+            .padding(.leading, 28)
         }
         .padding(16)
+        .sheet(isPresented: $showingNoteEditor) {
+            NoteEditorSheet(title: exerciseName, text: exerciseLog.notes ?? "") { newNote in
+                exerciseLog.notes = newNote
+            }
+        }
+    }
+}
+
+// MARK: - Note Editor Sheet
+
+/// Edits a note on a finished workout. Saving empty text removes the note.
+private struct NoteEditorSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.modelContext) private var modelContext
+    let title: String
+    let onSave: (String?) -> Void
+
+    @State private var text: String
+    @FocusState private var isFocused: Bool
+
+    init(title: String, text: String, onSave: @escaping (String?) -> Void) {
+        self.title = title
+        self.onSave = onSave
+        _text = State(initialValue: text)
+    }
+
+    var body: some View {
+        NavigationStack {
+            TextEditor(text: $text)
+                .font(.subheadline)
+                .foregroundStyle(Color.groveText)
+                .focused($isFocused)
+                .scrollContentBackground(.hidden)
+                .padding(12)
+                .background(Color.groveCardBackground)
+                .clipShape(RoundedRectangle(cornerRadius: 12))
+                .padding()
+                .frame(maxHeight: .infinity, alignment: .top)
+                .background(Color.groveBackground)
+                .navigationTitle(title)
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button("Cancel") { dismiss() }
+                    }
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button("Save") {
+                            let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+                            onSave(trimmed.isEmpty ? nil : trimmed)
+                            try? modelContext.save()
+                            dismiss()
+                        }
+                        .fontWeight(.semibold)
+                    }
+                }
+                .onAppear { isFocused = true }
+        }
+        .presentationDetents([.medium, .large])
     }
 }
 

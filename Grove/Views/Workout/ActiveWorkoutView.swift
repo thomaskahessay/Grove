@@ -484,6 +484,17 @@ struct ExerciseFullScreenCard: View {
             .sorted { $0.date > $1.date }
     }
 
+    private func deletePreviousNote(_ entry: ExerciseNoteEntry) {
+        let logID = entry.id
+        let descriptor = FetchDescriptor<ExerciseLog>(
+            predicate: #Predicate<ExerciseLog> { $0.id == logID }
+        )
+        guard let log = try? modelContext.fetch(descriptor).first else { return }
+        log.notes = nil
+        try? modelContext.save()
+        previousNotes.removeAll { $0.id == logID }
+    }
+
     private var sortedSets: [SetLog] {
         exerciseLog.sets.sorted { $0.setNumber < $1.setNumber }
     }
@@ -599,19 +610,17 @@ struct ExerciseFullScreenCard: View {
                                     .fontWeight(.medium)
                                     .foregroundStyle(Color.groveTerracotta)
                                 Spacer()
-                                if previousNotes.count > 1 {
-                                    Button {
-                                        showingNotesHistory = true
-                                    } label: {
-                                        HStack(spacing: 2) {
-                                            Text("+\(previousNotes.count - 1) more")
-                                            Image(systemName: "chevron.right")
-                                        }
-                                        .font(.caption)
-                                        .foregroundStyle(Color.groveSage)
+                                Button {
+                                    showingNotesHistory = true
+                                } label: {
+                                    HStack(spacing: 2) {
+                                        Text(previousNotes.count > 1 ? "+\(previousNotes.count - 1) more" : "View")
+                                        Image(systemName: "chevron.right")
                                     }
-                                    .buttonStyle(.plain)
+                                    .font(.caption)
+                                    .foregroundStyle(Color.groveSage)
                                 }
+                                .buttonStyle(.plain)
                             }
                             Text(latest.text)
                                 .font(.subheadline)
@@ -775,7 +784,8 @@ struct ExerciseFullScreenCard: View {
         .sheet(isPresented: $showingNotesHistory) {
             ExerciseNotesHistorySheet(
                 exerciseName: exerciseLog.exercise?.name ?? "Exercise",
-                notes: previousNotes
+                notes: previousNotes,
+                onDelete: deletePreviousNote
             )
         }
         .task(id: exerciseLog.exercise?.id) {
@@ -956,30 +966,37 @@ struct ExerciseNotesHistorySheet: View {
     @Environment(\.dismiss) private var dismiss
     let exerciseName: String
     let notes: [ExerciseNoteEntry]
+    let onDelete: (ExerciseNoteEntry) -> Void
 
     var body: some View {
         NavigationStack {
-            ScrollView {
-                LazyVStack(alignment: .leading, spacing: 12) {
-                    ForEach(notes) { note in
-                        VStack(alignment: .leading, spacing: 6) {
-                            Text(note.date.formatted(.dateTime.month(.wide).day().year()))
-                                .font(.caption)
-                                .fontWeight(.medium)
-                                .foregroundStyle(Color.groveTerracotta)
-                            Text(note.text)
-                                .font(.subheadline)
-                                .foregroundStyle(Color.groveText)
+            List {
+                ForEach(notes) { note in
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text(note.date.formatted(.dateTime.month(.wide).day().year()))
+                            .font(.caption)
+                            .fontWeight(.medium)
+                            .foregroundStyle(Color.groveTerracotta)
+                        Text(note.text)
+                            .font(.subheadline)
+                            .foregroundStyle(Color.groveText)
+                    }
+                    .padding(.vertical, 4)
+                    .listRowBackground(Color.groveCardBackground)
+                    .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                        Button(role: .destructive) {
+                            onDelete(note)
+                        } label: {
+                            Label("Delete", systemImage: "trash")
                         }
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(14)
-                        .background(Color.groveCardBackground)
-                        .clipShape(RoundedRectangle(cornerRadius: 12))
                     }
                 }
-                .padding()
             }
+            .scrollContentBackground(.hidden)
             .background(Color.groveBackground)
+            .onChange(of: notes.isEmpty) { _, isEmpty in
+                if isEmpty { dismiss() }
+            }
             .navigationTitle(exerciseName)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
