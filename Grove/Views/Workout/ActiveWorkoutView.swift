@@ -2076,6 +2076,8 @@ struct ReplaceExerciseView: View {
         // Swap the exercise
         exerciseLog.exercise = newExercise
         exerciseLog.status = .planned
+        // Written about the old exercise; would otherwise land in the new one's history
+        exerciseLog.notes = nil
 
         // Auto-fill from last completed session, including the new exercise's plateau state
         WorkoutSessionManager.prefillSets(
