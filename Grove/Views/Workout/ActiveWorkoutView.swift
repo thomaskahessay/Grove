@@ -1013,6 +1013,8 @@ struct ExerciseNotesHistorySheet: View {
 // MARK: - Set Row View
 
 struct SetRowView: View {
+    @Environment(\.modelContext) private var modelContext
+    @Environment(\.scenePhase) private var scenePhase
     @Bindable var setLog: SetLog
     let setNumber: Int
     let onComplete: (UUID) -> Void
@@ -1370,6 +1372,19 @@ struct SetRowView: View {
         .onChange(of: setLog.reps) { _, _ in
             if !repsFocused { syncTextFromSetLog() }
         }
+        .onChange(of: scenePhase) { _, newPhase in
+            // Fields keep focus when the app leaves the foreground, so nothing else commits them
+            if newPhase != .active, isEditing {
+                commitFocusedField()
+                try? modelContext.save()
+            }
+        }
+    }
+
+    /// Only the focused field can be ahead of the model; the other's text may be stale.
+    private func commitFocusedField() {
+        if weightFocused { syncWeightFromText() }
+        if repsFocused { syncRepsFromText() }
     }
 
     private func syncTextFromSetLog() {
@@ -1443,6 +1458,7 @@ struct SetRowView: View {
     }
 
     private func toggleComplete() {
+        commitFocusedField()
         setLog.isCompleted.toggle()
         if setLog.isCompleted {
             setLog.completedAt = Date()
@@ -1452,6 +1468,8 @@ struct SetRowView: View {
             onUncomplete?(setLog.id)
         }
         onSetStatusChanged?()
+        // Autosave can lag by several seconds; a logged set shouldn't depend on it
+        try? modelContext.save()
     }
 }
 
