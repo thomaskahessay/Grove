@@ -408,6 +408,9 @@ class WorkoutSessionManager {
         sessionManager.startWorkout(workout)
     }
 
+    /// A completed set from a past session.
+    typealias LoggedSet = (weight: Double?, reps: Int?, modifier: BodyweightModifier, isWarmup: Bool)
+
     /// Inserts a new workout with exercise and set logs pre-filled from each exercise's last
     /// session, plus progression nudges or a plateau deload suggestion. Does not save.
     static func buildWorkout(
@@ -422,54 +425,71 @@ class WorkoutSessionManager {
         context.insert(workout)
 
         for (index, exercise) in exercises.enumerated() {
-            let history = getExerciseHistory(exercise, context: context, sessionCount: 2)
-            let lastSets = history.first ?? []
-            let numberOfSets = lastSets.isEmpty ? defaultSets : lastSets.count
-
             let exerciseLog = ExerciseLog(
                 exercise: exercise,
                 orderIndex: index,
-                targetSets: numberOfSets,
                 targetReps: defaultReps
             )
             exerciseLog.workout = workout
-            // A plateau replaces the usual "add weight" nudge with a lighter-week suggestion
-            exerciseLog.deloadSuggestedWeight = stallDeloadWeight(for: exercise, context: context)
             context.insert(exerciseLog)
+            prefillSets(of: exerciseLog, for: exercise, defaultSets: defaultSets, context: context)
+        }
 
-            let isBodyweight = exercise.isBodyweight
-            for setNumber in 1...numberOfSets {
-                let lastSetData = lastSets.indices.contains(setNumber - 1) ? lastSets[setNumber - 1] : nil
-                // For bodyweight exercises: use last session's modifier if available, otherwise default to .bodyweight
-                let modifier: BodyweightModifier = {
-                    if !isBodyweight { return .none }
-                    if let lastMod = lastSetData?.modifier, lastMod != .none { return lastMod }
-                    return .bodyweight
-                }()
-                let setLog = SetLog(
-                    setNumber: setNumber,
-                    weight: modifier == .bodyweight ? nil : lastSetData?.weight,
-                    reps: lastSetData?.reps,
-                    bodyweightModifier: modifier
-                )
-                setLog.lastSessionWeight = lastSetData?.weight
-                setLog.lastSessionReps = lastSetData?.reps
+        return workout
+    }
+
+    /// Fills an empty exercise log with sets from the exercise's last session, plus its
+    /// progression nudges or plateau deload suggestion. Does not save.
+    static func prefillSets(
+        of exerciseLog: ExerciseLog,
+        for exercise: Exercise,
+        defaultSets: Int,
+        context: ModelContext
+    ) {
+        let history = getExerciseHistory(exercise, context: context, sessionCount: 2)
+        let lastSets = history.first ?? []
+        let numberOfSets = lastSets.isEmpty ? defaultSets : lastSets.count
+        let workingHistory = history.map { session in session.filter { !$0.isWarmup } }
+
+        exerciseLog.targetSets = lastSets.isEmpty ? defaultSets : workingHistory[0].count
+        // A plateau replaces the usual "add weight" nudge with a lighter-week suggestion
+        exerciseLog.deloadSuggestedWeight = stallDeloadWeight(for: exercise, context: context)
+
+        let isBodyweight = exercise.isBodyweight
+        var workingSetPosition = 0
+        for setNumber in 1...numberOfSets {
+            let lastSetData = lastSets.indices.contains(setNumber - 1) ? lastSets[setNumber - 1] : nil
+            // For bodyweight exercises: use last session's modifier if available, otherwise default to .bodyweight
+            let modifier: BodyweightModifier = {
+                if !isBodyweight { return .none }
+                if let lastMod = lastSetData?.modifier, lastMod != .none { return lastMod }
+                return .bodyweight
+            }()
+            let setLog = SetLog(
+                setNumber: setNumber,
+                weight: modifier == .bodyweight ? nil : lastSetData?.weight,
+                reps: lastSetData?.reps,
+                bodyweightModifier: modifier
+            )
+            setLog.lastSessionWeight = lastSetData?.weight
+            setLog.lastSessionReps = lastSetData?.reps
+            setLog.isWarmup = lastSetData?.isWarmup ?? false
+            if !setLog.isWarmup {
                 if exerciseLog.deloadSuggestedWeight == nil {
                     let nudge = computeNudge(
-                        forSetPosition: setNumber - 1,
-                        history: history,
+                        forSetPosition: workingSetPosition,
+                        history: workingHistory,
                         isCompound: exercise.isCompound
                     )
                     setLog.suggestedWeight = nudge.weight
                     setLog.suggestedReps = nudge.reps
                 }
-                setLog.exerciseLog = exerciseLog
-                exerciseLog.sets.append(setLog)
-                context.insert(setLog)
+                workingSetPosition += 1
             }
+            setLog.exerciseLog = exerciseLog
+            exerciseLog.sets.append(setLog)
+            context.insert(setLog)
         }
-
-        return workout
     }
 
     // MARK: - Plateau Detection
@@ -514,7 +534,7 @@ class WorkoutSessionManager {
     }
 
     /// Gets the most recent completed sets for an exercise from prior workouts.
-    private static func getLastSetsForExercise(_ exercise: Exercise, context: ModelContext) -> [(weight: Double?, reps: Int?, modifier: BodyweightModifier)] {
+    static func getLastSetsForExercise(_ exercise: Exercise, context: ModelContext) -> [LoggedSet] {
         let history = getExerciseHistory(exercise, context: context, sessionCount: 1)
         return history.first ?? []
     }
@@ -524,12 +544,12 @@ class WorkoutSessionManager {
         _ exercise: Exercise,
         context: ModelContext,
         sessionCount: Int = 2
-    ) -> [[(weight: Double?, reps: Int?, modifier: BodyweightModifier)]] {
+    ) -> [[LoggedSet]] {
         completedLogs(for: exercise, context: context).prefix(sessionCount).map { log in
             log.sets
                 .filter { $0.isCompleted }
                 .sorted { $0.setNumber < $1.setNumber }
-                .map { (weight: $0.weight, reps: $0.reps, modifier: $0.bodyweightModifier ?? .none) }
+                .map { (weight: $0.weight, reps: $0.reps, modifier: $0.bodyweightModifier ?? .none, isWarmup: $0.isWarmup) }
         }
     }
 
@@ -555,7 +575,7 @@ class WorkoutSessionManager {
     /// Returns a suggested weight increase (for weighted exercises) or rep increase (for bodyweight).
     private static func computeNudge(
         forSetPosition index: Int,
-        history: [[(weight: Double?, reps: Int?, modifier: BodyweightModifier)]],
+        history: [[LoggedSet]],
         isCompound: Bool
     ) -> (weight: Double?, reps: Int?) {
         guard history.count >= 2 else { return (nil, nil) }

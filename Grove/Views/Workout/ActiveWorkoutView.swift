@@ -447,6 +447,7 @@ struct ExerciseFullScreenCard: View {
     @State private var exercisePR: PersonalRecord?
     @State private var bodyweightMode: BodyweightModifier = .bodyweight
     @State private var previousNotes: [ExerciseNoteEntry] = []
+    @State private var lastSessionSets: [WorkoutSessionManager.LoggedSet] = []
     @State private var showingNotesHistory = false
     @State private var deletedSet: DeletedSetSnapshot?
 
@@ -491,6 +492,20 @@ struct ExerciseFullScreenCard: View {
         sortedSets.first
     }
 
+    private var workingSets: [SetLog] {
+        sortedSets.filter { !$0.isWarmup }
+    }
+
+    /// The set from last session to compare against: the nth working set matches the nth
+    /// working set and warmups match warmups, so adding sets or marking warmups can't misalign them.
+    private func lastSessionSet(for setLog: SetLog) -> WorkoutSessionManager.LoggedSet? {
+        let sameRoleSets = sortedSets.filter { $0.isWarmup == setLog.isWarmup }
+        let sameRoleLastSets = lastSessionSets.filter { $0.isWarmup == setLog.isWarmup }
+        guard let position = sameRoleSets.firstIndex(where: { $0.id == setLog.id }),
+              sameRoleLastSets.indices.contains(position) else { return nil }
+        return sameRoleLastSets[position]
+    }
+
     var body: some View {
         ScrollViewReader { proxy in
             ScrollView {
@@ -530,7 +545,6 @@ struct ExerciseFullScreenCard: View {
 
                         // Set progress bar (excludes warmup sets)
                         HStack(spacing: 8) {
-                            let workingSets = sortedSets.filter { !$0.isWarmup }
                             let completed = workingSets.filter(\.isCompleted).count
                             let total = workingSets.count
                             let warmupCount = sortedSets.filter { $0.isWarmup }.count
@@ -645,23 +659,26 @@ struct ExerciseFullScreenCard: View {
                                 onRemove: sortedSets.count > 1 ? {
                                     removeSet(setLog)
                                 } : nil,
-                                onWeightChanged: (index == 0 && !exerciseLog.hasLastSessionData) ? { newWeight in
+                                onWeightChanged: (setLog.id == workingSets.first?.id && !exerciseLog.hasLastSessionData) ? { newWeight in
                                     autofillWeight(newWeight)
                                 } : nil,
-                                onRepsChanged: (index == 0 && !exerciseLog.hasLastSessionData) ? { newReps in
+                                onRepsChanged: (setLog.id == workingSets.first?.id && !exerciseLog.hasLastSessionData) ? { newReps in
                                     autofillReps(newReps)
                                 } : nil,
                                 onSetStatusChanged: {
                                     updateExerciseStatus()
                                 },
+                                onWarmupToggled: {
+                                    moveWarmupsToTop()
+                                },
                                 onFocused: {
                                     focusedSetID = setLog.id
                                 },
-                                lastSessionWeight: setLog.lastSessionWeight,
-                                lastSessionReps: setLog.lastSessionReps,
+                                lastSessionWeight: lastSessionSet(for: setLog)?.weight,
+                                lastSessionReps: lastSessionSet(for: setLog)?.reps,
                                 isBodyweightExercise: isBodyweightExercise,
-                                suggestedWeight: setLog.suggestedWeight,
-                                suggestedReps: setLog.suggestedReps
+                                suggestedWeight: setLog.isWarmup ? nil : setLog.suggestedWeight,
+                                suggestedReps: setLog.isWarmup ? nil : setLog.suggestedReps
                             )
                             .id(setLog.id)
 
@@ -763,7 +780,12 @@ struct ExerciseFullScreenCard: View {
         }
         .task(id: exerciseLog.exercise?.id) {
             loadPreviousNotes()
-            guard let exerciseID = exerciseLog.exercise?.id else { return }
+            guard let exercise = exerciseLog.exercise else {
+                lastSessionSets = []
+                return
+            }
+            lastSessionSets = WorkoutSessionManager.getLastSetsForExercise(exercise, context: modelContext)
+            let exerciseID = exercise.id
             let descriptor = FetchDescriptor<PersonalRecord>(
                 predicate: #Predicate<PersonalRecord> { $0.exercise?.id == exerciseID }
             )
@@ -791,9 +813,17 @@ struct ExerciseFullScreenCard: View {
         return nonWarmupBefore + 1
     }
 
+    /// Keeps warmups above working sets, here and when they carry into the next session.
+    private func moveWarmupsToTop() {
+        let warmups = sortedSets.filter { $0.isWarmup }
+        for (index, set) in (warmups + workingSets).enumerated() {
+            set.setNumber = index + 1
+        }
+    }
+
     private func addSet() {
         let newSetNumber = exerciseLog.sets.count + 1
-        let lastSet = exerciseLog.sets.last
+        let lastSet = sortedSets.last { !$0.isWarmup } ?? sortedSets.last
         let modifier = isBodyweightExercise ? bodyweightMode : .none
         let newSet = SetLog(
             setNumber: newSetNumber,
@@ -885,15 +915,15 @@ struct ExerciseFullScreenCard: View {
     }
 
     private func autofillWeight(_ newWeight: Double?) {
-        // Fill subsequent incomplete sets with the first set's weight
-        for set in sortedSets.dropFirst() where !set.isCompleted {
+        // Fill subsequent incomplete working sets with the first working set's weight
+        for set in workingSets.dropFirst() where !set.isCompleted {
             set.weight = newWeight
         }
     }
 
     private func autofillReps(_ newReps: Int?) {
-        // Fill subsequent incomplete sets with the first set's reps
-        for set in sortedSets.dropFirst() where !set.isCompleted {
+        // Fill subsequent incomplete working sets with the first working set's reps
+        for set in workingSets.dropFirst() where !set.isCompleted {
             set.reps = newReps
         }
     }
@@ -974,6 +1004,7 @@ struct SetRowView: View {
     var onWeightChanged: ((Double?) -> Void)? = nil
     var onRepsChanged: ((Int?) -> Void)? = nil
     var onSetStatusChanged: (() -> Void)? = nil
+    var onWarmupToggled: (() -> Void)? = nil
     var onFocused: (() -> Void)? = nil
     var lastSessionWeight: Double? = nil
     var lastSessionReps: Int? = nil
@@ -1295,6 +1326,7 @@ struct SetRowView: View {
             Button {
                 withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
                     setLog.isWarmup.toggle()
+                    onWarmupToggled?()
                 }
             } label: {
                 Label(
@@ -1932,48 +1964,22 @@ struct AddExerciseToWorkoutView: View {
     }
 
     private func addExercise(_ exercise: Exercise) {
-        let lastSets = Self.getLastSetsForExercise(exercise, context: modelContext)
-        let numberOfSets = lastSets.isEmpty ? 3 : lastSets.count
-        let newIndex = workout.exercises.count
         let exerciseLog = ExerciseLog(
             exercise: exercise,
-            orderIndex: newIndex,
-            targetSets: numberOfSets,
+            orderIndex: workout.exercises.count,
             targetReps: 10
         )
         exerciseLog.workout = workout
-
-        for i in 1...numberOfSets {
-            let lastSetData = lastSets.indices.contains(i - 1) ? lastSets[i - 1] : nil
-            let setLog = SetLog(setNumber: i, weight: lastSetData?.weight, reps: lastSetData?.reps)
-            setLog.lastSessionWeight = lastSetData?.weight
-            setLog.lastSessionReps = lastSetData?.reps
-            setLog.exerciseLog = exerciseLog
-            exerciseLog.sets.append(setLog)
-        }
-
         modelContext.insert(exerciseLog)
-        dismiss()
-    }
 
-    private static func getLastSetsForExercise(_ exercise: Exercise, context: ModelContext) -> [(weight: Double?, reps: Int?)] {
-        let exerciseID = exercise.id
-        let descriptor = FetchDescriptor<ExerciseLog>(
-            predicate: #Predicate<ExerciseLog> { log in
-                log.exercise?.id == exerciseID
-            }
+        WorkoutSessionManager.prefillSets(
+            of: exerciseLog,
+            for: exercise,
+            defaultSets: 3,
+            context: modelContext
         )
 
-        guard let logs = try? context.fetch(descriptor) else { return [] }
-        let completedLogs = logs
-            .filter { $0.workout?.completedAt != nil }
-            .sorted { ($0.workout?.completedAt ?? .distantPast) > ($1.workout?.completedAt ?? .distantPast) }
-        guard let lastLog = completedLogs.first else { return [] }
-
-        return lastLog.sets
-            .filter { $0.isCompleted }
-            .sorted { $0.setNumber < $1.setNumber }
-            .map { (weight: $0.weight, reps: $0.reps) }
+        dismiss()
     }
 }
 
@@ -2071,41 +2077,15 @@ struct ReplaceExerciseView: View {
         exerciseLog.exercise = newExercise
         exerciseLog.status = .planned
 
-        // Auto-fill from last completed session
-        let lastSets = getLastSetsForExercise(newExercise)
-        let numberOfSets = lastSets.isEmpty ? 3 : lastSets.count
-
-        for i in 1...numberOfSets {
-            let lastSetData = lastSets.indices.contains(i - 1) ? lastSets[i - 1] : nil
-            let setLog = SetLog(setNumber: i, weight: lastSetData?.weight, reps: lastSetData?.reps)
-            setLog.lastSessionWeight = lastSetData?.weight
-            setLog.lastSessionReps = lastSetData?.reps
-            setLog.exerciseLog = exerciseLog
-            exerciseLog.sets.append(setLog)
-            modelContext.insert(setLog)
-        }
-
-        dismiss()
-    }
-
-    private func getLastSetsForExercise(_ exercise: Exercise) -> [(weight: Double?, reps: Int?)] {
-        let exerciseID = exercise.id
-        let descriptor = FetchDescriptor<ExerciseLog>(
-            predicate: #Predicate<ExerciseLog> { log in
-                log.exercise?.id == exerciseID
-            }
+        // Auto-fill from last completed session, including the new exercise's plateau state
+        WorkoutSessionManager.prefillSets(
+            of: exerciseLog,
+            for: newExercise,
+            defaultSets: 3,
+            context: modelContext
         )
 
-        guard let logs = try? modelContext.fetch(descriptor) else { return [] }
-        let completedLogs = logs
-            .filter { $0.workout?.completedAt != nil }
-            .sorted { ($0.workout?.completedAt ?? .distantPast) > ($1.workout?.completedAt ?? .distantPast) }
-        guard let lastLog = completedLogs.first else { return [] }
-
-        return lastLog.sets
-            .filter { $0.isCompleted }
-            .sorted { $0.setNumber < $1.setNumber }
-            .map { (weight: $0.weight, reps: $0.reps) }
+        dismiss()
     }
 }
 
