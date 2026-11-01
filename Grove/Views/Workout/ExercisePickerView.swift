@@ -18,10 +18,6 @@ struct ExercisePickerView: View {
         // Apply muscle group filter
         if let muscleGroup = selectedMuscleGroup {
             result = result.filter { $0.muscleGroup == muscleGroup }
-        } else if let category = filterCategory {
-            // If no muscle group selected but category provided, filter by category's muscle groups
-            let muscleGroups = muscleGroupsForCategory(category)
-            result = result.filter { muscleGroups.contains($0.muscleGroup) }
         }
 
         // Apply search filter
@@ -37,7 +33,7 @@ struct ExercisePickerView: View {
 
     private var groupedExercises: [(MuscleGroup, [Exercise])] {
         let grouped = Dictionary(grouping: filteredExercises) { $0.muscleGroup }
-        return MuscleGroup.allCases
+        return orderedMuscleGroups
             .filter { grouped[$0] != nil }
             .map { ($0, grouped[$0]!) }
     }
@@ -56,7 +52,7 @@ struct ExercisePickerView: View {
                                 selectedMuscleGroup = nil
                             }
 
-                            ForEach(relevantMuscleGroups, id: \.self) { group in
+                            ForEach(orderedMuscleGroups, id: \.self) { group in
                                 FilterChip(
                                     title: group.rawValue,
                                     isSelected: selectedMuscleGroup == group
@@ -115,7 +111,7 @@ struct ExercisePickerView: View {
             .sheet(isPresented: $showingAddExercise) {
                 AddExerciseView(
                     prefillName: searchText,
-                    initialMuscleGroup: selectedMuscleGroup ?? relevantMuscleGroups.first ?? .chest
+                    initialMuscleGroup: selectedMuscleGroup ?? orderedMuscleGroups.first ?? .chest
                 ) { exercise in
                     selectedExercises.append(exercise)
                     searchText = ""
@@ -141,11 +137,11 @@ struct ExercisePickerView: View {
 
     // MARK: - Helpers
 
-    private var relevantMuscleGroups: [MuscleGroup] {
-        if let category = filterCategory {
-            return muscleGroupsForCategory(category)
-        }
-        return MuscleGroup.allCases
+    // The category's muscle groups come first; every other group stays available after them
+    private var orderedMuscleGroups: [MuscleGroup] {
+        guard let category = filterCategory else { return MuscleGroup.allCases }
+        let focusGroups = muscleGroupsForCategory(category)
+        return focusGroups + MuscleGroup.allCases.filter { !focusGroups.contains($0) }
     }
 
     private func toggleExercise(_ exercise: Exercise) {
