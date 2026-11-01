@@ -32,7 +32,7 @@ class WorkoutSessionManager {
     private(set) var restTimerEndDate: Date?
     private(set) var restTimerSetID: UUID?
     private(set) var restTimerTotalSeconds: Int = 0
-    private var restTimerExerciseName: String?
+    private var restTimerExerciseLogID: UUID?
     private var restTimerTask: Task<Void, Never>?
 
     var hasActiveWorkout: Bool {
@@ -117,10 +117,10 @@ class WorkoutSessionManager {
         return max(0, Int(end.timeIntervalSince(date).rounded(.up)))
     }
 
-    func startRestTimer(afterSetID setID: UUID, seconds: Int, exerciseName: String?) {
+    func startRestTimer(afterSetID setID: UUID, seconds: Int, exerciseLogID: UUID) {
         restTimerSetID = setID
         restTimerTotalSeconds = seconds
-        restTimerExerciseName = exerciseName
+        restTimerExerciseLogID = exerciseLogID
         setRestTimerEnd(Date().addingTimeInterval(TimeInterval(seconds)))
     }
 
@@ -136,13 +136,44 @@ class WorkoutSessionManager {
         restTimerTask = nil
         restTimerEndDate = nil
         restTimerSetID = nil
-        restTimerExerciseName = nil
+        restTimerExerciseLogID = nil
         NotificationService.shared.cancelRestTimerNotification()
+    }
+
+    /// Rewords the pending alert when the plan changes mid-rest, e.g. adding a set
+    /// after what was the last one.
+    func refreshRestTimerNotification() {
+        guard let end = restTimerEndDate else { return }
+        NotificationService.shared.scheduleRestTimerNotification(at: end, body: restCompleteMessage)
+    }
+
+    /// Reads the set state rather than `ExerciseLog.status`, which only updates after
+    /// the timer starts.
+    private var restCompleteMessage: String {
+        let exercises = activeWorkout?.exercises ?? []
+        let resting = exercises.first { $0.id == restTimerExerciseLogID }
+
+        if let resting, resting.status != .skipped {
+            let name = resting.exercise?.name ?? "this exercise"
+            let setsLeft = resting.sets.filter { !$0.isCompleted }.count
+            if setsLeft == 1 { return "Last set of \(name)." }
+            if setsLeft > 1 { return "Time for your next set of \(name)." }
+        }
+
+        // Wraps around to exercises passed over earlier in the workout
+        let unfinished = exercises
+            .filter { $0.status != .skipped && $0.sets.contains { !$0.isCompleted } }
+            .sorted { $0.orderIndex < $1.orderIndex }
+        let restingIndex = resting?.orderIndex ?? -1
+        guard let next = unfinished.first(where: { $0.orderIndex > restingIndex }) ?? unfinished.first else {
+            return "That was your last set. Finish up and save your workout."
+        }
+        return "Up next: \(next.exercise?.name ?? "your next exercise")."
     }
 
     private func setRestTimerEnd(_ end: Date) {
         restTimerEndDate = end
-        NotificationService.shared.scheduleRestTimerNotification(at: end, exerciseName: restTimerExerciseName)
+        NotificationService.shared.scheduleRestTimerNotification(at: end, body: restCompleteMessage)
 
         restTimerTask?.cancel()
         restTimerTask = Task { @MainActor [weak self] in

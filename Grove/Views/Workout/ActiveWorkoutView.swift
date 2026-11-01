@@ -41,6 +41,11 @@ struct ActiveWorkoutView: View {
         "\(currentExerciseIndex + 1)/\(activeExercises.count)"
     }
 
+    /// Changes whenever what comes after the current rest could change
+    private var remainingSetIDs: [UUID] {
+        activeExercises.flatMap { log in log.sets.filter { !$0.isCompleted }.map(\.id) }
+    }
+
     var body: some View {
         NavigationStack {
             ZStack {
@@ -147,6 +152,9 @@ struct ActiveWorkoutView: View {
             .onChange(of: currentExerciseIndex) {
                 exerciseNameVisible = true
                 UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+            }
+            .onChange(of: remainingSetIDs) {
+                sessionManager.refreshRestTimerNotification()
             }
         }
     }
@@ -362,7 +370,7 @@ struct ActiveWorkoutView: View {
             sessionManager.startRestTimer(
                 afterSetID: afterSetID,
                 seconds: exerciseLog.exercise?.effectiveRestSeconds ?? 90,
-                exerciseName: exerciseLog.exercise?.name
+                exerciseLogID: exerciseLog.id
             )
         }
     }

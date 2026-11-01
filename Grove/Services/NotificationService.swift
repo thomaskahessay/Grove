@@ -244,7 +244,7 @@ class NotificationService: NSObject {
     /// Alerts the user when rest ends while Grove is in the background. Ignores quiet
     /// hours since the user is mid-workout. Suppressed in the foreground (see delegate),
     /// where WorkoutSessionManager plays a haptic instead.
-    func scheduleRestTimerNotification(at date: Date, exerciseName: String?) {
+    func scheduleRestTimerNotification(at date: Date, body: String) {
         let center = UNUserNotificationCenter.current()
         center.removePendingNotificationRequests(withIdentifiers: [Self.restTimerID])
 
@@ -253,7 +253,7 @@ class NotificationService: NSObject {
 
         let content = UNMutableNotificationContent()
         content.title = "Rest complete"
-        content.body = exerciseName.map { "Time for your next set of \($0)." } ?? "Time for your next set."
+        content.body = body
         content.sound = .default
         content.interruptionLevel = .active
 
