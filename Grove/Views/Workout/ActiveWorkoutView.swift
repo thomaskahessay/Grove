@@ -769,7 +769,7 @@ struct ExerciseFullScreenCard: View {
         }
         .overlay(alignment: .bottom) {
             if let deletedSet {
-                UndoToastView(message: "Set \(deletedSet.setNumber) deleted") {
+                UndoToastView(message: deletedSet.isWarmup ? "Warmup deleted" : "Set \(deletedSet.workingSetNumber) deleted") {
                     restoreDeletedSet()
                 }
                 .padding(.bottom, 12)
@@ -1479,6 +1479,7 @@ struct SetRowView: View {
 struct DeletedSetSnapshot {
     let id = UUID()
     let setNumber: Int
+    let workingSetNumber: Int
     let weight: Double?
     let reps: Int?
     let isCompleted: Bool
@@ -1492,6 +1493,7 @@ struct DeletedSetSnapshot {
 
     init(_ set: SetLog) {
         setNumber = set.setNumber
+        workingSetNumber = set.workingSetNumber
         weight = set.weight
         reps = set.reps
         isCompleted = set.isCompleted

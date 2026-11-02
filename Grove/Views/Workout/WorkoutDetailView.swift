@@ -631,7 +631,7 @@ private struct SetDetailRow: View {
 
     var body: some View {
         HStack(spacing: 4) {
-            Text(setLog.isWarmup ? "W:" : "Set \(setLog.setNumber):")
+            Text(setLog.isWarmup ? "W:" : "Set \(setLog.workingSetNumber):")
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .opacity(setLog.isWarmup ? 0.6 : 1)
