@@ -756,8 +756,10 @@ class CloudKitSocialService {
 
     // MARK: - Share Workout
 
-    func shareWorkout(_ workout: Workout, user: User, prExerciseNames: Set<String> = []) async {
-        guard let myAppleUserID else { return }
+    /// Uploads the workout to the feed. Returns the new post's record name, or nil on failure.
+    @discardableResult
+    func shareWorkout(_ workout: Workout, user: User, prExerciseNames: Set<String> = []) async -> String? {
+        guard let myAppleUserID else { return nil }
 
         do {
             let record = CKRecord(recordType: RecordType.sharedWorkout)
@@ -806,10 +808,24 @@ class CloudKitSocialService {
                 }
             }
 
-            try await publicDB.save(record)
+            let saved = try await publicDB.save(record)
+            return saved.recordID.recordName
         } catch {
             self.error = "Could not share workout: \(error.localizedDescription)"
+            return nil
         }
+    }
+
+    /// One post per friend to offer sunlight on: each friend's most recent post, friends who
+    /// trained today first, then everyone else by recency. Own posts are excluded; friends
+    /// with no posts in the loaded feed can't receive sunlight (it attaches to a post).
+    var sunlightCandidates: [SharedWorkoutItem] {
+        var latestByFriend: [String: SharedWorkoutItem] = [:]
+        for item in feedItems where item.userID != myAppleUserID {
+            if let existing = latestByFriend[item.userID], existing.completedAt >= item.completedAt { continue }
+            latestByFriend[item.userID] = item
+        }
+        return latestByFriend.values.sorted { $0.completedAt > $1.completedAt }
     }
 
     // MARK: - Update Stats
@@ -1204,6 +1220,8 @@ class CloudKitSocialService {
 
         // Check local set first (prevents rapid-tap duplicates)
         guard !usedSunlightSources.contains(fromWorkoutRecordName) else { return false }
+        // One sunlight per post from each person, matching the feed's sunlight button.
+        guard interactionsByWorkout[workoutRecordName]?.iSunlit != true else { return false }
 
         // Mark as used immediately to block concurrent sends
         usedSunlightSources.insert(fromWorkoutRecordName)

@@ -35,7 +35,7 @@ class User {
     var lastNotifiedRootLevels: [String: String] = [:]  // friendID -> RootLevel.rawValue
 
     // Sharing preferences (defaults)
-    var autoShareWorkouts: Bool = false
+    var autoShareWorkouts: Bool = true  // The summary's "Post to feed" toggle updates this
     var shareWorkoutName: Bool = true
     var shareDuration: Bool = true
     var shareExercises: Bool = false

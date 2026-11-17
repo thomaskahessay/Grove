@@ -18,6 +18,19 @@ struct WorkoutSummaryView: View {
     }
 
     private var totalVolume: Double {
+        Self.volume(of: workout)
+    }
+
+    private var completedSetsCount: Int {
+        workout.exercises.reduce(0) { $0 + $1.sets.filter { $0.isCompleted && !$0.isWarmup }.count }
+    }
+
+    private var warmupSetsCount: Int {
+        workout.exercises.reduce(0) { $0 + $1.sets.filter { $0.isCompleted && $0.isWarmup }.count }
+    }
+
+    /// Weighted volume (weight × reps) of completed working sets, excluding assisted sets.
+    private static func volume(of workout: Workout) -> Double {
         workout.exercises.reduce(0) { exerciseTotal, exerciseLog in
             exerciseTotal + exerciseLog.sets.reduce(0) { setTotal, setLog in
                 guard setLog.isCompleted,
@@ -30,44 +43,20 @@ struct WorkoutSummaryView: View {
         }
     }
 
-    private var completedSetsCount: Int {
-        workout.exercises.reduce(0) { $0 + $1.sets.filter { $0.isCompleted && !$0.isWarmup }.count }
-    }
-
-    private var warmupSetsCount: Int {
-        workout.exercises.reduce(0) { $0 + $1.sets.filter { $0.isCompleted && $0.isWarmup }.count }
-    }
-
-    private var previousWorkout: Workout? {
-        // Find the most recent completed workout with the same name (excluding current)
-        allWorkouts.first { w in
-            w.id != workout.id &&
-            w.name == workout.name &&
-            w.completedAt != nil
-        }
-    }
-
+    /// Volume of the most recent earlier workout with the same name that has any weighted
+    /// volume. Workouts with none (bodyweight-only, or sets logged without weights) are
+    /// skipped: a 0 baseline can't give a percentage and used to leave the section empty.
     private var previousVolume: Double? {
-        guard let prev = previousWorkout else { return nil }
-        return prev.exercises.reduce(0) { exerciseTotal, exerciseLog in
-            exerciseTotal + exerciseLog.sets.reduce(0) { setTotal, setLog in
-                guard setLog.isCompleted,
-                      !setLog.isWarmup,
-                      setLog.bodyweightModifier != .assisted,
-                      let weight = setLog.weight,
-                      let reps = setLog.reps else { return setTotal }
-                return setTotal + (weight * Double(reps))
-            }
-        }
+        allWorkouts.lazy
+            .filter { $0.id != workout.id && $0.name == workout.name && $0.completedAt != nil }
+            .map(Self.volume(of:))
+            .first { $0 > 0 }
     }
 
     private var volumeChange: Double? {
-        guard let prev = previousVolume, prev > 0 else { return nil }
+        // No comparison on a day with no weighted volume (e.g. bodyweight only): it would read -100%.
+        guard totalVolume > 0, let prev = previousVolume, prev > 0 else { return nil }
         return ((totalVolume - prev) / prev) * 100
-    }
-
-    private var skippedCount: Int {
-        workout.exercises.filter { $0.status == .skipped }.count
     }
 
     private var hasNewPRs: Bool {
@@ -92,7 +81,7 @@ struct WorkoutSummaryView: View {
                     }
 
                     // Comparison (if available)
-                    if previousWorkout != nil {
+                    if volumeChange != nil {
                         comparisonSection
                     }
 
@@ -111,21 +100,18 @@ struct WorkoutSummaryView: View {
 
                     // Workout notes
                     notesSection
-
-                    // Social sharing
-                    sharingSection
-
-                    // Sunlight prompt (if available)
-                    sunlightPrompt
-
-                    // Done button
-                    doneButton
-                        .padding(.top, 8)
-                        .padding(.bottom, 32)
                 }
                 .padding()
             }
             .background(Color.groveBackground)
+            // Posting, sunlight and finishing stay pinned so they never need a scroll.
+            .safeAreaInset(edge: .bottom, spacing: 0) {
+                postBar
+            }
+            .sheet(isPresented: $showSharingOptions) {
+                sharingOptionsSheet
+                    .presentationDetents([.medium])
+            }
             .navigationTitle("Workout Complete")
             .navigationBarTitleDisplayMode(.inline)
             .overlay {
@@ -174,15 +160,17 @@ struct WorkoutSummaryView: View {
     private var completionSummary: String {
         let total = workout.exercises.count
         let completed = exerciseCount
-        var summary = "\(completed) of \(total) exercises completed"
-        if skippedCount > 0 {
-            summary += " (\(skippedCount) skipped)"
-        }
-        return summary
+        return "\(completed) of \(total) exercises completed"
+    }
+
+    /// Exercises with at least one logged set. Untouched exercises stay `.planned`, not
+    /// `.skipped`, so status alone overcounts ("6 of 6 completed" with one exercise done).
+    private func wasDone(_ log: ExerciseLog) -> Bool {
+        log.status != .skipped && log.sets.contains { $0.isCompleted }
     }
 
     private var exerciseCount: Int {
-        workout.exercises.filter { $0.status != .skipped }.count
+        workout.exercises.filter(wasDone).count
     }
 
     private var statsSection: some View {
@@ -328,112 +316,172 @@ struct WorkoutSummaryView: View {
         }
     }
 
-    private var sharingSection: some View {
+    // MARK: - Post bar
+
+    @State private var sunlightTargetID: String?
+
+    private var shareBinding: Binding<Bool> {
+        Binding(
+            get: { workout.isShared },
+            set: { newValue in
+                workout.isShared = newValue
+                if newValue, let user {
+                    workout.shareWorkoutName = user.shareWorkoutName
+                    workout.shareDuration = user.shareDuration
+                    workout.shareExercises = user.shareExercises
+                    workout.shareWeights = user.shareWeights
+                    workout.sharePRs = user.sharePRs
+                }
+            }
+        )
+    }
+
+    /// What the post will include, e.g. "Name, duration, exercises, PRs".
+    private var shareContentsSummary: String {
+        var parts: [String] = []
+        if workout.shareWorkoutName { parts.append("name") }
+        if workout.shareDuration { parts.append("duration") }
+        if workout.shareExercises { parts.append(workout.shareWeights ? "exercises with weights" : "exercises") }
+        if workout.sharePRs && !prExerciseNames.isEmpty { parts.append("PRs") }
+        guard let first = parts.first else { return "Set count only" }
+        return ([first.prefix(1).uppercased() + first.dropFirst()] + parts.dropFirst()).joined(separator: ", ")
+    }
+
+    private var sunlightCandidates: [SharedWorkoutItem] {
+        socialService.sunlightCandidates
+    }
+
+    private var postBar: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Label("Social Feed", systemImage: "person.2.fill")
-                .font(.headline)
-                .foregroundStyle(Color.groveText)
-
-            VStack(spacing: 12) {
-                Toggle("Share with Friends", isOn: Binding(
-                    get: { workout.isShared },
-                    set: { newValue in
-                        workout.isShared = newValue
-                        if newValue, let user {
-                            workout.shareWorkoutName = user.shareWorkoutName
-                            workout.shareDuration = user.shareDuration
-                            workout.shareExercises = user.shareExercises
-                            workout.shareWeights = user.shareWeights
-                            workout.sharePRs = user.sharePRs
-                        }
-                    }
-                ))
-                .tint(.groveSage)
-
-                if workout.isShared {
-                    DisclosureGroup("Customize Sharing", isExpanded: $showSharingOptions) {
-                        VStack(spacing: 8) {
-                            Toggle("Workout Name", isOn: Binding(
-                                get: { workout.shareWorkoutName },
-                                set: { workout.shareWorkoutName = $0 }
-                            ))
-                            Toggle("Duration", isOn: Binding(
-                                get: { workout.shareDuration },
-                                set: { workout.shareDuration = $0 }
-                            ))
-                            Toggle("Exercises", isOn: Binding(
-                                get: { workout.shareExercises },
-                                set: { workout.shareExercises = $0 }
-                            ))
-                            Toggle("Weights", isOn: Binding(
-                                get: { workout.shareWeights },
-                                set: { workout.shareWeights = $0 }
-                            ))
-                            if !prExerciseNames.isEmpty {
-                                Toggle("Personal Records", isOn: Binding(
-                                    get: { workout.sharePRs },
-                                    set: { workout.sharePRs = $0 }
-                                ))
-                            }
-                        }
+            HStack(alignment: .center) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Post to feed")
                         .font(.subheadline)
-                        .tint(.groveSage)
-                        .padding(.top, 8)
-                    }
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                }
-            }
-            .padding()
-            .background(Color.groveCardBackground)
-            .clipShape(RoundedRectangle(cornerRadius: 12))
-        }
-    }
-
-    @State private var showSunlightPrompt = true
-
-    @ViewBuilder
-    private var sunlightPrompt: some View {
-        if showSunlightPrompt && !socialService.feedItems.isEmpty && workout.isShared {
-            SunlightPromptCard(
-                feedItems: socialService.feedItems,
-                onSend: { item in
-                    Task {
-                        if let myWorkout = await socialService.myLatestSharedWorkoutRecordName() {
-                            _ = await socialService.sendSunlight(
-                                to: item.id,
-                                recipientID: item.userID,
-                                fromWorkoutRecordName: myWorkout
-                            )
+                        .fontWeight(.semibold)
+                        .foregroundStyle(Color.groveText)
+                    if workout.isShared {
+                        Button {
+                            showSharingOptions = true
+                        } label: {
+                            (Text(shareContentsSummary + " · ").foregroundStyle(.secondary)
+                             + Text("Customize").foregroundStyle(Color.groveSage))
+                                .font(.caption)
+                                .multilineTextAlignment(.leading)
                         }
+                        .buttonStyle(.plain)
+                    } else {
+                        Text("Only you will see this workout")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
                     }
-                },
-                onDismiss: {
-                    withAnimation { showSunlightPrompt = false }
                 }
-            )
+                Spacer()
+                Toggle("Post to feed", isOn: shareBinding)
+                    .labelsHidden()
+                    .tint(.groveSage)
+            }
+
+            // Sunlight comes from a shared workout, so it's only offered when posting.
+            if workout.isShared && !sunlightCandidates.isEmpty {
+                SunlightPromptCard(
+                    candidates: sunlightCandidates,
+                    alreadySunlitIDs: Set(sunlightCandidates.lazy
+                        .filter { socialService.interactionsByWorkout[$0.id]?.iSunlit == true }
+                        .map(\.id)),
+                    selectedItemID: $sunlightTargetID
+                )
+            }
+
+            finishButton
+        }
+        .padding(.horizontal)
+        .padding(.top, 12)
+        .padding(.bottom, 8)
+        .background(Color.groveBackground)
+        .overlay(alignment: .top) { Divider() }
+        .animation(.easeInOut(duration: 0.2), value: workout.isShared)
+    }
+
+    private var sharingOptionsSheet: some View {
+        NavigationStack {
+            Form {
+                Toggle("Workout name", isOn: Binding(
+                    get: { workout.shareWorkoutName },
+                    set: { workout.shareWorkoutName = $0 }
+                ))
+                Toggle("Duration", isOn: Binding(
+                    get: { workout.shareDuration },
+                    set: { workout.shareDuration = $0 }
+                ))
+                Toggle("Exercises", isOn: Binding(
+                    get: { workout.shareExercises },
+                    set: { workout.shareExercises = $0 }
+                ))
+                Toggle("Weights", isOn: Binding(
+                    get: { workout.shareWeights },
+                    set: { workout.shareWeights = $0 }
+                ))
+                .disabled(!workout.shareExercises)
+                if !prExerciseNames.isEmpty {
+                    Toggle("Personal records", isOn: Binding(
+                        get: { workout.sharePRs },
+                        set: { workout.sharePRs = $0 }
+                    ))
+                }
+            }
+            .tint(.groveSage)
+            .navigationTitle("What to post")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Done") { showSharingOptions = false }
+                }
+            }
         }
     }
 
-    private var doneButton: some View {
+    private var finishButton: some View {
         Button {
-            if workout.isShared, let user {
-                Task {
-                    await socialService.shareWorkout(workout, user: user, prExerciseNames: workout.sharePRs ? prExerciseNames : [])
-                    await socialService.updateMyStats(user: user)
-                }
-            }
-            sessionManager.dismissSummary()
+            finish()
         } label: {
-            Text("Done")
+            Text(workout.isShared ? "Post and finish" : "Finish")
                 .font(.title3)
                 .fontWeight(.semibold)
                 .foregroundStyle(.white)
                 .frame(maxWidth: .infinity)
-                .padding(.vertical, 16)
+                .padding(.vertical, 14)
                 .background(Color.groveSage)
                 .clipShape(RoundedRectangle(cornerRadius: 16))
         }
+    }
+
+    private func finish() {
+        if let user {
+            // The toggle remembers your last choice for the next workout.
+            user.autoShareWorkouts = workout.isShared
+        }
+        if workout.isShared, let user {
+            // Re-check at send time: interactions may have loaded since the pick.
+            let target = sunlightCandidates.first {
+                $0.id == sunlightTargetID && socialService.interactionsByWorkout[$0.id]?.iSunlit != true
+            }
+            let prNames = workout.sharePRs ? prExerciseNames : []
+            Task {
+                // Post first: the sunlight must come from this workout's post, which only
+                // exists once the upload finishes.
+                if let postID = await socialService.shareWorkout(workout, user: user, prExerciseNames: prNames),
+                   let target {
+                    _ = await socialService.sendSunlight(
+                        to: target.id,
+                        recipientID: target.userID,
+                        fromWorkoutRecordName: postID
+                    )
+                }
+                await socialService.updateMyStats(user: user)
+                await socialService.checkAvailableSunlight()
+            }
+        }
+        sessionManager.dismissSummary()
     }
 
     private var exerciseBreakdownSection: some View {
@@ -443,14 +491,51 @@ struct WorkoutSummaryView: View {
                 .foregroundStyle(Color.groveText)
 
             VStack(spacing: 8) {
-                ForEach(workout.exercises.sorted { $0.orderIndex < $1.orderIndex }) { exerciseLog in
-                    ExerciseSummaryRow(
-                        exerciseLog: exerciseLog,
-                        previousExerciseLog: findPreviousExerciseLog(for: exerciseLog)
-                    )
+                let sorted = workout.exercises.sorted { $0.orderIndex < $1.orderIndex }
+                let done = sorted.filter(wasDone)
+                let notDone = sorted.filter { !wasDone($0) }
+
+                ForEach(done) { exerciseLog in
+                    summaryRow(exerciseLog)
+                }
+
+                if !notDone.isEmpty {
+                    Button {
+                        withAnimation(.easeInOut(duration: 0.2)) { showSkippedExercises.toggle() }
+                    } label: {
+                        HStack {
+                            Text("\(notDone.count) \(notDone.count == 1 ? "exercise" : "exercises") skipped")
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+                            Spacer()
+                            Image(systemName: "chevron.down")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                                .rotationEffect(.degrees(showSkippedExercises ? 180 : 0))
+                        }
+                        .padding()
+                        .background(Color.groveCardBackground)
+                        .clipShape(RoundedRectangle(cornerRadius: 12))
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+
+                    if showSkippedExercises {
+                        ForEach(notDone) { exerciseLog in
+                            summaryRow(exerciseLog)
+                        }
+                    }
                 }
             }
         }
+    }
+
+    @State private var showSkippedExercises = false
+
+    private func summaryRow(_ exerciseLog: ExerciseLog) -> some View {
+        let exerciseID = exerciseLog.exercise?.id
+        let pr = sessionManager.newPRs.first { $0.exercise.id == exerciseID }
+        return ExerciseSummaryRow(exerciseLog: exerciseLog, prSetID: pr?.newPR.setLogID)
     }
 
     private var notesSection: some View {
@@ -499,12 +584,6 @@ struct WorkoutSummaryView: View {
         return formatter.string(from: date)
     }
 
-    private func findPreviousExerciseLog(for exerciseLog: ExerciseLog) -> ExerciseLog? {
-        guard let exercise = exerciseLog.exercise,
-              let prev = previousWorkout else { return nil }
-
-        return prev.exercises.first { $0.exercise?.id == exercise.id }
-    }
 }
 
 // MARK: - Supporting Views
@@ -569,7 +648,11 @@ struct ComparisonCard: View {
 
 struct ExerciseSummaryRow: View {
     let exerciseLog: ExerciseLog
-    let previousExerciseLog: ExerciseLog?
+    /// The set that set a new PR, from `PRDetectionService` (all-time best, baselines
+    /// excluded), so the row matches the PR cards above it. Nil when there's no new PR.
+    let prSetID: UUID?
+
+    private var isPR: Bool { prSetID != nil }
 
     private var isBodyweightExercise: Bool {
         exerciseLog.exercise?.isBodyweight ?? false
@@ -603,29 +686,15 @@ struct ExerciseSummaryRow: View {
         }
     }
 
-    private var previousBestSet: SetLog? {
-        previousExerciseLog?.sets.filter { $0.isCompleted && !$0.isWarmup }.max { a, b in
-            let aVolume = (a.weight ?? 0) * Double(a.reps ?? 0)
-            let bVolume = (b.weight ?? 0) * Double(b.reps ?? 0)
-            return aVolume < bVolume
-        }
-    }
-
-    private var isPR: Bool {
-        guard let best = bestSet,
-              let prevBest = previousBestSet,
-              let bestWeight = best.weight,
-              let prevWeight = prevBest.weight else { return false }
-        return bestWeight > prevWeight
-    }
-
     private var setsVary: Bool {
         guard completedSets.count > 1 else { return false }
         let volumes = completedSets.map { ($0.weight ?? 0) * Double($0.reps ?? 0) }
         return Set(volumes).count > 1
     }
 
+    /// The starred set: the PR set when there's a new PR, otherwise the highest-volume set.
     private func isBestSet(_ set: SetLog) -> Bool {
+        if let prSetID { return set.id == prSetID }
         guard setsVary, let best = bestSet else { return false }
         return set.setNumber == best.setNumber
     }
