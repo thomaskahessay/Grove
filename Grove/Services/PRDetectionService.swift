@@ -206,6 +206,32 @@ struct PRDetectionService {
         }
     }
 
+    // MARK: - New PR vs. baseline
+
+    /// The records that beat an earlier record, i.e. real PRs. The first record per
+    /// exercise and type is the baseline set by the first workout, and is left out.
+    /// Only `.maxWeight` and `.maxReps` count; legacy `.estimatedOneRM` records are ignored.
+    /// This is the single definition of "is this a PR?" for every screen.
+    static func newPRRecords(from records: [PersonalRecord]) -> [PersonalRecord] {
+        var byKey: [String: [PersonalRecord]] = [:]
+        for record in records where record.type == .maxWeight || record.type == .maxReps {
+            guard let exerciseID = record.exercise?.id else { continue }
+            byKey["\(exerciseID)-\(record.type.rawValue)", default: []].append(record)
+        }
+        return byKey.values.flatMap { group in
+            group.sorted { $0.achievedAt < $1.achievedAt }.dropFirst()
+        }
+    }
+
+    /// Real PRs (not baselines) set during the given workout.
+    static func newPRs(in workout: Workout, context: ModelContext) -> [PersonalRecord] {
+        let setIDs = Set(workout.exercises.flatMap { $0.sets.map(\.id) })
+        guard !setIDs.isEmpty, let allPRs = try? context.fetch(FetchDescriptor<PersonalRecord>()) else { return [] }
+        return newPRRecords(from: allPRs).filter { pr in
+            pr.setLogID.map(setIDs.contains) ?? false
+        }
+    }
+
     /// Gets all PRs for a user, optionally filtered by exercise
     static func getPRs(
         for user: User,

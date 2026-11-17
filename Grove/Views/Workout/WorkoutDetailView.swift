@@ -68,16 +68,9 @@ struct WorkoutDetailView: View {
         workoutExercises.sorted { $0.orderIndex < $1.orderIndex }
     }
 
+    /// Real PRs set in this workout; first-time baselines don't count.
     private var workoutPRs: [PersonalRecord] {
-        let setIDs = Set(workout.exercises.flatMap { $0.sets.map { $0.id } })
-        let descriptor = FetchDescriptor<PersonalRecord>()
-        guard let allPRs = try? modelContext.fetch(descriptor) else { return [] }
-        return allPRs
-            .filter { pr in
-                pr.type == .maxWeight &&
-                pr.setLogID != nil &&
-                setIDs.contains(pr.setLogID!)
-            }
+        PRDetectionService.newPRs(in: workout, context: modelContext)
             .sorted { a, b in
                 let nameA = a.exercise?.name ?? ""
                 let nameB = b.exercise?.name ?? ""
@@ -185,7 +178,10 @@ struct WorkoutDetailView: View {
             }
         }
         .sheet(isPresented: $showingShareToFeed) {
-            ShareToFeedSheet(workout: workout)
+            ShareToFeedSheet(
+                workout: workout,
+                prExerciseNames: Set(workoutPRs.compactMap { $0.exercise?.name })
+            )
                 .presentationDetents([.medium])
         }
         .sheet(isPresented: $showingHealthKitConnect) {
@@ -330,7 +326,7 @@ struct WorkoutDetailView: View {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 12) {
                     ForEach(workoutPRs, id: \.id) { pr in
-                        PRCard(pr: pr)
+                        PRCard(pr: pr, unitLabel: workout.user?.preferredUnits == .metric ? "kg" : "lbs")
                     }
                 }
                 .padding(.horizontal)
@@ -401,6 +397,7 @@ private struct StatBox: View {
 
 private struct PRCard: View {
     let pr: PersonalRecord
+    let unitLabel: String
 
     private var exerciseName: String {
         pr.exercise?.name ?? "Unknown"
@@ -411,8 +408,11 @@ private struct PRCard: View {
     }
 
     private var displayValue: String {
+        if pr.type == .maxReps {
+            return "\(pr.reps) reps"
+        }
         let w = pr.weight == floor(pr.weight) ? "\(Int(pr.weight))" : String(format: "%.1f", pr.weight)
-        return "\(w) lbs x \(pr.reps)"
+        return "\(w) \(unitLabel) x \(pr.reps)"
     }
 
     var body: some View {

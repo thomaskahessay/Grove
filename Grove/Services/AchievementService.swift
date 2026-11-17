@@ -37,7 +37,8 @@ struct AchievementService {
         let workoutCount = completedWorkouts.count
 
         // Precompute data needed by multiple checks
-        let uniquePRExerciseCount = Set(user.personalRecords.compactMap { $0.exercise?.id }).count
+        // Baselines from first-time exercises are not PRs
+        let uniquePRExerciseCount = Set(PRDetectionService.newPRRecords(from: user.personalRecords).compactMap { $0.exercise?.id }).count
         let allExerciseLogs = completedWorkouts.flatMap { $0.exercises }
         let completedExerciseLogs = allExerciseLogs.filter { $0.status == .completed }
         let uniqueExerciseIDs = Set(completedExerciseLogs.compactMap { $0.exercise?.id })
@@ -195,7 +196,8 @@ struct AchievementService {
 
         // Precompute expensive data only once
         let completedWorkouts = user.workouts.filter { $0.completedAt != nil }
-        let uniquePRExerciseCount = Set(user.personalRecords.compactMap { $0.exercise?.id }).count
+        // Baselines from first-time exercises are not PRs
+        let uniquePRExerciseCount = Set(PRDetectionService.newPRRecords(from: user.personalRecords).compactMap { $0.exercise?.id }).count
         let allCompletedExerciseLogs = completedWorkouts.flatMap { $0.exercises }.filter { $0.status == .completed }
         let uniqueExerciseCount = Set(allCompletedExerciseLogs.compactMap { $0.exercise?.id }).count
         let uniqueMuscleGroupCount = Set(allCompletedExerciseLogs.compactMap { $0.exercise?.muscleGroup }).count
