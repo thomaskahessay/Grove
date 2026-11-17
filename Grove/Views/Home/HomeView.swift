@@ -22,7 +22,7 @@ struct HomeView: View {
     @Query private var creatineLogs: [CreatineLog]
 
     @State private var showingWeeklyPlan = false
-    @State private var creatineCheckAnimation = false
+    @State private var showingCreatineCalendar = false
     @State private var restNudgeDismissed = false
 
     private var recentWorkouts: [Workout] {
@@ -218,8 +218,7 @@ struct HomeView: View {
                         CreatinePillView(
                             isLogged: todaysCreatineLog != nil,
                             streak: creatineStreak,
-                            animating: $creatineCheckAnimation,
-                            onTap: { toggleCreatine() }
+                            onTap: { showingCreatineCalendar = true }
                         )
                     }
 
@@ -274,6 +273,12 @@ struct HomeView: View {
             }
             .sheet(isPresented: $showingWeeklyPlan) {
                 WeeklyPlanView()
+            }
+            .sheet(isPresented: $showingCreatineCalendar) {
+                if let user = currentUser {
+                    CreatineCalendarSheet(user: user)
+                        .presentationDetents([.medium, .large])
+                }
             }
             .onAppear {
                 // Skip recalculation when a workout was just completed — the streak
@@ -361,20 +366,6 @@ struct HomeView: View {
         )
         .clipShape(RoundedRectangle(cornerRadius: 24))
         .contentShape(RoundedRectangle(cornerRadius: 24))
-    }
-
-    private func toggleCreatine() {
-        if let existing = todaysCreatineLog {
-            modelContext.delete(existing)
-        } else {
-            let log = CreatineLog()
-            log.user = currentUser
-            modelContext.insert(log)
-            creatineCheckAnimation = true
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
-                creatineCheckAnimation = false
-            }
-        }
     }
 
     private func startTodaysWorkout(plan: WorkoutPlan) {
@@ -843,7 +834,6 @@ struct AllWorkoutsView: View {
 struct CreatinePillView: View {
     let isLogged: Bool
     let streak: Int
-    @Binding var animating: Bool
     var onTap: () -> Void
 
     var body: some View {
@@ -853,8 +843,6 @@ struct CreatinePillView: View {
                     .font(.body)
                     .foregroundStyle(isLogged ? Color.groveSage : Color.groveSage.opacity(0.5))
                     .contentTransition(.symbolEffect(.replace))
-                    .scaleEffect(animating ? 1.3 : 1.0)
-                    .animation(.spring(duration: 0.3, bounce: 0.4), value: animating)
 
                 Text(isLogged ? "Creatine taken" : "Creatine")
                     .font(.subheadline)
@@ -870,7 +858,12 @@ struct CreatinePillView: View {
                         .foregroundStyle(Color.groveSage)
                         .transition(.scale.combined(with: .opacity))
                 }
+
+                Image(systemName: "chevron.right")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.tertiary)
             }
+            .contentShape(Rectangle())
             .padding(.horizontal, 14)
             .padding(.vertical, 10)
             .glassEffect(

@@ -182,5 +182,7 @@ struct CreatineCalendarSheet: View {
             log.user = user
             modelContext.insert(log)
         }
+        // Autosave is delayed; persist right away so a quick app kill doesn't lose the tick.
+        try? modelContext.save()
     }
 }
