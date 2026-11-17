@@ -603,9 +603,16 @@ class CloudKitSocialService {
         let query = CKQuery(recordType: RecordType.sharedWorkout, predicate: pred)
         query.sortDescriptors = [NSSortDescriptor(key: "completedAt", ascending: false)]
 
-        // May fail if SharedWorkout record type doesn't exist yet — that's fine
-        guard let (results, _) = try? await publicDB.records(matching: query, resultsLimit: 50) else {
-            feedItems = []
+        // May fail if SharedWorkout record type doesn't exist yet, on a flaky network, or
+        // when a pull-to-refresh is cancelled. Keep what's already on screen instead of
+        // blanking the feed; the next refresh will try again.
+        let results: [(CKRecord.ID, Result<CKRecord, Error>)]
+        do {
+            results = try await publicDB.records(matching: query, resultsLimit: 50).matchResults
+        } catch {
+            if !feedItems.isEmpty && !(error is CancellationError) && (error as? CKError)?.code != .operationCancelled {
+                self.error = "Could not refresh feed: \(error.localizedDescription)"
+            }
             return
         }
 

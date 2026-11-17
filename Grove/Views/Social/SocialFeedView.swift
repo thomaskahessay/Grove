@@ -161,10 +161,15 @@ struct SocialFeedView: View {
                 }
             }
             .refreshable {
-                await socialService.fetchFriends()
-                await socialService.fetchFeed()
-                await socialService.fetchRootConnections()
-                await socialService.checkAvailableSunlight()
+                // Run in an unstructured Task: SwiftUI cancels the refreshable task when the
+                // view re-renders mid-refresh (e.g. friends/isLoading changing), which would
+                // abort the CloudKit queries partway through.
+                await Task {
+                    await socialService.fetchFriends()
+                    await socialService.fetchFeed()
+                    await socialService.fetchRootConnections()
+                    await socialService.checkAvailableSunlight()
+                }.value
             }
             .sheet(isPresented: $showingAddFriend) {
                 AddFriendSheet()
