@@ -118,6 +118,15 @@ Create `@Model` class in `Models/`. Add to `modelContainer` in `GroveApp.swift`.
 ### HealthKit
 Read-only from Apple Watch workouts. Reference `docs/PRODUCT_SPEC.md` Section 8.
 
+## Simulator (shared by all sessions)
+
+Use **one** simulator for building, launching and testing Grove: **`Grove Dev`** (iPhone 17 Pro, iOS 27.0), UDID `FDB9FEF4-A6B6-46FC-89D8-BA3C6CD652EA`.
+
+- Pass this UDID to the iOS Simulator tool (`device`) and to xcodebuild: `-destination 'platform=iOS Simulator,id=FDB9FEF4-A6B6-46FC-89D8-BA3C6CD652EA'`
+- If it's shut down, boot it with `xcrun simctl boot FDB9FEF4-A6B6-46FC-89D8-BA3C6CD652EA`. If it's already booted, reuse it as is.
+- **Never create, erase, delete or rename simulators**, and don't switch to another device. If `Grove Dev` is missing, stop and ask the user.
+- Other sessions may reinstall the app on it at any time. Before trusting a result, relaunch your own build, and avoid long-running tests that a reinstall would kill.
+
 ## Xcode Capabilities
 
 Sign in with Apple, HealthKit, iCloud (CloudKit), Push Notifications
