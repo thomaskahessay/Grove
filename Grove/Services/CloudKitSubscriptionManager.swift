@@ -224,7 +224,9 @@ enum CloudKitSubscriptionManager {
         )
         let info = CKSubscription.NotificationInfo()
         info.shouldSendContentAvailable = true
-        info.desiredKeys = ["type", "senderID", "recipientID", "workoutRecordName", "message", "createdAt"]
+        // No desiredKeys: PushNotificationHandler only checks which subscription fired.
+        // Asking for six fields made CloudKit reject it ("notification additional fields
+        // limit exceeded").
         subscription.notificationInfo = info
         return subscription
     }
