@@ -157,27 +157,48 @@ struct ContentView: View {
         }
     }
 
+    /// Friends' posts since you last looked at the Grove tab (none while you're on it).
+    private var newGrovePosts: Int {
+        guard selectedTab != 2 else { return 0 }
+        let since = users.first?.lastFeedCheckDate ?? .distantPast
+        let me = socialService.currentUserID
+        return socialService.feedItems.filter { $0.userID != me && $0.completedAt > since }.count
+    }
+
     @ViewBuilder
     private var mainAppView: some View {
         ZStack(alignment: .bottom) {
             TabView(selection: $selectedTab) {
-                Tab("Home", systemImage: "house.fill", value: 0) {
+                Tab("Today", systemImage: "sun.horizon.fill", value: 0) {
                     HomeView()
                 }
 
-                Tab("Progress", systemImage: "chart.line.uptrend.xyaxis", value: 1) {
+                Tab("Progress", systemImage: "chart.bar.fill", value: 1) {
                     ProgressView()
                 }
 
-                Tab("Social", systemImage: "person.2.fill", value: 2) {
+                Tab("Grove", systemImage: "tree.fill", value: 2) {
                     SocialFeedView()
                 }
+                .badge(newGrovePosts)
 
-                Tab("Profile", systemImage: "person.fill", value: 3) {
+                Tab(value: 3) {
                     ProfileView()
+                } label: {
+                    Label {
+                        Text("You")
+                    } icon: {
+                        if let avatar = TabAvatar.image(for: users.first?.profileImageData) {
+                            Image(uiImage: avatar)
+                        } else {
+                            Image(systemName: "person.crop.circle.fill")
+                        }
+                    }
                 }
             }
             .tint(.groveSage)
+            .tabBarMinimizeBehavior(.onScrollDown)
+            .modifier(WorkoutAccessoryModifier(isActive: sessionManager.isMinimized))
             .background {
                 TabBarFrameReader { tabBarFrame in
                     let tabWidth = tabBarFrame.width / 4
@@ -192,8 +213,8 @@ struct ContentView: View {
                 }
             }
 
-            // Minimized workout card
-            if sessionManager.isMinimized {
+            // Minimized workout card (before iOS 26.1, which has the tab bar accessory)
+            if sessionManager.isMinimized && !WorkoutAccessoryModifier.isSupported {
                 MinimizedWorkoutCardView()
                     .padding(.horizontal, 20)
                     .padding(.bottom, 60)
@@ -282,6 +303,53 @@ struct ContentView: View {
                 }
             }
         }
+    }
+}
+
+// MARK: - Tab bar extras
+
+/// Shows the minimized workout in the tab bar's bottom accessory where available.
+private struct WorkoutAccessoryModifier: ViewModifier {
+    let isActive: Bool
+
+    static var isSupported: Bool {
+        if #available(iOS 26.1, *) { return true }
+        return false
+    }
+
+    func body(content: Content) -> some View {
+        if #available(iOS 26.1, *) {
+            content.tabViewBottomAccessory(isEnabled: isActive) {
+                WorkoutAccessoryView()
+            }
+        } else {
+            content
+        }
+    }
+}
+
+/// Your profile photo as a small round tab icon, drawn in its own colours (tab icons
+/// are otherwise tinted as templates). Cached so it isn't redrawn on every update.
+@MainActor
+private enum TabAvatar {
+    private static var cache: (key: Int, image: UIImage)?
+
+    static func image(for data: Data?) -> UIImage? {
+        guard let data else { return nil }
+        let key = data.hashValue
+        if let cache, cache.key == key { return cache.image }
+        guard let source = UIImage(data: data) else { return nil }
+        let side: CGFloat = 26
+        let image = UIGraphicsImageRenderer(size: CGSize(width: side, height: side)).image { _ in
+            let rect = CGRect(x: 0, y: 0, width: side, height: side)
+            UIBezierPath(ovalIn: rect).addClip()
+            let scale = max(side / source.size.width, side / source.size.height)
+            let size = CGSize(width: source.size.width * scale, height: source.size.height * scale)
+            source.draw(in: CGRect(x: (side - size.width) / 2, y: (side - size.height) / 2,
+                                   width: size.width, height: size.height))
+        }.withRenderingMode(.alwaysOriginal)
+        cache = (key, image)
+        return image
     }
 }
 

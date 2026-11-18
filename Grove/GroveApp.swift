@@ -173,7 +173,8 @@ struct GroveApp: App {
             case .active:
                 Task { @MainActor in
                     NotificationService.shared.cancelAbandonedWorkoutReminder()
-                    await socialService.fetchInteractionsForFeed()
+                    // New posts (for the Grove tab's badge) and their interactions
+                    await socialService.fetchFeed()
                     await socialService.checkAvailableSunlight()
                 }
             default:
