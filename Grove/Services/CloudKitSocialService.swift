@@ -472,9 +472,9 @@ class CloudKitSocialService {
             friendIDs = Set(profileRecords.map(\.recordID.recordName))
             groveIsEveryone = true
         } else {
-            // Fallback: friend links. Used if the all-profiles query fails, e.g. before the
-            // UserProfile index is deployed to Production, so the grove is never emptier
-            // than it was with invite codes.
+            // Fallback: friend links. Used if the all-profiles query fails (offline, or the
+            // appleUserID index missing), so the grove is never emptier than it was with
+            // invite codes.
             groveIsEveryone = false
             let pred1 = NSPredicate(format: "userID1 == %@", myAppleUserID)
             let pred2 = NSPredicate(format: "userID2 == %@", myAppleUserID)
@@ -550,9 +550,12 @@ class CloudKitSocialService {
     }
 
     /// Every UserProfile record (without photos), following query cursors to the end.
-    /// Throws if the query fails, e.g. when the UserProfile type has no queryable index.
+    /// Filters on `appleUserID`, which every profile sets and which already has a queryable
+    /// index in Production. (A match-all predicate would need a new `recordName` index.)
+    /// Throws if the query fails; the caller then falls back to friend links.
     private func fetchAllProfileRecords() async throws -> [CKRecord] {
-        let query = CKQuery(recordType: RecordType.userProfile, predicate: NSPredicate(value: true))
+        let predicate = NSPredicate(format: "appleUserID != %@", "")
+        let query = CKQuery(recordType: RecordType.userProfile, predicate: predicate)
         var records: [CKRecord] = []
         var (results, cursor) = try await publicDB.records(
             matching: query, desiredKeys: Self.profileKeysWithoutImage, resultsLimit: CKQueryOperation.maximumResults
