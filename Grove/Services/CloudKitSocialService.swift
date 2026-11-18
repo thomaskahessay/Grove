@@ -639,21 +639,137 @@ class CloudKitSocialService {
     /// and the friends list must have loaded completely — so a background push launch
     /// or a failed fetch never deletes subscriptions for real friends. Serialized so
     /// overlapping callers don't race each other's diffs.
-    private func syncPushSubscriptions() async {
+    private func syncPushSubscriptions(force: Bool = false) async {
         let previous = subscriptionSyncTask
         let task = Task {
             await previous?.value
-            guard let myAppleUserID, let pushPreferences, friendsListIsComplete else { return }
-            let configuration = CloudKitSubscriptionManager.Configuration(
-                myAppleUserID: myAppleUserID,
-                friends: friends.map { .init(id: $0.id, name: $0.displayName) },
-                friendActivityEnabled: pushPreferences.friendActivity,
-                seedsEnabled: pushPreferences.seeds
-            )
-            await CloudKitSubscriptionManager.sync(configuration, database: publicDB)
+            guard let configuration = subscriptionConfiguration() else { return }
+            await CloudKitSubscriptionManager.sync(configuration, database: publicDB, force: force)
         }
         subscriptionSyncTask = task
         await task.value
+    }
+
+    /// The desired subscription set, or nil until the user, toggles and a complete
+    /// friends list are all known.
+    private func subscriptionConfiguration() -> CloudKitSubscriptionManager.Configuration? {
+        guard let myAppleUserID, let pushPreferences, friendsListIsComplete else { return nil }
+        return CloudKitSubscriptionManager.Configuration(
+            myAppleUserID: myAppleUserID,
+            friends: friends.map { .init(id: $0.id, name: $0.displayName) },
+            friendActivityEnabled: pushPreferences.friendActivity,
+            seedsEnabled: pushPreferences.seeds
+        )
+    }
+
+    // MARK: - Push Diagnostics
+
+    struct PushDiagnostics: Sendable {
+        enum Subscriptions: Sendable {
+            case friendActivityOff
+            /// Can't be checked yet; the message says why.
+            case notReady(String)
+            case checked(active: Int, expected: Int, missingNames: [String], selfTestActive: Bool)
+            case failed(String)
+        }
+
+        let isDevelopmentBuild: Bool
+        let iCloudStatus: String
+        let iCloudReady: Bool
+        let isRegisteredForPush: Bool
+        let subscriptions: Subscriptions
+        let lastSyncError: String?
+    }
+
+    /// Re-syncs the push subscriptions (bypassing the 24h cache) and reports what the
+    /// server actually has, so a missing friend workout alert can be traced to a cause.
+    func pushDiagnostics() async -> PushDiagnostics {
+        #if DEBUG
+        let isDevelopmentBuild = true
+        #else
+        let isDevelopmentBuild = false
+        #endif
+
+        let iCloudStatus: String
+        let iCloudReady: Bool
+        do {
+            switch try await container.accountStatus() {
+            case .available: (iCloudStatus, iCloudReady) = ("Signed in", true)
+            case .noAccount: (iCloudStatus, iCloudReady) = ("Not signed in", false)
+            case .restricted: (iCloudStatus, iCloudReady) = ("Restricted", false)
+            case .temporarilyUnavailable: (iCloudStatus, iCloudReady) = ("Temporarily unavailable", false)
+            case .couldNotDetermine: (iCloudStatus, iCloudReady) = ("Unknown", false)
+            @unknown default: (iCloudStatus, iCloudReady) = ("Unknown", false)
+            }
+        } catch {
+            (iCloudStatus, iCloudReady) = (CloudKitSubscriptionManager.describe(error), false)
+        }
+
+        let subscriptions: PushDiagnostics.Subscriptions
+        if isPreviewMode {
+            subscriptions = .notReady("Preview data, no iCloud")
+        } else if myAppleUserID == nil {
+            subscriptions = .notReady("Your Grove profile hasn't synced yet")
+        } else if pushPreferences?.friendActivity == false {
+            subscriptions = .friendActivityOff
+        } else {
+            if !friendsListIsComplete { await fetchFriends() }
+            await syncPushSubscriptions(force: true)
+            if let configuration = subscriptionConfiguration() {
+                do {
+                    let status = try await CloudKitSubscriptionManager.serverStatus(for: configuration, database: publicDB)
+                    let missing = friends
+                        .filter { status.expectedFriendIDs.contains($0.id) && !status.activeFriendIDs.contains($0.id) }
+                        .map(\.displayName)
+                    subscriptions = .checked(
+                        active: status.activeFriendIDs.count,
+                        expected: status.expectedFriendIDs.count,
+                        missingNames: missing,
+                        selfTestActive: status.selfTestActive
+                    )
+                } catch {
+                    subscriptions = .failed(CloudKitSubscriptionManager.describe(error))
+                }
+            } else {
+                subscriptions = .notReady("Your friends list couldn't load completely")
+            }
+        }
+
+        return PushDiagnostics(
+            isDevelopmentBuild: isDevelopmentBuild,
+            iCloudStatus: iCloudStatus,
+            iCloudReady: iCloudReady,
+            isRegisteredForPush: UIApplication.shared.isRegisteredForRemoteNotifications,
+            subscriptions: subscriptions,
+            lastSyncError: CloudKitSubscriptionManager.lastSyncError?.message
+        )
+    }
+
+    /// Saves a test record that the recipient's self-test subscription turns into a visible
+    /// push, through the same CloudKit → APNs path as friend workout alerts. The record is
+    /// deleted a minute later (readers ignore its type meanwhile). Returns an error message,
+    /// or nil once iCloud accepted the record.
+    func sendTestPush(to recipientID: String) async -> String? {
+        guard let myAppleUserID else { return "Your Grove profile hasn't synced yet" }
+
+        let record = CKRecord(recordType: RecordType.interaction)
+        record["type"] = CloudKitSubscriptionManager.testInteractionType as CKRecordValue
+        record["senderID"] = myAppleUserID as CKRecordValue
+        record["recipientID"] = recipientID as CKRecordValue
+        record["message"] = (myDisplayName ?? "Someone") as CKRecordValue
+        record["createdAt"] = Date() as CKRecordValue
+
+        do {
+            let saved = try await publicDB.save(record)
+            let database = publicDB
+            Task {
+                try? await Task.sleep(for: .seconds(60))
+                _ = try? await database.deleteRecord(withID: saved.recordID)
+            }
+            return nil
+        } catch {
+            return CloudKitSubscriptionManager.describe(error)
+        }
     }
 
     // MARK: - Social Feed

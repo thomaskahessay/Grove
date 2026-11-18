@@ -5,6 +5,11 @@ struct NotificationSettingsView: View {
     @Query private var users: [User]
     @Environment(CloudKitSocialService.self) private var socialService
 
+    @State private var diagnostics: CloudKitSocialService.PushDiagnostics?
+    @State private var isCheckingAlerts = false
+    @State private var testResult: String?
+    @State private var isSendingTest = false
+
     private var user: User? { users.first }
     private var notificationService: NotificationService { NotificationService.shared }
 
@@ -136,8 +141,10 @@ struct NotificationSettingsView: View {
             } header: {
                 Text("Social")
             } footer: {
-                Text("Watering Reminders notify you when friends share workouts. Seed Received alerts you when someone plants a seed on your post. Connection Milestones celebrate when your roots grow deeper.")
+                Text("Watering Reminders send one evening nudge if friends posted today and you haven't watered yet. Instant alerts when a friend finishes come from Friend Activity. Seed Received alerts you when someone plants a seed on your post. Connection Milestones celebrate when your roots grow deeper.")
             }
+
+            friendAlertStatusSection
 
             Section {
                 if let user = user {
@@ -187,6 +194,144 @@ struct NotificationSettingsView: View {
         .navigationBarTitleDisplayMode(.inline)
         .task {
             await notificationService.checkAuthorizationStatus()
+        }
+        .task {
+            await checkFriendAlerts()
+        }
+    }
+
+    // MARK: - Friend Alert Status
+
+    private var friendAlertStatusSection: some View {
+        Section {
+            if let diagnostics {
+                LabeledContent("Build", value: diagnostics.isDevelopmentBuild ? "Xcode (Development)" : "TestFlight / App Store")
+                LabeledContent("iCloud") {
+                    Text(diagnostics.iCloudStatus)
+                        .foregroundStyle(diagnostics.iCloudReady ? Color.groveSage : Color.groveMutedRust)
+                }
+                LabeledContent("Push registration") {
+                    Text(diagnostics.isRegisteredForPush ? "Registered" : "Not registered")
+                        .foregroundStyle(diagnostics.isRegisteredForPush ? Color.groveSage : Color.groveMutedRust)
+                }
+                subscriptionRows(diagnostics.subscriptions)
+                if let error = diagnostics.lastSyncError {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Last error")
+                        Text(error)
+                            .font(.footnote)
+                            .foregroundStyle(Color.groveMutedRust)
+                    }
+                }
+            } else {
+                HStack {
+                    Text("Checking iCloud…")
+                    Spacer()
+                    ProgressView()
+                }
+            }
+
+            Button {
+                Task { await checkFriendAlerts() }
+            } label: {
+                HStack {
+                    Text("Check again")
+                    if isCheckingAlerts && diagnostics != nil {
+                        Spacer()
+                        ProgressView()
+                    }
+                }
+            }
+            .disabled(isCheckingAlerts)
+
+            Menu {
+                if let myID = socialService.currentUserID {
+                    Button("This phone") { sendTest(to: myID) }
+                }
+                if !socialService.friends.isEmpty {
+                    Section("A friend") {
+                        ForEach(socialService.friends) { friend in
+                            Button(friend.displayName) { sendTest(to: friend.id) }
+                        }
+                    }
+                }
+            } label: {
+                HStack {
+                    Text("Send test alert")
+                    if isSendingTest {
+                        Spacer()
+                        ProgressView()
+                    }
+                }
+            }
+            .disabled(isSendingTest || socialService.currentUserID == nil)
+
+            if let testResult {
+                Text(testResult)
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            }
+        } header: {
+            Text("Friend Alert Status")
+        } footer: {
+            Text("Friend workout alerts are sent by iCloud the moment a friend posts. Each friend needs an alert set up on this phone. A test alert to a friend shows up on their phone and confirms their alerts work.")
+        }
+    }
+
+    @ViewBuilder
+    private func subscriptionRows(_ subscriptions: CloudKitSocialService.PushDiagnostics.Subscriptions) -> some View {
+        switch subscriptions {
+        case .friendActivityOff:
+            LabeledContent("Workout alerts", value: "Off (Friend Activity)")
+        case .notReady(let reason):
+            LabeledContent("Workout alerts") {
+                Text(reason).foregroundStyle(Color.groveMutedRust)
+            }
+        case .failed(let message):
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Workout alerts")
+                Text("Couldn't check: \(message)")
+                    .font(.footnote)
+                    .foregroundStyle(Color.groveMutedRust)
+            }
+        case .checked(let active, let expected, let missingNames, let selfTestActive):
+            LabeledContent("Workout alerts") {
+                Text(expected == 0 ? "No friends yet" : "\(active) of \(expected) friends")
+                    .foregroundStyle(active == expected ? Color.groveSage : Color.groveMutedRust)
+            }
+            if !missingNames.isEmpty {
+                Text("Missing: \(missingNames.joined(separator: ", "))")
+                    .font(.footnote)
+                    .foregroundStyle(Color.groveMutedRust)
+            }
+            LabeledContent("Test alerts") {
+                Text(selfTestActive ? "Ready" : "Not set up")
+                    .foregroundStyle(selfTestActive ? Color.groveSage : Color.groveMutedRust)
+            }
+        }
+    }
+
+    private func checkFriendAlerts() async {
+        guard !isCheckingAlerts else { return }
+        isCheckingAlerts = true
+        diagnostics = await socialService.pushDiagnostics()
+        isCheckingAlerts = false
+    }
+
+    private func sendTest(to recipientID: String) {
+        let isSelf = recipientID == socialService.currentUserID
+        let name = socialService.friends.first { $0.id == recipientID }?.displayName ?? "your friend"
+        isSendingTest = true
+        testResult = nil
+        Task {
+            if let error = await socialService.sendTestPush(to: recipientID) {
+                testResult = "Couldn't send: \(error)"
+            } else if isSelf {
+                testResult = "Sent. It should arrive within a few seconds, even with Grove closed. If it doesn't, ask a friend to send you one: iCloud may skip the phone that sent it."
+            } else {
+                testResult = "Sent. Ask \(name) whether it arrived. If not, their app needs updating or opening once."
+            }
+            isSendingTest = false
         }
     }
 

@@ -6,3 +6,6 @@
 
 /* Friend planted a seed on your post. %@ = message */
 "GROVE_PUSH_SEED" = "Planted a seed: “%@”";
+
+/* Test alert sent from Notification Settings. %@ = sender's name */
+"GROVE_PUSH_TEST" = "%@ sent a test. Friend workout alerts can reach this phone.";
