@@ -18,9 +18,9 @@ struct GroveLayout {
 struct GroveLayoutEngine {
 
     /// Minimum spacing between friend plants
-    private static let minSpacing: CGFloat = 70
+    private static let minSpacing: CGFloat = 58
     /// Comfortable plant size for friends
-    private static let friendSize: CGFloat = 65
+    private static let friendSize: CGFloat = 52
 
     static func compute(
         containerSize: CGSize,
@@ -48,7 +48,7 @@ struct GroveLayoutEngine {
         let centerX = totalWidth / 2
 
         // User plant — centered, large
-        let userPlantSize: CGFloat = 120
+        let userPlantSize: CGFloat = 92
         let userCenter = CGPoint(x: centerX, y: groundY - userPlantSize * 0.42)
         let userSlot = GroveSlot(
             id: "user",

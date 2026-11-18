@@ -6,6 +6,9 @@ struct GroveNetworkView: View {
     let userStreak: Int
     let isWilted: Bool
     let wiltedAtStage: Int
+    /// Most recent workout per user ID, for bloom (today) and droop (quiet 4+ days).
+    var lastWorkoutByUser: [String: Date] = [:]
+    var userTrainedToday: Bool = false
     let onFriendTap: (String) -> Void
     let onConnectionTap: (RootConnection) -> Void
 
@@ -29,7 +32,7 @@ struct GroveNetworkView: View {
                     if needsScroll {
                         ScrollView(.horizontal, showsIndicators: false) {
                             groveContent(layout: layout, viewportWidth: geo.size.width)
-                                .frame(width: layout.totalWidth, height: 300)
+                                .frame(width: layout.totalWidth, height: 170)
                         }
                         .defaultScrollAnchor(.center)
                     } else {
@@ -37,7 +40,7 @@ struct GroveNetworkView: View {
                     }
                 }
             }
-        .frame(height: 220)
+        .frame(height: 170)
         .background {
             RoundedRectangle(cornerRadius: 16)
                 .fill(Color.groveGroveWindowBackground)
@@ -89,6 +92,7 @@ struct GroveNetworkView: View {
                         label: String(friend.displayName.prefix(8)),
                         sublabel: friend.currentStreak > 0 ? "\(friend.currentStreak)d" : nil,
                         isUser: false,
+                        activity: GroveActivity.from(lastWorkout: lastWorkoutByUser[friend.id]),
                         onTap: { onFriendTap(friend.id) }
                     )
                     .position(slot.center)
@@ -106,6 +110,7 @@ struct GroveNetworkView: View {
                 label: "You",
                 sublabel: isWilted ? "Wilted" : (userStreak > 0 ? "\(userStreak)d" : nil),
                 isUser: true,
+                activity: userTrainedToday ? .today : .recent,
                 onTap: {}
             )
             .position(layout.userSlot.center)
@@ -113,7 +118,7 @@ struct GroveNetworkView: View {
 
             // Empty state hint
             if friends.isEmpty {
-                Text("Invite friends to grow your grove")
+                Text("Your grove grows as people join Grove")
                     .font(.caption2)
                     .foregroundStyle(Color.groveTextSecondary.opacity(0.6))
                     .position(x: viewportWidth / 2, y: layout.groundY + 30)

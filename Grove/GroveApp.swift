@@ -58,9 +58,18 @@ class AppDelegate: NSObject, UIApplicationDelegate {
 struct GroveApp: App {
     @UIApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
     let modelContainer: ModelContainer
-    let socialService = CloudKitSocialService()
+    let socialService: CloudKitSocialService
 
     init() {
+        #if DEBUG
+        // `-GrovePreviewSocial`: fill the social tab with SocialPreviewData so its layout can
+        // be checked in a simulator without iCloud. Never compiled into release builds.
+        socialService = ProcessInfo.processInfo.arguments.contains("-GrovePreviewSocial")
+            ? SocialPreviewData.socialService
+            : CloudKitSocialService()
+        #else
+        socialService = CloudKitSocialService()
+        #endif
         AppDelegate.socialService = socialService
 
         let schema = Schema([

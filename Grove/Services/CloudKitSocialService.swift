@@ -149,6 +149,21 @@ class CloudKitSocialService {
     var friends: [CKFriendProfile] = []
     var friendsLoaded: Bool = false
     var feedItems: [SharedWorkoutItem] = []
+    /// Start of the oldest feed window loaded so far. The feed loads in 14-day windows.
+    var feedLoadedSince: Date?
+    /// Whether any visible post exists before `feedLoadedSince` ("Show older").
+    var feedHasOlderPosts = false
+    var isLoadingOlderFeed = false
+    /// Users whose posts you've hidden. Local to this device; they still see you.
+    var hiddenUserIDs: Set<String> = Set(UserDefaults.standard.stringArray(forKey: "grove_hiddenUserIDs") ?? []) {
+        didSet { UserDefaults.standard.set(Array(hiddenUserIDs), forKey: "grove_hiddenUserIDs") }
+    }
+    /// Display names for hidden users, so Settings can list them for unhiding.
+    var hiddenUserNames: [String: String] = (UserDefaults.standard.dictionary(forKey: "grove_hiddenUserNames") as? [String: String]) ?? [:] {
+        didSet { UserDefaults.standard.set(hiddenUserNames, forKey: "grove_hiddenUserNames") }
+    }
+    /// True when the grove is everyone with a profile; false when it fell back to friend links.
+    var groveIsEveryone = false
     var mySharedWorkouts: [SharedWorkoutItem] = []
     var myInviteCode: String? = UserDefaults.standard.string(forKey: "grove_myInviteCode") {
         didSet { UserDefaults.standard.set(myInviteCode, forKey: "grove_myInviteCode") }
@@ -211,8 +226,13 @@ class CloudKitSocialService {
 
     // MARK: - iCloud Availability
 
+    /// Debug-only: the service was filled from `SocialPreviewData` (launch argument
+    /// `-GrovePreviewSocial`) so the social UI can be checked without iCloud. All
+    /// CloudKit fetches become no-ops so the fake data isn't replaced or cleared.
+    var isPreviewMode = false
+
     var iCloudAvailable: Bool {
-        FileManager.default.ubiquityIdentityToken != nil
+        isPreviewMode || FileManager.default.ubiquityIdentityToken != nil
     }
 
     // MARK: - Bootstrap (for background tasks)
@@ -229,6 +249,7 @@ class CloudKitSocialService {
 
     /// Full social preload/refresh chain used on launch and for manual retry.
     func refreshAll(user: User) async {
+        if isPreviewMode { return }
         await ensureUserProfile(user: user)
         await fetchFriends()
         await fetchFeed()
@@ -431,68 +452,79 @@ class CloudKitSocialService {
     // MARK: - Fetch Friends
 
     func fetchFriends() async {
+        if isPreviewMode { return }
         guard let myAppleUserID else { return }
 
-        // Query both sides of friend links
-        let pred1 = NSPredicate(format: "userID1 == %@", myAppleUserID)
-        let pred2 = NSPredicate(format: "userID2 == %@", myAppleUserID)
-
-        let query1 = CKQuery(recordType: RecordType.friendLink, predicate: pred1)
-        let query2 = CKQuery(recordType: RecordType.friendLink, predicate: pred2)
-
-        // These may fail if FriendLink record type doesn't exist yet — that's fine.
         // Any failure means the list may be incomplete, which must not be pushed into the
         // per-friend push subscriptions (it would delete subscriptions for real friends).
         var fetchComplete = true
-        var linksFetched = true
-        let results1: [(CKRecord.ID, Result<CKRecord, Error>)]
-        let results2: [(CKRecord.ID, Result<CKRecord, Error>)]
-        do {
-            results1 = try await publicDB.records(matching: query1).matchResults
-        } catch {
-            results1 = []
-            fetchComplete = false
-            linksFetched = false
-        }
-        do {
-            results2 = try await publicDB.records(matching: query2).matchResults
-        } catch {
-            results2 = []
-            fetchComplete = false
-            linksFetched = false
-        }
-
-        // Extract friend user IDs
+        // Whether `friendIDs` is the full membership (so missing friends can be dropped).
+        var membershipKnown = true
         var friendIDs: Set<String> = []
-        for (_, result) in results1 {
-            if let record = try? result.get(),
-               let id = record["userID2"] as? String {
-                friendIDs.insert(id)
-            }
-        }
-        for (_, result) in results2 {
-            if let record = try? result.get(),
-               let id = record["userID1"] as? String {
-                friendIDs.insert(id)
-            }
-        }
-
-        // Batch fetch friend profiles without photos, then fill photos from the cache
-        // and download only the ones whose profile changed since they were cached.
         var profileRecords: [CKRecord] = []
-        let recordIDs = friendIDs.map { CKRecord.ID(recordName: $0) }
-        if !recordIDs.isEmpty {
+
+        if let everyone = try? await fetchAllProfileRecords() {
+            // Everyone with a Grove profile is in your grove: no invite codes needed.
+            profileRecords = everyone.filter {
+                let id = $0.recordID.recordName
+                return id != myAppleUserID && !hiddenUserIDs.contains(id)
+            }
+            friendIDs = Set(profileRecords.map(\.recordID.recordName))
+            groveIsEveryone = true
+        } else {
+            // Fallback: friend links. Used if the all-profiles query fails, e.g. before the
+            // UserProfile index is deployed to Production, so the grove is never emptier
+            // than it was with invite codes.
+            groveIsEveryone = false
+            let pred1 = NSPredicate(format: "userID1 == %@", myAppleUserID)
+            let pred2 = NSPredicate(format: "userID2 == %@", myAppleUserID)
+            let query1 = CKQuery(recordType: RecordType.friendLink, predicate: pred1)
+            let query2 = CKQuery(recordType: RecordType.friendLink, predicate: pred2)
+
+            let results1: [(CKRecord.ID, Result<CKRecord, Error>)]
+            let results2: [(CKRecord.ID, Result<CKRecord, Error>)]
             do {
-                let results = try await publicDB.records(for: recordIDs, desiredKeys: Self.profileKeysWithoutImage)
-                for recordID in recordIDs {
-                    if let record = try? results[recordID]?.get() {
-                        profileRecords.append(record)
-                    } else {
-                        fetchComplete = false
-                    }
-                }
+                results1 = try await publicDB.records(matching: query1).matchResults
             } catch {
+                results1 = []
                 fetchComplete = false
+                membershipKnown = false
+            }
+            do {
+                results2 = try await publicDB.records(matching: query2).matchResults
+            } catch {
+                results2 = []
+                fetchComplete = false
+                membershipKnown = false
+            }
+
+            for (_, result) in results1 {
+                if let record = try? result.get(), let id = record["userID2"] as? String {
+                    friendIDs.insert(id)
+                }
+            }
+            for (_, result) in results2 {
+                if let record = try? result.get(), let id = record["userID1"] as? String {
+                    friendIDs.insert(id)
+                }
+            }
+            friendIDs.subtract(hiddenUserIDs)
+
+            // Batch fetch friend profiles without photos
+            let recordIDs = friendIDs.map { CKRecord.ID(recordName: $0) }
+            if !recordIDs.isEmpty {
+                do {
+                    let results = try await publicDB.records(for: recordIDs, desiredKeys: Self.profileKeysWithoutImage)
+                    for recordID in recordIDs {
+                        if let record = try? results[recordID]?.get() {
+                            profileRecords.append(record)
+                        } else {
+                            fetchComplete = false
+                        }
+                    }
+                } catch {
+                    fetchComplete = false
+                }
             }
         }
 
@@ -503,7 +535,9 @@ class CloudKitSocialService {
         // rather than dropping them (and their avatars) from the UI on a flaky network.
         let fetchedIDs = Set(profiles.map(\.id))
         let retained = friends.filter { friend in
-            !fetchedIDs.contains(friend.id) && (!linksFetched || friendIDs.contains(friend.id))
+            !fetchedIDs.contains(friend.id)
+                && !hiddenUserIDs.contains(friend.id)
+                && (!membershipKnown || friendIDs.contains(friend.id))
         }
         self.friends = (profiles + retained).sorted { $0.displayName < $1.displayName }
         self.friendsLoaded = true
@@ -513,6 +547,42 @@ class CloudKitSocialService {
         if fetchComplete {
             Task { await syncPushSubscriptions() }
         }
+    }
+
+    /// Every UserProfile record (without photos), following query cursors to the end.
+    /// Throws if the query fails, e.g. when the UserProfile type has no queryable index.
+    private func fetchAllProfileRecords() async throws -> [CKRecord] {
+        let query = CKQuery(recordType: RecordType.userProfile, predicate: NSPredicate(value: true))
+        var records: [CKRecord] = []
+        var (results, cursor) = try await publicDB.records(
+            matching: query, desiredKeys: Self.profileKeysWithoutImage, resultsLimit: CKQueryOperation.maximumResults
+        )
+        records += results.compactMap { try? $0.1.get() }
+        while let next = cursor {
+            (results, cursor) = try await publicDB.records(
+                continuingMatchFrom: next, desiredKeys: Self.profileKeysWithoutImage, resultsLimit: CKQueryOperation.maximumResults
+            )
+            records += results.compactMap { try? $0.1.get() }
+        }
+        return records
+    }
+
+    // MARK: - Hiding
+
+    /// Hide someone's posts on this device. They stay in CloudKit and still see you.
+    func hideUser(_ userID: String, name: String) {
+        hiddenUserIDs.insert(userID)
+        hiddenUserNames[userID] = name
+        friends.removeAll { $0.id == userID }
+        feedItems.removeAll { $0.userID == userID }
+        Task { await syncPushSubscriptions() }
+    }
+
+    func unhideUser(_ userID: String) async {
+        hiddenUserIDs.remove(userID)
+        hiddenUserNames[userID] = nil
+        await fetchFriends()
+        await fetchFeed()
     }
 
     /// Photo data keyed by record name, served from `ProfileImageCache` when the profile
@@ -585,8 +655,14 @@ class CloudKitSocialService {
 
     // MARK: - Social Feed
 
+    /// The feed loads in windows of this many days, so "everything from the last 2 weeks"
+    /// is literally true rather than depending on how many people posted.
+    static let feedWindowDays = 14
+
+    /// Reloads the newest window (the last 14 days, from the start of that day).
     func fetchFeed() async {
-        guard let myAppleUserID else {
+        if isPreviewMode { return }
+        guard myAppleUserID != nil else {
             feedItems = []
             return
         }
@@ -595,20 +671,16 @@ class CloudKitSocialService {
         isLoading = true
         defer { isLoading = false }
 
-        // Include both friends and the current user in the feed query
-        var allIDs = friends.map { $0.id }
-        allIDs.append(myAppleUserID)
-
-        let pred = NSPredicate(format: "userID IN %@", allIDs)
-        let query = CKQuery(recordType: RecordType.sharedWorkout, predicate: pred)
-        query.sortDescriptors = [NSSortDescriptor(key: "completedAt", ascending: false)]
+        let since = Calendar.current.date(
+            byAdding: .day, value: -Self.feedWindowDays, to: Calendar.current.startOfDay(for: Date())
+        ) ?? Date()
 
         // May fail if SharedWorkout record type doesn't exist yet, on a flaky network, or
         // when a pull-to-refresh is cancelled. Keep what's already on screen instead of
         // blanking the feed; the next refresh will try again.
-        let results: [(CKRecord.ID, Result<CKRecord, Error>)]
+        let items: [SharedWorkoutItem]
         do {
-            results = try await publicDB.records(matching: query, resultsLimit: 50).matchResults
+            items = try await fetchFeedItems(from: since, to: nil)
         } catch {
             if !feedItems.isEmpty && !(error is CancellationError) && (error as? CKError)?.code != .operationCancelled {
                 self.error = "Could not refresh feed: \(error.localizedDescription)"
@@ -616,39 +688,89 @@ class CloudKitSocialService {
             return
         }
 
-        // Build a lookup for friend info
-        let friendLookup = Dictionary(uniqueKeysWithValues: friends.map { ($0.id, $0) })
-
-        var items: [SharedWorkoutItem] = []
-        for (_, result) in results {
-            if let record = try? result.get() {
-                let userID = record["userID"] as? String ?? ""
-                let isOwnPost = userID == myAppleUserID
-                let friend = friendLookup[userID]
-
-                items.append(SharedWorkoutItem(
-                    id: record.recordID.recordName,
-                    userID: userID,
-                    friendName: isOwnPost ? "You" : (friend?.displayName ?? "Friend"),
-                    friendProfileImageData: isOwnPost ? myProfileImageData : friend?.profileImageData,
-                    workoutName: record["workoutName"] as? String ?? "Workout",
-                    templateCategory: record["templateCategory"] as? String,
-                    duration: record["duration"] as? TimeInterval ?? 0,
-                    exerciseCount: Int(record["exerciseCount"] as? Int64 ?? 0),
-                    totalSets: Int(record["totalSets"] as? Int64 ?? 0),
-                    completedAt: record["completedAt"] as? Date ?? Date(),
-                    exercisesJSON: record["exercisesJSON"] as? String,
-                    prCount: Int(record["prCount"] as? Int64 ?? 0),
-                    prExerciseNames: Self.parsePRExerciseNames(record["prExerciseNamesJSON"] as? String)
-                ))
-            }
-        }
-
         self.feedItems = items
+        self.feedLoadedSince = since
         self.error = nil
+        self.feedHasOlderPosts = await hasFeedPosts(before: since)
 
         // Batch fetch interactions for the loaded feed
         await fetchInteractionsForFeed()
+    }
+
+    /// Loads the 14-day window before the oldest one loaded ("Show older").
+    func loadOlderFeed() async {
+        guard !isPreviewMode, let loadedSince = feedLoadedSince, !isLoadingOlderFeed else { return }
+        isLoadingOlderFeed = true
+        defer { isLoadingOlderFeed = false }
+
+        let from = Calendar.current.date(byAdding: .day, value: -Self.feedWindowDays, to: loadedSince) ?? loadedSince
+        guard let older = try? await fetchFeedItems(from: from, to: loadedSince) else {
+            self.error = "Could not load older posts. Try again."
+            return
+        }
+        let known = Set(feedItems.map(\.id))
+        feedItems += older.filter { !known.contains($0.id) }
+        feedLoadedSince = from
+        feedHasOlderPosts = await hasFeedPosts(before: from)
+        await fetchInteractions(for: older.map(\.id))
+    }
+
+    /// Posts from you and your grove with `from <= completedAt < to`, newest first,
+    /// following query cursors so a busy window is never cut short.
+    private func fetchFeedItems(from: Date, to: Date?) async throws -> [SharedWorkoutItem] {
+        guard let myAppleUserID else { return [] }
+        let query = CKQuery(recordType: RecordType.sharedWorkout, predicate: feedPredicate(from: from, to: to))
+        query.sortDescriptors = [NSSortDescriptor(key: "completedAt", ascending: false)]
+
+        var records: [CKRecord] = []
+        var (results, cursor) = try await publicDB.records(matching: query, resultsLimit: CKQueryOperation.maximumResults)
+        records += results.compactMap { try? $0.1.get() }
+        while let next = cursor {
+            (results, cursor) = try await publicDB.records(continuingMatchFrom: next, resultsLimit: CKQueryOperation.maximumResults)
+            records += results.compactMap { try? $0.1.get() }
+        }
+
+        let friendLookup = Dictionary(uniqueKeysWithValues: friends.map { ($0.id, $0) })
+        return records.map { record in
+            let userID = record["userID"] as? String ?? ""
+            let isOwnPost = userID == myAppleUserID
+            let friend = friendLookup[userID]
+            return SharedWorkoutItem(
+                id: record.recordID.recordName,
+                userID: userID,
+                friendName: isOwnPost ? "You" : (friend?.displayName ?? "Friend"),
+                friendProfileImageData: isOwnPost ? myProfileImageData : friend?.profileImageData,
+                workoutName: record["workoutName"] as? String ?? "Workout",
+                templateCategory: record["templateCategory"] as? String,
+                duration: record["duration"] as? TimeInterval ?? 0,
+                exerciseCount: Int(record["exerciseCount"] as? Int64 ?? 0),
+                totalSets: Int(record["totalSets"] as? Int64 ?? 0),
+                completedAt: record["completedAt"] as? Date ?? Date(),
+                exercisesJSON: record["exercisesJSON"] as? String,
+                prCount: Int(record["prCount"] as? Int64 ?? 0),
+                prExerciseNames: Self.parsePRExerciseNames(record["prExerciseNamesJSON"] as? String)
+            )
+        }
+    }
+
+    /// Whether any post from you or your grove exists before `date`.
+    private func hasFeedPosts(before date: Date) async -> Bool {
+        guard let myAppleUserID else { return false }
+        let ids = friends.map(\.id) + [myAppleUserID]
+        let pred = NSPredicate(format: "userID IN %@ AND completedAt < %@", ids, date as NSDate)
+        let query = CKQuery(recordType: RecordType.sharedWorkout, predicate: pred)
+        guard let (results, _) = try? await publicDB.records(matching: query, desiredKeys: [], resultsLimit: 1) else {
+            return false
+        }
+        return !results.isEmpty
+    }
+
+    private func feedPredicate(from: Date, to: Date?) -> NSPredicate {
+        let ids = friends.map(\.id) + [myAppleUserID].compactMap { $0 }
+        if let to {
+            return NSPredicate(format: "userID IN %@ AND completedAt >= %@ AND completedAt < %@", ids, from as NSDate, to as NSDate)
+        }
+        return NSPredicate(format: "userID IN %@ AND completedAt >= %@", ids, from as NSDate)
     }
 
     /// Fetch the current user's own shared workouts (for Profile view)
@@ -685,6 +807,8 @@ class CloudKitSocialService {
             }
         }
 
+        // Posts from before this flag existed still count for Socializer.
+        if !items.isEmpty { UserDefaults.standard.set(true, forKey: AchievementService.hasPostedWorkoutKey) }
         mySharedWorkouts = items
 
         // Fetch interactions for these workouts too
@@ -809,6 +933,8 @@ class CloudKitSocialService {
             }
 
             let saved = try await publicDB.save(record)
+            // Socializer counts real posts, not the pre-upload `isShared` flag.
+            UserDefaults.standard.set(true, forKey: AchievementService.hasPostedWorkoutKey)
             return saved.recordID.recordName
         } catch {
             self.error = "Could not share workout: \(error.localizedDescription)"
@@ -935,6 +1061,7 @@ class CloudKitSocialService {
 
     /// Batch fetch all interactions for currently visible feed items
     func fetchInteractionsForFeed() async {
+        if isPreviewMode { return }
         guard let myAppleUserID else { return }
         let workoutIDs = feedItems.map { $0.id }
         guard !workoutIDs.isEmpty else { return }
@@ -1296,6 +1423,7 @@ class CloudKitSocialService {
 
     /// Check how many sunlights the user has available (only from today's completed workouts)
     func checkAvailableSunlight() async {
+        if isPreviewMode { return }
         guard let myAppleUserID else { return }
 
         // Fetch only today's shared workouts
@@ -1360,6 +1488,7 @@ class CloudKitSocialService {
 
     /// Compute root connection scores from all interactions involving the current user
     func fetchRootConnections() async {
+        if isPreviewMode { return }
         guard let myAppleUserID else { return }
 
         // Fetch interactions where I'm the sender

@@ -30,13 +30,13 @@ struct ProfileView: View {
     @Environment(CloudKitSocialService.self) private var socialService
 
     @State private var photoItem: PhotosPickerItem? = nil
+    @State private var unlockedBanner: [AchievementType] = []
     @State private var cameraImage: UIImage? = nil
     @State private var showingPhotoPicker = false
     @State private var showingCamera = false
     @State private var showingPlanEditor = false
     @State private var selectedSharedWorkout: SharedWorkoutItem?
     @State private var achievementProgress: [AchievementService.AchievementProgress] = []
-    @State private var showingAddFriend = false
     @State private var selectedFriendID: String?
 
     private var user: User? { users.first }
@@ -75,6 +75,12 @@ struct ProfileView: View {
     }
 
     var body: some View {
+        screen
+            // Achievements earned outside a workout (creatine, custom exercise, posting…)
+            .achievementUnlockBanner($unlockedBanner)
+    }
+
+    private var screen: some View {
         NavigationStack {
             ScrollView {
                 VStack(spacing: 0) {
@@ -147,9 +153,6 @@ struct ProfileView: View {
             }
             .navigationDestination(item: $selectedFriendID) { userID in
                 FriendProfileView(userID: userID)
-            }
-            .sheet(isPresented: $showingAddFriend) {
-                AddFriendSheet()
             }
             .toolbar(.hidden, for: .navigationBar)
         }
@@ -341,7 +344,7 @@ struct ProfileView: View {
             statDivider
             statColumn(icon: "trophy.fill", value: "\(prExerciseCount)", label: "PRs")
             statDivider
-            statColumn(icon: "person.2.fill", value: "\(socialService.friends.count)", label: "Friends")
+            statColumn(icon: "person.2.fill", value: "\(socialService.friends.count)", label: "Grove")
         }
         .padding(.vertical, 16)
         .frame(maxWidth: .infinity)
@@ -373,28 +376,29 @@ struct ProfileView: View {
 
     // MARK: - Friends Section
 
+    /// Everyone in Grove is in your grove automatically, so there's nothing to add here.
     private var friendsSection: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
-                Image(systemName: "person.2.fill")
+                Image(systemName: "leaf.fill")
                     .font(.caption)
                     .foregroundStyle(Color.groveSage)
-                Text("Friends")
+                Text("Your grove")
                     .font(.headline)
                     .foregroundStyle(Color.groveText)
                 Spacer()
-                if !socialService.friends.isEmpty {
-                    Button {
-                        showingAddFriend = true
-                    } label: {
-                        Image(systemName: "person.badge.plus")
-                            .font(.subheadline)
-                            .foregroundStyle(Color.groveSage)
-                    }
+                if socialService.friendsLoaded && !socialService.friends.isEmpty {
+                    Text(socialService.friends.count == 1 ? "1 person" : "\(socialService.friends.count) people")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                 }
             }
 
-            if !socialService.friendsLoaded {
+            if !socialService.iCloudAvailable {
+                Text("Sign in to iCloud in Settings to see your grove.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            } else if !socialService.friendsLoaded {
                 // Still loading — show placeholder to avoid flashing the empty state
                 HStack(spacing: 14) {
                     ForEach(0..<3, id: \.self) { _ in
@@ -411,40 +415,9 @@ struct ProfileView: View {
                     Spacer()
                 }
             } else if socialService.friends.isEmpty {
-                Button {
-                    showingAddFriend = true
-                } label: {
-                    HStack(spacing: 10) {
-                        Circle()
-                            .strokeBorder(Color.groveSage.opacity(0.4), style: StrokeStyle(lineWidth: 1.5, dash: [4, 3]))
-                            .frame(width: 52, height: 52)
-                            .overlay {
-                                Image(systemName: "person.badge.plus")
-                                    .font(.title3)
-                                    .foregroundStyle(Color.groveSage.opacity(0.6))
-                            }
-
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("Add your first friend")
-                                .font(.subheadline)
-                                .fontWeight(.medium)
-                                .foregroundStyle(Color.groveText)
-                            Text("Share invite codes to connect")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-
-                        Spacer()
-
-                        Image(systemName: "chevron.right")
-                            .font(.caption)
-                            .foregroundStyle(.tertiary)
-                    }
-                    .padding(14)
-                    .background(Color.groveCardBackground)
-                    .clipShape(RoundedRectangle(cornerRadius: 12))
-                }
-                .buttonStyle(.plain)
+                Text("No one else is here yet. Everyone who joins Grove shows up automatically.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             } else {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 14) {
@@ -456,28 +429,6 @@ struct ProfileView: View {
                             }
                             .buttonStyle(.plain)
                         }
-
-                        // Add friend button at end
-                        Button {
-                            showingAddFriend = true
-                        } label: {
-                            VStack(spacing: 6) {
-                                Circle()
-                                    .strokeBorder(Color.groveSage.opacity(0.4), style: StrokeStyle(lineWidth: 1.5, dash: [4, 3]))
-                                    .frame(width: 52, height: 52)
-                                    .overlay {
-                                        Image(systemName: "plus")
-                                            .font(.title3)
-                                            .foregroundStyle(Color.groveSage.opacity(0.6))
-                                    }
-
-                                Text("Add")
-                                    .font(.caption2)
-                                    .foregroundStyle(.secondary)
-                            }
-                            .frame(width: 60)
-                        }
-                        .buttonStyle(.plain)
                     }
                     .padding(.horizontal, 2)
                 }
@@ -771,7 +722,8 @@ struct ProfileView: View {
     private func loadAchievementProgress() {
         if let user = user {
             // Award any achievements the user already qualifies for (retroactive check)
-            let _ = AchievementService.checkAndAwardAchievements(for: user, context: modelContext)
+            let newlyUnlocked = AchievementService.checkAndAwardAchievements(for: user, context: modelContext)
+            if !newlyUnlocked.isEmpty { unlockedBanner = newlyUnlocked.map(\.type) }
             achievementProgress = AchievementService.getProgress(for: user, context: modelContext)
         } else {
             achievementProgress = AchievementType.allCases.map { type in

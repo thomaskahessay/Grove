@@ -63,16 +63,14 @@ struct FriendProfileView: View {
                 }
             }
         }
-        .alert("Remove Friend", isPresented: $showingRemoveConfirmation) {
-            Button("Remove", role: .destructive) {
-                Task {
-                    let success = await socialService.removeFriend(theirUserID: userID)
-                    if success { dismiss() }
-                }
+        .alert("Hide \(profileData?.profile.displayName ?? "their") posts?", isPresented: $showingRemoveConfirmation) {
+            Button("Hide", role: .destructive) {
+                socialService.hideUser(userID, name: profileData?.profile.displayName ?? "Someone")
+                dismiss()
             }
             Button("Cancel", role: .cancel) {}
         } message: {
-            Text("They won't be able to see your shared workouts and you won't see theirs.")
+            Text("Their workouts and plant won't show in your grove on this phone. They aren't told, and they can still see your posts. You can undo this in Settings.")
         }
     }
 
@@ -457,13 +455,13 @@ struct FriendProfileView: View {
         }
     }
 
-    // MARK: - Remove Friend
+    // MARK: - Hide
 
     private var removeFriendButton: some View {
         Button {
             showingRemoveConfirmation = true
         } label: {
-            Label("Remove Friend", systemImage: "person.badge.minus")
+            Label("Hide Their Posts", systemImage: "eye.slash")
                 .font(.subheadline)
                 .fontWeight(.medium)
                 .frame(maxWidth: .infinity)

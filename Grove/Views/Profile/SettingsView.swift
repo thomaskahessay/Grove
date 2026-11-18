@@ -35,6 +35,9 @@ struct SettingsView: View {
             preferencesSection
             trainingPlanSection
             sharingSection
+            if !socialService.hiddenUserNames.isEmpty {
+                hiddenPeopleSection
+            }
             linksSection
             appearanceSection
             dataSection
@@ -318,6 +321,27 @@ struct SettingsView: View {
             Text(user?.autoShareWorkouts == true
                  ? "Workouts are automatically shared when completed using your defaults below. Training program visibility is controlled separately."
                  : "These defaults apply when sharing workouts to the social feed. Training program visibility is controlled separately.")
+        }
+    }
+
+    // MARK: - Hidden People
+
+    private var hiddenPeopleSection: some View {
+        Section {
+            ForEach(socialService.hiddenUserNames.sorted { $0.value < $1.value }, id: \.key) { id, name in
+                HStack {
+                    Text(name)
+                    Spacer()
+                    Button("Show") {
+                        Task { await socialService.unhideUser(id) }
+                    }
+                    .foregroundStyle(Color.groveSage)
+                }
+            }
+        } header: {
+            Text("Hidden from your grove")
+        } footer: {
+            Text("Hiding only affects this phone. They aren't told and can still see your posts.")
         }
     }
 

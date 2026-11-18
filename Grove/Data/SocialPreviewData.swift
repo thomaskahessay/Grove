@@ -305,6 +305,11 @@ enum SocialPreviewData {
         service.rootConnections = rootConnections
         service.availableSunlightCount = 2
         service.myInviteCode = "GROVE-ZZ99"
+        service.groveIsEveryone = true
+        service.friendsLoaded = true
+        service.feedLoadedSince = Calendar.current.date(byAdding: .day, value: -CloudKitSocialService.feedWindowDays, to: Calendar.current.startOfDay(for: Date()))
+        service.feedHasOlderPosts = true
+        service.isPreviewMode = true
         return service
     }
 

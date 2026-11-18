@@ -18,100 +18,61 @@ struct FeedItemCard: View {
 
     private var exercises: [SharedExercise] { item.parsedExercises }
 
+    /// Exercises shown on the card; the rest are summarized as "+N more" (tap for detail).
+    private static let visibleExerciseCount = 3
+
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            // Top row: avatar + name + time ago
-            if isOwnPost {
-                HStack(spacing: 8) {
-                    Text("Your Workout")
-                        .font(.subheadline)
-                        .fontWeight(.semibold)
-                        .foregroundStyle(Color.groveSage)
+            header
 
-                    Spacer()
-
-                    Text(item.timeAgo)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-            } else {
-                HStack(spacing: 8) {
-                    avatarView
-
-                    Text(item.friendName)
-                        .font(.subheadline)
-                        .fontWeight(.semibold)
-                        .foregroundStyle(Color.groveText)
-
-                    Spacer()
-
-                    Text(item.timeAgo)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-                .contentShape(Rectangle())
-                .highPriorityGesture(TapGesture().onEnded {
-                    onProfileTap()
-                })
-            }
-
-            // PR banner
-            if item.hasPRs {
-                prBanner
-            }
-
-            // Workout title + category tag
-            HStack(spacing: 8) {
+            // Workout title + category + PR pill
+            HStack(spacing: 6) {
                 Text(item.workoutName)
                     .font(.headline)
                     .foregroundStyle(Color.groveText)
+                    .lineLimit(1)
 
                 if let category = item.templateCategory,
-                   let tc = TemplateCategory(rawValue: category) {
-                    HStack(spacing: 3) {
-                        Image(systemName: tc.icon)
-                            .font(.system(size: 9))
-                        Text(category)
-                            .font(.system(size: 10, weight: .medium))
-                    }
-                    .foregroundStyle(Color.groveSage)
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 3)
-                    .background(Color.groveSage.opacity(0.12))
-                    .clipShape(Capsule())
+                   let tc = TemplateCategory(rawValue: category),
+                   category != item.workoutName {
+                    Label(category, systemImage: tc.icon)
+                        .labelStyle(.titleAndIcon)
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundStyle(Color.groveSage)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 3)
+                        .background(Color.groveSage.opacity(0.12))
+                        .clipShape(Capsule())
+                }
+
+                if item.hasPRs {
+                    Label(item.prCount == 1 ? "PR" : "\(item.prCount) PRs", systemImage: "star.fill")
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundStyle(Color.groveTerracotta)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 3)
+                        .background(Color.groveTerracotta.opacity(0.12))
+                        .clipShape(Capsule())
                 }
             }
 
-            // Stats row
-            statsRow
-                .padding(.vertical, 8)
-                .background(Color.groveWarmSand.opacity(0.3))
-                .clipShape(RoundedRectangle(cornerRadius: 8))
+            // One quiet stats line instead of a boxed grid
+            if !statsLine.isEmpty {
+                Text(statsLine)
+                    .font(.caption)
+                    .foregroundStyle(Color.groveTextSecondary)
+            }
 
-            // Exercise list (if available)
             if !exercises.isEmpty {
                 exerciseList
+            }
 
-                // "Use as Template" button
-                if !isOwnPost, let onUseTemplate {
-                    Button {
-                        onUseTemplate()
-                    } label: {
-                        HStack(spacing: 6) {
-                            Image(systemName: "doc.badge.plus")
-                                .font(.caption)
-                            Text("Use as Template")
-                                .font(.caption)
-                                .fontWeight(.medium)
-                        }
-                        .foregroundStyle(Color.groveSage)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 8)
-                        .background(Color.groveSage.opacity(0.1))
-                        .clipShape(RoundedRectangle(cornerRadius: 8))
-                    }
-                    .buttonStyle(.plain)
-                }
+            // Who reacted, by name (shown on your own posts too)
+            if let reactions = reactionSummary {
+                Text(reactions)
+                    .font(.caption)
+                    .foregroundStyle(Color.groveTextSecondary)
+                    .lineLimit(2)
             }
 
             // Interaction bar — hidden on own posts
@@ -134,29 +95,13 @@ struct FeedItemCard: View {
             }
         }
         .padding(14)
+        // One accent: the growing scene behind the card reflects water and sunlight.
+        // PRs are marked with the pill above rather than a border/glow/shimmer as well.
         .background {
             CardSceneBackgroundView(interactions: interactions, hasPRs: item.hasPRs)
         }
         .clipShape(RoundedRectangle(cornerRadius: 12))
-        .overlay(
-            RoundedRectangle(cornerRadius: 12)
-                .strokeBorder(
-                    LinearGradient(
-                        colors: [Color.groveTerracotta.opacity(0.4), Color.groveTerracotta.opacity(0.15)],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    ),
-                    lineWidth: 1.5
-                )
-                .opacity(item.hasPRs ? 1 : 0)
-        )
-        .waterShimmer(active: interactions?.isWaterShimmerActive ?? false)
-        .sunlightGlow(active: interactions?.isSunlightGlowActive ?? false)
-        .shadow(
-            color: item.hasPRs ? Color.groveTerracotta.opacity(0.15) : .black.opacity(0.05),
-            radius: item.hasPRs ? 10 : 6,
-            y: 2
-        )
+        .shadow(color: .black.opacity(0.05), radius: 6, y: 2)
         .overlay {
             if showWaterAnimation {
                 WaterTapAnimation {
@@ -175,6 +120,11 @@ struct FeedItemCard: View {
             }
         }
         .clipShape(RoundedRectangle(cornerRadius: 12))
+        .contextMenu {
+            if let onUseTemplate, !exercises.isEmpty {
+                Button("Use as template", systemImage: "doc.badge.plus", action: onUseTemplate)
+            }
+        }
         .onChange(of: triggerSeedAnimation) { _, shouldAnimate in
             if shouldAnimate {
                 showSeedAnimation = true
@@ -184,75 +134,115 @@ struct FeedItemCard: View {
         }
     }
 
-    // MARK: - PR Banner
+    // MARK: - Header
 
-    private var prBanner: some View {
-        HStack(spacing: 6) {
-            Image(systemName: "star.fill")
-                .font(.caption)
-                .foregroundStyle(Color.groveTerracotta)
-
-            Text(item.prCount == 1 ? "Personal Record" : "\(item.prCount) Personal Records")
-                .font(.caption)
-                .fontWeight(.semibold)
-                .foregroundStyle(Color.groveTerracotta)
+    private var header: some View {
+        HStack(spacing: 8) {
+            Group {
+                if isOwnPost {
+                    Text("Your workout")
+                        .font(.subheadline)
+                        .fontWeight(.semibold)
+                        .foregroundStyle(Color.groveSage)
+                } else {
+                    HStack(spacing: 8) {
+                        avatarView
+                        Text(item.friendName)
+                            .font(.subheadline)
+                            .fontWeight(.semibold)
+                            .foregroundStyle(Color.groveText)
+                    }
+                    .contentShape(Rectangle())
+                    .highPriorityGesture(TapGesture().onEnded {
+                        onProfileTap()
+                    })
+                }
+            }
 
             Spacer()
 
-            Text("PR")
-                .font(.system(size: 10, weight: .bold))
-                .foregroundStyle(.white)
-                .padding(.horizontal, 6)
-                .padding(.vertical, 2)
-                .background(Color.groveTerracotta)
-                .clipShape(Capsule())
-        }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 6)
-        .background(Color.groveTerracotta.opacity(0.12))
-        .clipShape(RoundedRectangle(cornerRadius: 8))
-    }
+            Text(item.timeAgo)
+                .font(.caption)
+                .foregroundStyle(.secondary)
 
-    // MARK: - Stats Row
-
-    private var statsRow: some View {
-        HStack(spacing: 0) {
-            if item.exerciseCount > 0 {
-                feedStatColumn(value: "\(item.exerciseCount)", label: "Exercises")
-            }
-            if item.totalSets > 0 {
-                feedStatColumn(value: "\(item.totalSets)", label: "Sets")
-            }
-            if item.duration > 0 {
-                feedStatColumn(value: item.durationText, label: "Duration")
-            }
-            if item.prCount > 0 {
-                feedStatColumn(value: "\(item.prCount)", label: item.prCount == 1 ? "PR" : "PRs", isPR: true)
+            // Side actions live here instead of a full-width button.
+            if let onUseTemplate, !exercises.isEmpty {
+                Menu {
+                    Button("Use as template", systemImage: "doc.badge.plus", action: onUseTemplate)
+                } label: {
+                    Image(systemName: "ellipsis")
+                        .font(.subheadline)
+                        .foregroundStyle(Color.groveTextSecondary)
+                        .frame(width: 28, height: 28)
+                        .contentShape(Rectangle())
+                }
+                .menuStyle(.button)
+                .buttonStyle(.plain)
+                .accessibilityLabel("More actions")
             }
         }
     }
 
-    private func feedStatColumn(value: String, label: String, isPR: Bool = false) -> some View {
-        VStack(spacing: 2) {
-            Text(value)
-                .font(.subheadline)
-                .fontWeight(.bold)
-                .foregroundStyle(isPR ? Color.groveTerracotta : Color.groveText)
-                .lineLimit(1)
-                .minimumScaleFactor(0.7)
-            Text(label)
-                .font(.caption2)
-                .foregroundStyle(isPR ? Color.groveTerracotta.opacity(0.8) : Color.groveTextSecondary)
+    /// e.g. "5 exercises · 15 sets · 52 min".
+    private var statsLine: String {
+        var parts: [String] = []
+        if item.exerciseCount > 0 { parts.append(item.exerciseCount == 1 ? "1 exercise" : "\(item.exerciseCount) exercises") }
+        if item.totalSets > 0 { parts.append(item.totalSets == 1 ? "1 set" : "\(item.totalSets) sets") }
+        if item.duration > 0 { parts.append(item.durationText) }
+        return parts.joined(separator: " · ")
+    }
+
+    // MARK: - Reactions
+
+    /// e.g. "Watered by Sam and Alex · Sunlight from Mika · Jo: “Strong start”".
+    private var reactionSummary: String? {
+        guard let interactions else { return nil }
+        var parts: [String] = []
+        let waterers = interactions.waterers.map(\.displayName)
+        if !waterers.isEmpty { parts.append("Watered by " + Self.nameList(waterers)) }
+        let sunlighters = interactions.sunlighters.map(\.senderName)
+        if !sunlighters.isEmpty { parts.append("Sunlight from " + Self.nameList(sunlighters)) }
+        if let seed = interactions.seeds.last {
+            let extra = interactions.seeds.count > 1 ? " +\(interactions.seeds.count - 1)" : ""
+            parts.append("\(Self.firstName(seed.senderName)): “\(seed.message)”\(extra)")
         }
-        .frame(maxWidth: .infinity)
+        return parts.isEmpty ? nil : parts.joined(separator: " · ")
+    }
+
+    /// "Sam", "Sam and Alex", "Sam, Alex and 2 others" — "You" listed first.
+    static func nameList(_ names: [String]) -> String {
+        var unique: [String] = []
+        for name in names.map(firstName) where !unique.contains(name) { unique.append(name) }
+        if let i = unique.firstIndex(of: "You") { unique.insert(unique.remove(at: i), at: 0) }
+        switch unique.count {
+        case 0: return ""
+        case 1: return unique[0]
+        case 2: return "\(unique[0]) and \(unique[1])"
+        case 3: return "\(unique[0]), \(unique[1]) and \(unique[2])"
+        default: return "\(unique[0]), \(unique[1]) and \(unique.count - 2) others"
+        }
+    }
+
+    private static func firstName(_ name: String) -> String {
+        name.components(separatedBy: " ").first ?? name
     }
 
     // MARK: - Exercise List
 
     private var exerciseList: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            ForEach(Array(exercises.enumerated()), id: \.offset) { _, exercise in
+        // PR exercises first so they're never hidden behind "+N more".
+        let ordered = exercises.filter(\.isPR) + exercises.filter { !$0.isPR }
+        let shown = ordered.prefix(Self.visibleExerciseCount)
+        let hiddenCount = ordered.count - shown.count
+        return VStack(alignment: .leading, spacing: 4) {
+            ForEach(Array(shown.enumerated()), id: \.offset) { _, exercise in
                 exerciseRow(exercise)
+            }
+            if hiddenCount > 0 {
+                Text("+\(hiddenCount) more")
+                    .font(.caption2)
+                    .foregroundStyle(Color.groveTextSecondary)
+                    .padding(.leading, 20)
             }
         }
     }
@@ -269,16 +259,6 @@ struct FeedItemCard: View {
                 .fontWeight(exercise.isPR ? .semibold : .regular)
                 .foregroundStyle(Color.groveText)
                 .lineLimit(1)
-
-            if exercise.isPR {
-                Text("PR")
-                    .font(.system(size: 9, weight: .bold))
-                    .foregroundStyle(.white)
-                    .padding(.horizontal, 4)
-                    .padding(.vertical, 1)
-                    .background(Color.groveTerracotta)
-                    .clipShape(Capsule())
-            }
 
             Spacer(minLength: 4)
 
