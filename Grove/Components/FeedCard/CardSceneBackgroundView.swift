@@ -6,9 +6,14 @@ struct CardSceneBackgroundView: View {
     let interactions: InteractionSummary?
     let hasPRs: Bool
     var soilPosition: CGFloat = 0.85
+    /// Draw soil and a planted seed when nobody has interacted yet, instead of an empty
+    /// card (used by the profile's shared-workout tiles, which have no text over them).
+    var showsSeedWhenEmpty: Bool = false
+
+    @Environment(\.groveAudienceSize) private var audienceSize
 
     private var growth: CardGrowthState {
-        CardGrowthState(from: interactions)
+        CardGrowthState(from: interactions, audience: audienceSize)
     }
 
     var body: some View {
@@ -18,6 +23,18 @@ struct CardSceneBackgroundView: View {
                 Color.groveTerracotta.opacity(0.06)
             } else {
                 Color.groveCardBackground
+            }
+
+            if !growth.hasGrowth && showsSeedWhenEmpty {
+                // Static: nothing to animate yet.
+                Canvas { context, canvasSize in
+                    CardSceneRenderer.drawPlantedSeed(
+                        context: &context,
+                        size: canvasSize,
+                        soilPosition: soilPosition
+                    )
+                }
+                .opacity(0.85)
             }
 
             // Living scene (only render if there's something to show)
@@ -35,12 +52,13 @@ struct CardSceneBackgroundView: View {
                             soilPosition: soilPosition
                         )
                     }
-                    .opacity(0.35)
+                    .opacity(showsSeedWhenEmpty ? 0.9 : 0.35)
                 }
                 .drawingGroup()
 
-                // Gradient scrim for text readability:
+                // Gradient scrim for text readability (tiles have no text over the scene):
                 // Stronger at top (where text lives), weaker at bottom (where plant grows)
+                if !showsSeedWhenEmpty {
                 LinearGradient(
                     colors: [
                         Color.groveCardBackground.opacity(hasPRs ? 0.65 : 0.7),
@@ -49,6 +67,7 @@ struct CardSceneBackgroundView: View {
                     startPoint: .top,
                     endPoint: .bottom
                 )
+                }
             }
 
             // Sunlight rays rendered at full opacity (not dimmed by scene opacity)
@@ -133,4 +152,12 @@ struct CardSceneBackgroundView: View {
     }
     .padding()
     .background(Color.groveBackground)
+}
+
+// MARK: - Grove size
+
+extension EnvironmentValues {
+    /// How many other people are in the grove: the most people who could react to a
+    /// post. Card growth scales to it. Set from the friends list in ContentView.
+    @Entry var groveAudienceSize: Int = 2
 }

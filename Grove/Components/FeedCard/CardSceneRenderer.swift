@@ -65,6 +65,42 @@ struct CardSceneRenderer {
 
     }
 
+    // MARK: - Planted Seed (no interactions yet)
+
+    /// The starting scene before anyone interacts: a soil band with a seed and a tiny
+    /// shoot where the plant will grow (same spot as `draw` puts it).
+    static func drawPlantedSeed(
+        context: inout GraphicsContext,
+        size: CGSize,
+        soilPosition: CGFloat = 0.85
+    ) {
+        let soilTop = size.height * soilPosition
+        let plantX = size.width * 0.72
+        drawSoil(context: &context, size: size, soilTop: soilTop, moisture: 0.5)
+
+        // Seed resting just in the soil
+        let seedY = soilTop + 2
+        let seedRect = CGRect(x: plantX - 8, y: seedY - 5.5, width: 16, height: 11)
+        context.fill(Path(ellipseIn: seedRect), with: .color(Color(red: 0.62, green: 0.48, blue: 0.33)))
+        context.stroke(Path(ellipseIn: seedRect), with: .color(soilDark.opacity(0.6)), lineWidth: 0.8)
+
+        // A curled shoot just breaking out of the seed
+        var shoot = Path()
+        shoot.move(to: CGPoint(x: plantX, y: seedY - 5))
+        shoot.addQuadCurve(to: CGPoint(x: plantX + 7, y: seedY - 13),
+                           control: CGPoint(x: plantX + 0.5, y: seedY - 13.5))
+        context.stroke(shoot, with: .color(stemLight), style: StrokeStyle(lineWidth: 2.2, lineCap: .round))
+
+        // First leaf
+        var leaf = Path()
+        leaf.move(to: CGPoint(x: plantX + 7, y: seedY - 13))
+        leaf.addQuadCurve(to: CGPoint(x: plantX + 15, y: seedY - 15),
+                          control: CGPoint(x: plantX + 11, y: seedY - 19))
+        leaf.addQuadCurve(to: CGPoint(x: plantX + 7, y: seedY - 13),
+                          control: CGPoint(x: plantX + 12, y: seedY - 12))
+        context.fill(leaf, with: .color(leafMid))
+    }
+
     // MARK: - Sky
 
     private static func drawSkyGradient(context: inout GraphicsContext, size: CGSize, lushness: CGFloat) {
@@ -213,6 +249,9 @@ struct CardSceneRenderer {
         }
     }
 
+    // Shapes follow the streak plant: broad paired leaves, a rounded canopy, and small
+    // terracotta / gold / blush flowers. Sizes scale with the scene's height.
+
     // MARK: Sprout (stage 0-1)
 
     private static func drawSprout(
@@ -222,38 +261,24 @@ struct CardSceneRenderer {
         progress: CGFloat,
         swayOffset: CGFloat
     ) {
-        let stemH = size.height * 0.08 * progress
-        guard stemH > 0 else { return }
-
+        let unit = min(size.height, size.width * 0.9)
+        let stemH = unit * (0.12 + 0.08 * progress)
         let topSway = swayForHeight(1.0, swayOffset, scale: 1.5)
         let stemTop = CGPoint(x: base.x + topSway, y: base.y - stemH)
 
-        // Stem
         var stem = Path()
         stem.move(to: base)
-        stem.addQuadCurve(
-            to: stemTop,
-            control: CGPoint(x: base.x + topSway * 0.5, y: base.y - stemH * 0.5)
-        )
-        context.stroke(stem, with: .linearGradient(
-            Gradient(colors: [stemGreen, stemLight]),
-            startPoint: base, endPoint: stemTop
-        ), lineWidth: 1.5)
+        stem.addQuadCurve(to: stemTop, control: CGPoint(x: base.x - 1 + topSway * 0.5, y: base.y - stemH * 0.5))
+        context.stroke(stem, with: .color(stemGreen), style: StrokeStyle(lineWidth: max(2, unit * 0.022), lineCap: .round))
 
-        // Cotyledon leaves (appear as progress → 1)
-        if progress > 0.3 {
-            let leafProgress = (progress - 0.3) / 0.7
-            let leafLen = size.width * 0.04 * leafProgress
-            let leafSway = swayOffset * 0.03
-
-            drawLeaf(context: &context, origin: stemTop, length: leafLen,
-                     angle: -.pi / 3 + leafSway, width: leafLen * 0.45, shade: 0)
-            drawLeaf(context: &context, origin: stemTop, length: leafLen,
-                     angle: .pi + .pi / 3 + leafSway, width: leafLen * 0.45, shade: 1)
-        }
+        // Two broad seed leaves opening at the top
+        let leafLen = unit * (0.09 + 0.05 * progress)
+        let sway = swayOffset * 0.03
+        drawLeaf(context: &context, origin: stemTop, length: leafLen, angle: -.pi * 0.85 + sway, width: leafLen * 0.8, shade: 0)
+        drawLeaf(context: &context, origin: stemTop, length: leafLen, angle: -.pi * 0.18 + sway, width: leafLen * 0.8, shade: 1)
     }
 
-    // MARK: Seedling (stage 1-2.5)
+    // MARK: Young plant (stage 1-2.5)
 
     private static func drawSeedling(
         context: inout GraphicsContext,
@@ -262,39 +287,32 @@ struct CardSceneRenderer {
         progress: CGFloat,
         swayOffset: CGFloat
     ) {
-        let stemH = size.height * (0.08 + 0.08 * progress)
+        let unit = min(size.height, size.width * 0.9)
+        let stemH = unit * (0.24 + 0.14 * progress)
         let topSway = swayForHeight(1.0, swayOffset, scale: 2.0)
-        let midSway = swayForHeight(0.5, swayOffset, scale: 2.0)
         let stemTop = CGPoint(x: base.x + topSway, y: base.y - stemH)
+        let ctrl1 = CGPoint(x: base.x - unit * 0.025, y: base.y - stemH * 0.35)
+        let ctrl2 = CGPoint(x: base.x + unit * 0.02 + topSway * 0.7, y: base.y - stemH * 0.7)
 
-        // S-curved stem
-        let ctrl1 = CGPoint(x: base.x - 2 + midSway * 0.3, y: base.y - stemH * 0.3)
-        let ctrl2 = CGPoint(x: base.x + 3 + topSway * 0.7, y: base.y - stemH * 0.7)
+        drawTaperedStem(context: &context, from: base, to: stemTop, control1: ctrl1, control2: ctrl2,
+                        baseWidth: max(2.5, unit * 0.03), topWidth: max(1.5, unit * 0.015))
 
-        var stem = Path()
-        stem.move(to: base)
-        stem.addCurve(to: stemTop, control1: ctrl1, control2: ctrl2)
-        context.stroke(stem, with: .linearGradient(
-            Gradient(colors: [stemGreen, stemLight]),
-            startPoint: base, endPoint: stemTop
-        ), lineWidth: 1.8)
-
-        // Leaves along stem (2-6 based on progress)
-        let leafCount = 2 + Int(progress * 4)
-        let leafSway = swayOffset * 0.04
-        let baseLeafLen = size.width * 0.035
-
+        // A few broad leaves, alternating sides, largest at the bottom
+        let leafCount = 3 + Int((progress * 1).rounded())
+        let sway = swayOffset * 0.04
         for i in 0..<leafCount {
-            let t = CGFloat(i + 1) / CGFloat(leafCount + 1) * 0.85 + 0.1
+            let t = 0.3 + CGFloat(i) / CGFloat(leafCount) * 0.6
             let pt = cubicBezierPoint(from: base, to: stemTop, control1: ctrl1, control2: ctrl2, t: t)
+            let len = unit * (0.17 - CGFloat(i) * 0.02)
             let side: CGFloat = i % 2 == 0 ? -1 : 1
-            let angle = side * (.pi / 3 + CGFloat(i) * 0.08) + leafSway
-            let len = baseLeafLen * (0.7 + t * 0.5)
-            drawLeaf(context: &context, origin: pt, length: len, angle: angle, width: len * 0.4, shade: i % 3)
+            drawLeaf(context: &context, origin: pt, length: len, angle: -.pi / 2 + side * 1.0 + sway,
+                     width: len * 0.8, shade: i % 3)
         }
 
-        // Top bud
-        drawBud(context: &context, at: stemTop, size: size.width * 0.012, swayOffset: swayOffset)
+        // Fresh top pair
+        let topLen = unit * 0.1
+        drawLeaf(context: &context, origin: stemTop, length: topLen, angle: -.pi / 2 - 0.55 + sway, width: topLen * 0.75, shade: 2)
+        drawLeaf(context: &context, origin: stemTop, length: topLen, angle: -.pi / 2 + 0.5 + sway, width: topLen * 0.75, shade: 1)
     }
 
     // MARK: Bush (stage 2.5-4)
@@ -307,86 +325,42 @@ struct CardSceneRenderer {
         bloomProgress: CGFloat,
         swayOffset: CGFloat
     ) {
-        let stemH = size.height * (0.16 + 0.06 * progress)
-        let topSway = swayForHeight(1.0, swayOffset, scale: 2.2)
-        let midSway = swayForHeight(0.5, swayOffset, scale: 2.2)
-        let stemTop = CGPoint(x: base.x + topSway, y: base.y - stemH)
+        let unit = min(size.height, size.width * 0.9)
+        let scale = 0.8 + 0.2 * progress
+        let trunkH = unit * 0.24 * scale
+        let sway = swayForHeight(1.0, swayOffset, scale: 1.4)
+        let crown = CGPoint(x: base.x + sway, y: base.y - trunkH)
 
-        // Main stem (thicker)
-        let ctrl1 = CGPoint(x: base.x - 3 + midSway * 0.3, y: base.y - stemH * 0.3)
-        let ctrl2 = CGPoint(x: base.x + 4 + topSway * 0.7, y: base.y - stemH * 0.7)
+        // Trunk with two short limbs
+        let bark = Color(red: 0.43, green: 0.32, blue: 0.25)
+        var trunk = Path()
+        trunk.move(to: base)
+        trunk.addQuadCurve(to: crown, control: CGPoint(x: base.x - unit * 0.01, y: base.y - trunkH * 0.5))
+        trunk.move(to: CGPoint(x: base.x, y: base.y - trunkH * 0.5))
+        trunk.addLine(to: CGPoint(x: base.x - unit * 0.11 + sway * 0.6, y: base.y - trunkH * 0.95))
+        trunk.move(to: CGPoint(x: base.x, y: base.y - trunkH * 0.6))
+        trunk.addLine(to: CGPoint(x: base.x + unit * 0.12 + sway * 0.6, y: base.y - trunkH * 1.05))
+        context.stroke(trunk, with: .color(bark), style: StrokeStyle(lineWidth: max(2.5, unit * 0.03), lineCap: .round))
 
-        drawTaperedStem(context: &context, from: base, to: stemTop,
-                        control1: ctrl1, control2: ctrl2,
-                        baseWidth: 3.5, topWidth: 1.5)
-
-        // Branches
-        let branchCount = 2 + Int(progress * 2)
-        let branchDefs: [(t: CGFloat, angle: CGFloat, lenFactor: CGFloat)] = [
-            (0.45, -.pi / 4, 0.5),
-            (0.55, .pi / 3.5, 0.6),
-            (0.7, -.pi / 3, 0.55),
-            (0.8, .pi / 4, 0.45),
+        // Rounded canopy of overlapping leaf masses (darker behind, lighter in front)
+        let r = unit * 0.17 * scale
+        let blobs: [(dx: CGFloat, dy: CGFloat, rr: CGFloat, color: Color)] = [
+            (0, -0.25, 1.0, leafDark),
+            (-0.75, 0.25, 0.7, leafMid),
+            (0.8, 0.2, 0.75, leafMid),
+            (-0.15, -0.75, 0.62, leafLight),
+            (0.45, -0.45, 0.5, leafHighlight),
         ]
-
-        var branchEnds: [CGPoint] = []
-
-        for i in 0..<min(branchCount, branchDefs.count) {
-            let def = branchDefs[i]
-            let branchStart = cubicBezierPoint(from: base, to: stemTop, control1: ctrl1, control2: ctrl2, t: def.t)
-            let branchSway = swayForHeight(def.t, swayOffset, scale: 1.8, phase: CGFloat(i))
-            let branchLen = stemH * def.lenFactor * 0.5
-            let branchEnd = CGPoint(
-                x: branchStart.x + cos(def.angle) * branchLen + branchSway,
-                y: branchStart.y + sin(def.angle) * branchLen
-            )
-
-            // Draw branch
-            var branch = Path()
-            branch.move(to: branchStart)
-            branch.addQuadCurve(
-                to: branchEnd,
-                control: CGPoint(
-                    x: (branchStart.x + branchEnd.x) / 2,
-                    y: min(branchStart.y, branchEnd.y) - 3
-                )
-            )
-            context.stroke(branch, with: .color(stemGreen.opacity(0.8)), lineWidth: 1.2)
-            branchEnds.append(branchEnd)
-
-            // Leaves at branch end (cluster of 3-4)
-            let leafSway = swayOffset * 0.05
-            let leafLen = size.width * 0.03
-            for j in 0..<(3 + (i % 2)) {
-                let angle = def.angle + CGFloat(j - 1) * 0.5 + leafSway
-                drawLeaf(context: &context, origin: branchEnd, length: leafLen,
-                         angle: angle, width: leafLen * 0.4, shade: (i + j) % 3)
-            }
+        var flowerSpots: [CGPoint] = []
+        for blob in blobs.prefix(progress > 0.4 ? 5 : 4) {
+            let c = CGPoint(x: crown.x + blob.dx * r, y: crown.y + blob.dy * r)
+            let rr = r * blob.rr
+            context.fill(Path(ellipseIn: CGRect(x: c.x - rr, y: c.y - rr, width: rr * 2, height: rr * 2)), with: .color(blob.color))
+            flowerSpots.append(CGPoint(x: c.x - rr * 0.25, y: c.y - rr * 0.35))
         }
 
-        // Main stem leaves
-        let stemLeafCount = 4 + Int(progress * 3)
-        let leafSway = swayOffset * 0.04
-        for i in 0..<stemLeafCount {
-            let t = CGFloat(i + 1) / CGFloat(stemLeafCount + 1) * 0.8 + 0.1
-            let pt = cubicBezierPoint(from: base, to: stemTop, control1: ctrl1, control2: ctrl2, t: t)
-            let side: CGFloat = i % 2 == 0 ? -1 : 1
-            let angle = side * (.pi / 3 + CGFloat(i) * 0.06) + leafSway
-            let len = size.width * 0.028 * (0.6 + t * 0.5)
-            drawLeaf(context: &context, origin: pt, length: len, angle: angle, width: len * 0.4, shade: i % 3)
-        }
-
-        // Top crown leaves
-        let crownLeafLen = size.width * 0.035
-        for i in 0..<3 {
-            let angle = CGFloat(i - 1) * 0.6 + swayOffset * 0.04
-            drawLeaf(context: &context, origin: stemTop, length: crownLeafLen,
-                     angle: angle - .pi / 2, width: crownLeafLen * 0.4, shade: i)
-        }
-
-        // Flowers (based on bloomProgress)
         if bloomProgress > 0 {
-            drawFlowers(context: &context, stemTop: stemTop, branchEnds: branchEnds,
+            drawFlowers(context: &context, stemTop: flowerSpots[0], branchEnds: Array(flowerSpots.dropFirst()),
                         bloomProgress: bloomProgress, swayOffset: swayOffset)
         }
     }
@@ -497,37 +471,28 @@ struct CardSceneRenderer {
         bloomProgress: CGFloat,
         swayOffset: CGFloat
     ) {
-        // Flower positions: at stem top and branch ends
-        var flowerPositions: [CGPoint] = [stemTop]
-        flowerPositions.append(contentsOf: branchEnds)
-
-        let maxFlowers = bloomProgress >= 1.0 ? min(flowerPositions.count, 5) : min(Int(bloomProgress * 3) + 1, flowerPositions.count)
-
-        for i in 0..<maxFlowers {
-            let pos = flowerPositions[i]
-            let radius: CGFloat = 4.0 + bloomProgress * 2.0
-
-            // Golden glow behind flower
-            if bloomProgress > 0.5 {
-                let glowR = radius * 2.5
-                let glowRect = CGRect(x: pos.x - glowR, y: pos.y - glowR, width: glowR * 2, height: glowR * 2)
-                context.fill(Path(ellipseIn: glowRect), with: .color(flowerGlow.opacity(0.08 * bloomProgress)))
-            }
-
-            // 5-petal flower
+        let spots = [stemTop] + branchEnds
+        // Half bloom: a few flowers; full bloom: one on every leaf mass.
+        let count = bloomProgress >= 1.0 ? spots.count : max(2, spots.count / 2)
+        let palette: [Color] = [
+            Color(red: 0.77, green: 0.47, blue: 0.36),  // terracotta
+            Color(red: 0.91, green: 0.78, blue: 0.48),  // gold
+            flowerPetal,                                 // blush
+        ]
+        for (i, pos) in spots.prefix(count).enumerated() {
+            let radius: CGFloat = 3.2 + bloomProgress * 1.2
+            let petal = palette[i % palette.count]
             let petalR = radius * 0.55
             for j in 0..<5 {
                 let angle = CGFloat(j) * (.pi * 2 / 5) - .pi / 2 + swayOffset * 0.02
                 let px = pos.x + cos(angle) * radius * 0.6
                 let py = pos.y + sin(angle) * radius * 0.6
-                let rect = CGRect(x: px - petalR, y: py - petalR, width: petalR * 2, height: petalR * 2)
-                context.fill(Path(ellipseIn: rect), with: .color(flowerPetal))
+                context.fill(Path(ellipseIn: CGRect(x: px - petalR, y: py - petalR, width: petalR * 2, height: petalR * 2)),
+                             with: .color(petal))
             }
-
-            // Center
-            let cr = radius * 0.3
-            let centerRect = CGRect(x: pos.x - cr, y: pos.y - cr, width: cr * 2, height: cr * 2)
-            context.fill(Path(ellipseIn: centerRect), with: .color(flowerCenter))
+            let cr = radius * 0.32
+            context.fill(Path(ellipseIn: CGRect(x: pos.x - cr, y: pos.y - cr, width: cr * 2, height: cr * 2)),
+                         with: .color(flowerCenter))
         }
     }
 

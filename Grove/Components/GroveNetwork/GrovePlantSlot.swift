@@ -69,16 +69,20 @@ struct GrovePlantSlot: View {
         .accessibilityAddTraits(.isButton)
     }
 
-    /// One dot per day of their weekly goal, filled as they train (extra workouts add
-    /// filled dots, up to seven). Without a shared goal, just a dot per workout.
+    /// One dot per day of their weekly goal, filled as they train. Days beyond the goal
+    /// add terracotta dots (up to seven in all), so "3-day goal plus 2 extra" doesn't read
+    /// as a 5-day goal. Without a shared goal, just a dot per workout.
     private func goalDots(_ week: GroveWeekProgress) -> some View {
         let total = min(max(week.target ?? 0, week.trained), 7)
         let size: CGFloat = isUser ? 5 : 4
         return HStack(spacing: isUser ? 2.5 : 2) {
             ForEach(0..<total, id: \.self) { index in
                 if index < week.trained {
+                    let isExtra = week.target.map { index >= $0 } ?? false
                     Circle()
-                        .fill(week.reachedGoal ? Color.groveSage : Color.groveSage.opacity(0.8))
+                        .fill(isExtra
+                              ? Color.groveTerracotta
+                              : (week.reachedGoal ? Color.groveSage : Color.groveSage.opacity(0.8)))
                         .frame(width: size, height: size)
                 } else {
                     Circle()
@@ -96,7 +100,10 @@ struct GrovePlantSlot: View {
         if let week {
             let days = week.trained == 1 ? "1 workout" : "\(week.trained) workouts"
             text += ", \(days) this week"
-            if let target = week.target { text += " of \(target)" }
+            if let target = week.target {
+                text += " of \(target)"
+                if week.trained > target { text += ", \(week.trained - target) extra" }
+            }
         }
         return text
     }

@@ -893,81 +893,39 @@ struct ProfileView: View {
 
     // MARK: - Shared Workouts Grid
 
+    /// How many shared workouts the profile shows before "See all".
+    private static let sharedWorkoutPreviewCount = 6
+
     private var sharedWorkoutsSection: some View {
         Group {
             if !socialService.mySharedWorkouts.isEmpty {
                 VStack(alignment: .leading, spacing: 12) {
-                    // Section header
                     HStack {
                         Label("Shared Workouts", systemImage: "square.and.arrow.up.fill")
                             .font(.headline)
                             .foregroundStyle(Color.groveText)
                         Spacer()
-                        Text("\(socialService.mySharedWorkouts.count)")
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
+                        if socialService.mySharedWorkouts.count > Self.sharedWorkoutPreviewCount {
+                            NavigationLink {
+                                AllSharedWorkoutsView()
+                            } label: {
+                                Text("See All")
+                                    .font(.subheadline)
+                                    .foregroundStyle(Color.groveSage)
+                            }
+                        }
                     }
                     .padding(.leading, 4)
 
-                    // 2-column grid
                     LazyVGrid(columns: sharedWorkoutColumns, spacing: 12) {
-                        ForEach(socialService.mySharedWorkouts) { item in
-                            let interactions = socialService.interactionsByWorkout[item.id]
-
+                        ForEach(socialService.mySharedWorkouts.prefix(Self.sharedWorkoutPreviewCount)) { item in
                             Button {
                                 selectedSharedWorkout = item
                             } label: {
-                                VStack(alignment: .leading, spacing: 0) {
-                                    // Plant scene thumbnail
-                                    CardSceneBackgroundView(
-                                        interactions: interactions,
-                                        hasPRs: item.hasPRs
-                                    )
-                                    .frame(height: 120)
-                                    .clipShape(UnevenRoundedRectangle(
-                                        topLeadingRadius: 12,
-                                        bottomLeadingRadius: 0,
-                                        bottomTrailingRadius: 0,
-                                        topTrailingRadius: 12
-                                    ))
-
-                                    // Text content
-                                    VStack(alignment: .leading, spacing: 3) {
-                                        Text(item.workoutName)
-                                            .font(.caption)
-                                            .fontWeight(.semibold)
-                                            .foregroundStyle(Color.groveText)
-                                            .lineLimit(1)
-
-                                        Text(sharedWorkoutDateText(item.completedAt))
-                                            .font(.caption2)
-                                            .foregroundStyle(.secondary)
-
-                                        HStack(spacing: 4) {
-                                            HStack(spacing: 2) {
-                                                Image(systemName: "figure.strengthtraining.traditional")
-                                                    .font(.system(size: 8))
-                                                Text("\(item.exerciseCount)")
-                                                    .font(.system(size: 10))
-                                            }
-
-                                            Text("\u{00B7}")
-                                                .font(.system(size: 10))
-
-                                            HStack(spacing: 2) {
-                                                Image(systemName: "arrow.triangle.2.circlepath")
-                                                    .font(.system(size: 8))
-                                                Text("\(item.totalSets)")
-                                                    .font(.system(size: 10))
-                                            }
-                                        }
-                                        .foregroundStyle(.secondary)
-                                    }
-                                    .padding(.horizontal, 8)
-                                    .padding(.vertical, 8)
-                                }
-                                .background(Color.groveCardBackground)
-                                .clipShape(RoundedRectangle(cornerRadius: 12))
+                                SharedWorkoutTile(
+                                    item: item,
+                                    interactions: socialService.interactionsByWorkout[item.id]
+                                )
                             }
                             .buttonStyle(.plain)
                         }
@@ -975,12 +933,6 @@ struct ProfileView: View {
                 }
             }
         }
-    }
-
-    private func sharedWorkoutDateText(_ date: Date) -> String {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "MMM d, yyyy"
-        return formatter.string(from: date)
     }
 
     // MARK: - Helpers

@@ -527,10 +527,9 @@ struct WorkoutInteractionDetailView: View {
                         .font(.caption2)
                         .foregroundStyle(Color.groveTextSecondary)
                 }
-                Text("\"\(seed.message)\"")
+                Text(seed.message)
                     .font(.caption)
                     .foregroundStyle(Color.groveText)
-                    .italic()
             }
         }
     }

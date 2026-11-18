@@ -74,6 +74,8 @@ struct ContentView: View {
                     .preferredColorScheme(colorScheme)
                     .opacity(isLaunching ? 0 : 1)
                     .environment(coachMarkManager)
+                    // Card growth scales to how many people could react to a post.
+                    .environment(\.groveAudienceSize, max(socialService.friends.count, 1))
 
                 CoachMarkOverlay()
                     .environment(coachMarkManager)

@@ -893,15 +893,16 @@ class CloudKitSocialService {
         return NSPredicate(format: "userID IN %@ AND completedAt >= %@", ids, from as NSDate)
     }
 
-    /// Fetch the current user's own shared workouts (for Profile view)
-    func fetchMySharedWorkouts() async {
+    /// Fetch the current user's own shared workouts, newest first. The profile shows a few;
+    /// its "See all" page asks for many more.
+    func fetchMySharedWorkouts(limit: Int = 20) async {
         guard let myAppleUserID else { return }
 
         let pred = NSPredicate(format: "userID == %@", myAppleUserID)
         let query = CKQuery(recordType: RecordType.sharedWorkout, predicate: pred)
         query.sortDescriptors = [NSSortDescriptor(key: "completedAt", ascending: false)]
 
-        guard let (results, _) = try? await publicDB.records(matching: query, resultsLimit: 20) else {
+        guard let (results, _) = try? await publicDB.records(matching: query, resultsLimit: limit) else {
             mySharedWorkouts = []
             return
         }

@@ -34,9 +34,11 @@ enum RootLevel: String, CaseIterable, Sendable {
 
     static func from(score: Int) -> RootLevel {
         switch score {
-        case 0...15: return .scattered
-        case 16...40: return .growing
-        case 41...80: return .intertwined
+        // Tuned for a small group (a few posts a week between two people): water 1,
+        // seed 2, sunlight 3 points, so a couple of weeks of reacting reaches Growing.
+        case 0...7: return .scattered
+        case 8...20: return .growing
+        case 21...45: return .intertwined
         default: return .deep
         }
     }
@@ -44,9 +46,9 @@ enum RootLevel: String, CaseIterable, Sendable {
     var minScore: Int {
         switch self {
         case .scattered: return 0
-        case .growing: return 16
-        case .intertwined: return 41
-        case .deep: return 81
+        case .growing: return 8
+        case .intertwined: return 21
+        case .deep: return 46
         }
     }
 

@@ -33,53 +33,43 @@ struct CardGrowthState: Equatable {
         self.lushness = lushness
     }
 
-    init(from summary: InteractionSummary?) {
-        guard let summary else {
+    /// Growth is measured against how many people could react, not fixed counts: Grove is
+    /// a small group, so with two friends "everyone watered" is two waters. `audience` is
+    /// the number of other people in the grove (at least 1).
+    init(from summary: InteractionSummary?, audience: Int = 2) {
+        guard let summary, summary.waterCount + summary.sunlightCount + summary.seeds.count > 0 else {
             self = .empty
             return
         }
+        let audience = CGFloat(max(audience, 1))
 
-        let water = summary.waterCount
-        // Use unique senders for plant growth — one person spamming seeds
-        // shouldn't max out the plant; it should reflect community engagement
-        let uniqueSeedSenders = Set(summary.seeds.map(\.senderID))
-        let seeds = uniqueSeedSenders.count
-        let sunlight = summary.sunlightCount
+        // One water / seed / sunlight per person counts; repeats from the same person
+        // don't push growth further.
+        let waterers = CGFloat(min(summary.waterCount, Int(audience)))
+        let seeders = CGFloat(Set(summary.seeds.map(\.senderID)).count)
+        let sunlighters = CGFloat(min(summary.sunlightCount, Int(audience)))
 
-        // Water → soil moisture + grass
-        soilMoisture = min(CGFloat(water) * 0.25, 1.0)
-        grassDensity = min(water, 6)
+        let waterShare = min(waterers / audience, 1)
+        let seedShare = min(seeders / audience, 1)
+        let sunShare = min(sunlighters / audience, 1)
 
-        // Seeds → plant growth stage (continuous)
-        var seedPlantStage: CGFloat
-        switch seeds {
-        case 0: seedPlantStage = 0
-        case 1: seedPlantStage = 1.0
-        case 2: seedPlantStage = 2.0
-        case 3: seedPlantStage = 2.5
-        case 4: seedPlantStage = 3.0
-        case 5: seedPlantStage = 3.3
-        case 6: seedPlantStage = 3.5
-        default: seedPlantStage = 4.0
-        }
+        // Water: any water wets the soil; everyone watering soaks it and fills the grass.
+        soilMoisture = waterers > 0 ? 0.5 + 0.5 * waterShare : 0
+        grassDensity = Int((6 * waterShare).rounded())
 
-        // Sunlight → bloom progress
-        switch sunlight {
-        case 0: bloomProgress = 0
-        case 1: bloomProgress = 0.5
-        default: bloomProgress = 1.0
-        }
+        // Plant: any water sprouts it (stage 1 with two people); everyone watering grows a
+        // young plant (2); seeds grow it toward a full bush (4).
+        var stage: CGFloat = max(2 * waterShare, waterers > 0 ? 1 : 0)
+        if seeders > 0 { stage = max(stage, 2.5 + 1.5 * seedShare) }
 
-        // Sunlight guarantees a minimum bush so flowers have branches to grow on
-        if bloomProgress > 0 && seedPlantStage < 3.0 {
-            plantStage = 3.0
-        } else {
-            plantStage = seedPlantStage
-        }
+        // Sunlight: flowers; anyone's sunlight gives a half bloom, everyone's a full one.
+        bloomProgress = sunlighters > 0 ? 0.5 + 0.5 * sunShare : 0
+        // Flowers need branches to grow on.
+        if bloomProgress > 0 { stage = max(stage, 3.0) }
+        plantStage = min(stage, 4.0)
 
-        // Combined lushness
-        let rawScore = water + seeds * 2 + sunlight * 3
-        let totalScore = CGFloat(rawScore)
-        lushness = min(totalScore / 20.0, 1.0)
+        // Lushness (warm sky): how much of the group reacted, weighted like root points.
+        let weighted = waterShare * 1 + seedShare * 2 + sunShare * 3
+        lushness = min(weighted / 4.0, 1.0)
     }
 }

@@ -194,7 +194,7 @@ struct FeedItemCard: View {
 
     // MARK: - Reactions
 
-    /// e.g. "Watered by Sam and Alex · Sunlight from Mika · Jo: “Strong start”".
+    /// e.g. "Watered by Sam and Alex · Sunlight from Mika · Jo: Strong start".
     private var reactionSummary: String? {
         guard let interactions else { return nil }
         var parts: [String] = []
@@ -204,7 +204,7 @@ struct FeedItemCard: View {
         if !sunlighters.isEmpty { parts.append("Sunlight from " + Self.nameList(sunlighters)) }
         if let seed = interactions.seeds.last {
             let extra = interactions.seeds.count > 1 ? " +\(interactions.seeds.count - 1)" : ""
-            parts.append("\(Self.firstName(seed.senderName)): “\(seed.message)”\(extra)")
+            parts.append("\(Self.firstName(seed.senderName)): \(seed.message)\(extra)")
         }
         return parts.isEmpty ? nil : parts.joined(separator: " · ")
     }
