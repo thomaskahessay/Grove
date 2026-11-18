@@ -127,11 +127,29 @@ struct GroveApp: App {
 
     nonisolated private static let feedCheckTaskID = "com.grove.feedCheck"
 
+    @ViewBuilder
+    private var rootView: some View {
+        #if DEBUG
+        // `-GrovePlantGallery`: review every plant stage and species.
+        if ProcessInfo.processInfo.arguments.contains("-GrovePlantGallery") {
+            PlantGalleryView()
+        } else {
+            mainContent
+        }
+        #else
+        mainContent
+        #endif
+    }
+
+    private var mainContent: some View {
+        ContentView()
+            .environment(workoutSessionManager)
+            .environment(socialService)
+    }
+
     var body: some Scene {
         WindowGroup {
-            ContentView()
-                .environment(workoutSessionManager)
-                .environment(socialService)
+            rootView
                 .onOpenURL { url in
                     if let template = SharedTemplate.from(url: url) {
                         pendingTemplate = template

@@ -43,6 +43,9 @@ class User {
     var sharePRs: Bool = true
     var shareProgram: Bool = true
 
+    /// This person's streak plant: one shared look, varied slightly per account.
+    var plantStyle: PlantStyle { PlantStyle(identity: appleUserID) }
+
     // Notification preferences
     var notifyWorkoutReminder: Bool = true
     var notifyStreakAtRisk: Bool = true

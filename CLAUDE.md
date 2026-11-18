@@ -47,7 +47,7 @@ Grove/
 │   └── Library/                # ExerciseLibrary, AddExercise
 ├── Components/
 │   ├── GlassCard/GlassButton   # Liquid Glass components
-│   ├── StreakPlant/             # PlantCanvasRenderer, StreakPlantView, EvolutionTimeline
+│   ├── StreakPlant/             # GrovePlantRenderer, StreakPlantView, EvolutionTimeline
 │   └── FeedCard/               # CardSceneRenderer, tap animations (Water/Seed/Sunlight)
 ├── Data/                       # ExerciseSeeds (~100), PreviewSampleData, SocialPreviewData
 └── docs/PRODUCT_SPEC.md        # Full product specification

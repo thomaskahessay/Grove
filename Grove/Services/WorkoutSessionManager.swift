@@ -246,7 +246,8 @@ class WorkoutSessionManager {
                 isStageUp: isStageUp,
                 previousStage: pre,
                 currentStage: post,
-                isWilted: false
+                isWilted: false,
+                style: user.plantStyle
             )
         }
 

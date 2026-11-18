@@ -15,6 +15,9 @@ struct StreakPlantEntry: TimelineEntry {
     let stageName: String
     let trackCreatine: Bool
     let creatineLoggedToday: Bool
+    /// The stage the plant is drawn at: the stage it wilted at while wilted, as in the app.
+    var plantStage: PlantStage? = nil
+    var style: PlantStyle = .default
 
     static let placeholder = StreakPlantEntry(
         date: .now,
@@ -117,7 +120,9 @@ struct StreakPlantProvider: TimelineProvider {
                 daysUntilNext: stage.daysUntilNext(currentStreak: streak),
                 stageName: stage.displayName,
                 trackCreatine: user.trackCreatine,
-                creatineLoggedToday: creatineLoggedToday
+                creatineLoggedToday: creatineLoggedToday,
+                plantStage: user.isStreakWilted ? PlantStage(rawValue: user.wiltedAtStage) ?? .seed : stage,
+                style: user.plantStyle
             )
         } catch {
             return .empty
@@ -255,16 +260,14 @@ struct StreakPlantWidgetView: View {
 
     private var plantCanvas: some View {
         Canvas { context, size in
-            PlantCanvasRenderer.draw(
+            GrovePlantRenderer.draw(
                 context: &context,
                 size: size,
-                stage: entry.stage,
+                stage: entry.plantStage ?? entry.stage,
+                style: entry.style,
                 isWilted: entry.isWilted,
-                swayOffset: 0,
-                growthProgress: 1.0,
-                elapsedTime: 0,
-                bloomPulse: 0.5,
-                lightPhase: 0.5
+                elapsed: 0,
+                sway: 0
             )
         }
     }

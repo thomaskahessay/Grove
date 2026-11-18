@@ -53,6 +53,7 @@ struct ProfileSetupView: View {
                 // Animated seedling
                 StreakPlantView(
                     streak: 1,
+                    style: user.plantStyle,
                     size: 100,
                     showLabel: false
                 )

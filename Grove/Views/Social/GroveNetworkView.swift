@@ -9,6 +9,11 @@ struct GroveNetworkView: View {
     /// Most recent workout per user ID, for bloom (today) and droop (quiet 4+ days).
     var lastWorkoutByUser: [String: Date] = [:]
     var userTrainedToday: Bool = false
+    /// The signed-in person's Apple user ID, so their plant matches everywhere else.
+    var userIdentity: String?
+    /// This week's progress per friend ID, and yours, for the goal dots under each name.
+    var weekByUser: [String: GroveWeekProgress] = [:]
+    var userWeek: GroveWeekProgress?
     let onFriendTap: (String) -> Void
     let onConnectionTap: (RootConnection) -> Void
 
@@ -69,8 +74,7 @@ struct GroveNetworkView: View {
             ForEach(connections) { connection in
                 if let friendSlot = layout.friendSlots.first(where: { $0.id == connection.friendID }) {
                     let midX = (layout.userSlot.center.x + friendSlot.center.x) / 2
-                    let depth = rootDepth(for: connection.level)
-                    let midY = layout.groundY + depth * 0.6
+                    let midY = GroveSceneCanvas.rootMidY(groundY: layout.groundY, connection: connection)
 
                     Circle()
                         .fill(Color.clear)
@@ -88,9 +92,10 @@ struct GroveNetworkView: View {
                         streak: friend.currentStreak,
                         isWilted: false,
                         wiltedAtStage: .seed,
+                        style: PlantStyle(identity: friend.id),
                         plantSize: slot.plantSize,
                         label: String(friend.displayName.prefix(8)),
-                        sublabel: friend.currentStreak > 0 ? "\(friend.currentStreak)d" : nil,
+                        week: weekByUser[friend.id],
                         isUser: false,
                         activity: GroveActivity.from(lastWorkout: lastWorkoutByUser[friend.id]),
                         onTap: { onFriendTap(friend.id) }
@@ -106,9 +111,10 @@ struct GroveNetworkView: View {
                 streak: userStreak,
                 isWilted: isWilted,
                 wiltedAtStage: PlantStage(rawValue: wiltedAtStage) ?? .seed,
+                style: PlantStyle(identity: userIdentity),
                 plantSize: layout.userSlot.plantSize,
                 label: "You",
-                sublabel: isWilted ? "Wilted" : (userStreak > 0 ? "\(userStreak)d" : nil),
+                week: userWeek,
                 isUser: true,
                 activity: userTrainedToday ? .today : .recent,
                 onTap: {}
@@ -123,15 +129,6 @@ struct GroveNetworkView: View {
                     .foregroundStyle(Color.groveTextSecondary.opacity(0.6))
                     .position(x: viewportWidth / 2, y: layout.groundY + 30)
             }
-        }
-    }
-
-    private func rootDepth(for level: RootLevel) -> CGFloat {
-        switch level {
-        case .scattered: return 15
-        case .growing: return 25
-        case .intertwined: return 35
-        case .deep: return 50
         }
     }
 }

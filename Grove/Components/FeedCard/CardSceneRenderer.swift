@@ -1,7 +1,7 @@
 import SwiftUI
 
 /// Draws the evolving card background scene: soil, grass, plant, and flowers.
-/// Simplified landscape version of PlantCanvasRenderer, optimized for semi-transparent card backgrounds.
+/// Simplified landscape plant scene, optimized for semi-transparent card backgrounds.
 struct CardSceneRenderer {
 
     // MARK: - Colors

@@ -46,6 +46,7 @@ struct StreakDetailView: View {
                         streak: previewStage != nil ? displayedStage.minStreak : user.currentStreak,
                         isWilted: previewStage == nil && user.isStreakWilted,
                         wiltedAtStage: PlantStage(rawValue: user.wiltedAtStage) ?? .seed,
+                        style: user.plantStyle,
                         size: 300,
                         showLabel: false
                     )

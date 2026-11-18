@@ -45,6 +45,7 @@ struct OnboardingReadyView: View {
                             // Seed (fades out)
                             StreakPlantView(
                                 streak: 0,
+                                style: user.plantStyle,
                                 size: 200,
                                 showLabel: false
                             )
@@ -53,6 +54,7 @@ struct OnboardingReadyView: View {
                             // Sprout (fades in + scales up)
                             StreakPlantView(
                                 streak: 1,
+                                style: user.plantStyle,
                                 size: 200,
                                 showLabel: false
                             )

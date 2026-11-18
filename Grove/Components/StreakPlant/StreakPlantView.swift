@@ -4,10 +4,16 @@ struct StreakPlantView: View {
     let streak: Int
     var isWilted: Bool = false
     var wiltedAtStage: PlantStage = .seed
+    /// Species, blossom colour and per-person variation. Defaults to a cream Oak.
+    var style: PlantStyle = .default
     var size: CGFloat = 200
     var showLabel: Bool = true
     var animateStageUp: Bool = false
     var animateCelebration: Bool = false
+    /// Off in scenes that draw their own ground, like the grove strip.
+    var showsGround: Bool = true
+    /// Adds a warm glow and fresh blossoms (the grove strip's "trained today" signal).
+    var trainedToday: Bool = false
 
     @State private var stageUpScale: CGFloat = 1.0
     @State private var celebrationScale: CGFloat = 1.0
@@ -24,20 +30,18 @@ struct StreakPlantView: View {
                 let secondaryGust = sin(elapsed * 1.1 + 0.9) * 0.42
                 let leafRustle = sin(elapsed * 2.4 + 1.8) * 0.16
                 let swayOffset = CGFloat(primaryDrift + secondaryGust + leafRustle) * size * 0.009
-                let bloomPulse = CGFloat(0.5 + 0.5 * sin(elapsed * 1.35 + 0.7))
-                let lightPhase = CGFloat(0.5 + 0.5 * sin(elapsed * 0.22 + 0.4))
 
                 Canvas { context, canvasSize in
-                    PlantCanvasRenderer.draw(
+                    GrovePlantRenderer.draw(
                         context: &context,
                         size: canvasSize,
                         stage: stage,
+                        style: style,
                         isWilted: isWilted,
-                        swayOffset: swayOffset,
-                        growthProgress: 1.0,
-                        elapsedTime: elapsed,
-                        bloomPulse: bloomPulse,
-                        lightPhase: lightPhase
+                        elapsed: elapsed,
+                        sway: swayOffset,
+                        showsGround: showsGround,
+                        trainedToday: trainedToday
                     )
                 }
                 .frame(width: size, height: size)

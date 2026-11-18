@@ -153,14 +153,34 @@ struct SocialFeedView: View {
         user?.workouts.contains { $0.completedAt.map(Calendar.current.isDateInToday) ?? false } ?? false
     }
 
-    /// "14 workouts this week · 5 of 7 growing" — counts loaded posts since the start of the week.
+    /// This week's workouts per friend (from their shared posts, which the feed loads for
+    /// the last two weeks) against the goal on their profile.
+    private var weekByUser: [String: GroveWeekProgress] {
+        var datesByUser: [String: [Date]] = [:]
+        for item in socialService.feedItems {
+            datesByUser[item.userID, default: []].append(item.completedAt)
+        }
+        var result: [String: GroveWeekProgress] = [:]
+        for friend in socialService.friends {
+            result[friend.id] = GroveWeekProgress(dates: datesByUser[friend.id] ?? [], target: friend.daysPerWeek)
+        }
+        return result
+    }
+
+    private var userWeek: GroveWeekProgress? {
+        guard let user else { return nil }
+        return GroveWeekProgress(dates: user.workouts.compactMap(\.completedAt), target: user.preferredDaysPerWeek)
+    }
+
+    /// "3 of 4 have trained this week · 1 at goal"
     private var weeklyRecap: String {
-        let weekStart = Calendar.current.dateInterval(of: .weekOfYear, for: Date())?.start ?? Date()
-        let thisWeek = socialService.feedItems.filter { $0.completedAt >= weekStart }
-        let people = Set(thisWeek.map(\.userID)).count
-        let total = socialService.friends.count + 1
-        let workouts = thisWeek.count == 1 ? "1 workout" : "\(thisWeek.count) workouts"
-        return "\(workouts) this week · \(people) of \(total) growing"
+        let weeks = Array(weekByUser.values) + (userWeek.map { [$0] } ?? [])
+        let active = weeks.filter { $0.trained > 0 }.count
+        let atGoal = weeks.filter(\.reachedGoal).count
+        let base = active == weeks.count && !weeks.isEmpty
+            ? "Everyone has trained this week"
+            : "\(active) of \(weeks.count) have trained this week"
+        return atGoal > 0 ? base + " · \(atGoal) at goal" : base
     }
 
     private var groveSection: some View {
@@ -173,6 +193,9 @@ struct SocialFeedView: View {
                 wiltedAtStage: user?.wiltedAtStage ?? 0,
                 lastWorkoutByUser: lastWorkoutByUser,
                 userTrainedToday: userTrainedToday,
+                userIdentity: user?.appleUserID,
+                weekByUser: weekByUser,
+                userWeek: userWeek,
                 onFriendTap: { friendID in
                     selectedProfileUserID = friendID
                 },
@@ -181,11 +204,13 @@ struct SocialFeedView: View {
                 }
             )
 
-            Text(weeklyRecap)
-                .font(.caption)
-                .fontWeight(.medium)
-                .foregroundStyle(Color.groveSage)
-                .padding(.horizontal, 4)
+            if !socialService.friends.isEmpty {
+                Text(weeklyRecap)
+                    .font(.caption)
+                    .fontWeight(.medium)
+                    .foregroundStyle(Color.groveSage)
+                    .padding(.horizontal, 4)
+            }
         }
     }
 

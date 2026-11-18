@@ -49,7 +49,12 @@ struct GroveLayoutEngine {
 
         // User plant — centered, large
         let userPlantSize: CGFloat = 92
-        let userCenter = CGPoint(x: centerX, y: groundY - userPlantSize * 0.42)
+        // Plant frames are centred, so lift each by the distance from its centre to its base.
+        // Each plant stands on the wavy ground line at its own x.
+        func surface(_ x: CGFloat) -> CGFloat {
+            GroveSceneCanvas.surfaceY(atX: x, width: totalWidth, groundY: groundY) + 1
+        }
+        let userCenter = CGPoint(x: centerX, y: surface(centerX) - userPlantSize * (GrovePlantSlot.baseFraction - 0.5))
         let userSlot = GroveSlot(
             id: "user",
             center: userCenter,
@@ -90,11 +95,8 @@ struct GroveLayoutEngine {
         for (index, friend) in sorted.enumerated() {
             let x = max(padding, min(xPositions[index], totalWidth - padding))
 
-            // Vertical stagger: farther from center = slightly higher (depth)
             let distFromCenter = abs(x - centerX) / max(totalWidth / 2, 1)
-            let yStagger = distFromCenter * 18
-            let baseY = groundY - plantSize * 0.42
-            let y = baseY - yStagger
+            let y = surface(x) - plantSize * (GrovePlantSlot.baseFraction - 0.5)
 
             // Farther friends slightly dimmer
             let opacity = 1.0 - distFromCenter * 0.12

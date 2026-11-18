@@ -333,6 +333,7 @@ struct HomeView: View {
                 streak: user.currentStreak,
                 isWilted: user.isStreakWilted,
                 wiltedAtStage: PlantStage(rawValue: user.wiltedAtStage) ?? .seed,
+                style: user.plantStyle,
                 size: plantSize,
                 showLabel: false
             )

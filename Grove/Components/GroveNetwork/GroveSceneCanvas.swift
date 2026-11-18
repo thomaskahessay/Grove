@@ -44,22 +44,49 @@ struct GroveSceneCanvas: View {
 
     // MARK: - Ground Band
 
+    /// The ground's wavy top edge, as quadratic segments in fractions of the width:
+    /// (end x, end y offset, control y offset). Controls sit halfway along x, so x is
+    /// linear in t and the surface height at any x is easy to work out.
+    private static let groundSegments: [(endX: CGFloat, endDY: CGFloat, controlDY: CGFloat)] = [
+        (0.3, -2, 6), (0.7, 2, -5), (1.0, -1, 5),
+    ]
+    private static let groundStartDY: CGFloat = 4
+
+    /// The ground's surface height at `x`, so plants can stand on the wavy line.
+    static func surfaceY(atX x: CGFloat, width: CGFloat, groundY: CGFloat) -> CGFloat {
+        guard width > 0 else { return groundY }
+        let fx = min(max(x / width, 0), 1)
+        var startX: CGFloat = 0
+        var startDY = groundStartDY
+        for segment in groundSegments {
+            if fx <= segment.endX {
+                let t = (fx - startX) / (segment.endX - startX)
+                let u = 1 - t
+                return groundY + u * u * startDY + 2 * u * t * segment.controlDY + t * t * segment.endDY
+            }
+            startX = segment.endX
+            startDY = segment.endDY
+        }
+        return groundY + startDY
+    }
+
+    private static func groundEdge(width: CGFloat, groundY: CGFloat) -> Path {
+        var path = Path()
+        var startX: CGFloat = 0
+        path.move(to: CGPoint(x: 0, y: groundY + groundStartDY))
+        for segment in groundSegments {
+            path.addQuadCurve(
+                to: CGPoint(x: width * segment.endX, y: groundY + segment.endDY),
+                control: CGPoint(x: width * (startX + segment.endX) / 2, y: groundY + segment.controlDY)
+            )
+            startX = segment.endX
+        }
+        return path
+    }
+
     private func drawGroundBand(context: GraphicsContext, size: CGSize) {
         // Organic curved top edge
-        var groundPath = Path()
-        groundPath.move(to: CGPoint(x: 0, y: groundY + 4))
-        groundPath.addQuadCurve(
-            to: CGPoint(x: size.width * 0.3, y: groundY - 2),
-            control: CGPoint(x: size.width * 0.15, y: groundY + 6)
-        )
-        groundPath.addQuadCurve(
-            to: CGPoint(x: size.width * 0.7, y: groundY + 2),
-            control: CGPoint(x: size.width * 0.5, y: groundY - 5)
-        )
-        groundPath.addQuadCurve(
-            to: CGPoint(x: size.width, y: groundY - 1),
-            control: CGPoint(x: size.width * 0.85, y: groundY + 5)
-        )
+        var groundPath = Self.groundEdge(width: size.width, groundY: groundY)
         groundPath.addLine(to: CGPoint(x: size.width, y: size.height))
         groundPath.addLine(to: CGPoint(x: 0, y: size.height))
         groundPath.closeSubpath()
@@ -76,21 +103,8 @@ struct GroveSceneCanvas: View {
         )
 
         // Ground line accent
-        var linePath = Path()
-        linePath.move(to: CGPoint(x: 0, y: groundY + 4))
-        linePath.addQuadCurve(
-            to: CGPoint(x: size.width * 0.3, y: groundY - 2),
-            control: CGPoint(x: size.width * 0.15, y: groundY + 6)
-        )
-        linePath.addQuadCurve(
-            to: CGPoint(x: size.width * 0.7, y: groundY + 2),
-            control: CGPoint(x: size.width * 0.5, y: groundY - 5)
-        )
-        linePath.addQuadCurve(
-            to: CGPoint(x: size.width, y: groundY - 1),
-            control: CGPoint(x: size.width * 0.85, y: groundY + 5)
-        )
-        context.stroke(linePath, with: .color(Color.groveWarmSand.opacity(0.3)), lineWidth: 1.5)
+        context.stroke(Self.groundEdge(width: size.width, groundY: groundY),
+                       with: .color(Color.groveWarmSand.opacity(0.3)), lineWidth: 1.5)
     }
 
     // MARK: - Grass Tufts
@@ -142,64 +156,117 @@ struct GroveSceneCanvas: View {
 
     // MARK: - Root Connections
 
+    private static let rootColor = Color(red: 0.55, green: 0.42, blue: 0.31)
+
+    /// How far below ground a connection's root runs: under the names, a little deeper
+    /// for closer friends, and jittered per friend so the roots don't stack.
+    static func rootDepth(for connection: RootConnection) -> CGFloat {
+        let base: CGFloat
+        switch connection.level {
+        case .scattered: base = 34
+        case .growing: base = 38
+        case .intertwined: base = 42
+        case .deep: base = 46
+        }
+        let jitter = CGFloat(PlantStyle.stableHash(connection.friendID) % 7) - 3
+        return base + jitter
+    }
+
+    /// The root's lowest point, for placing its tap target.
+    static func rootMidY(groundY: CGFloat, connection: RootConnection) -> CGFloat {
+        groundY + 4 + rootDepth(for: connection) * 0.75
+    }
+
+    /// Each connection is a real-looking root between your plant and a friend's: it tapers
+    /// away from both plants and wanders a little. Closer friendships
+    /// add strands that twine around it. Near the surface it fades, so it reads as coming
+    /// up from the soil instead of crossing the names.
     private func drawRootConnections(context: GraphicsContext, size: CGSize, time: Double) {
         for connection in connections {
             guard let friendSlot = friendSlots.first(where: { $0.id == connection.friendID }) else { continue }
 
-            let start = CGPoint(x: userCenter.x, y: groundY + 6)
-            let end = CGPoint(x: friendSlot.center.x, y: groundY + 6)
-
             let level = connection.level
-            let depth = rootDepth(for: level)
-            let midX = (start.x + end.x) / 2
-            let undulation = CGFloat(sin(time * 0.3 + Double(connection.score) * 0.1)) * 2
+            let depth = Self.rootDepth(for: connection)
+            let seed = Double(PlantStyle.stableHash(connection.friendID) % 1000) / 1000
+            let p0 = CGPoint(x: userCenter.x, y: groundY + 4)
+            let p3 = CGPoint(x: friendSlot.center.x, y: groundY + 4)
+            let dx = p3.x - p0.x
+            let p1 = CGPoint(x: p0.x + dx * 0.08, y: groundY + 4 + depth)
+            let p2 = CGPoint(x: p3.x - dx * 0.08, y: groundY + 4 + depth)
 
-            // Main root
-            var rootPath = Path()
-            rootPath.move(to: start)
-            rootPath.addCurve(
-                to: end,
-                control1: CGPoint(x: midX - (end.x - start.x) * 0.15, y: groundY + depth + undulation),
-                control2: CGPoint(x: midX + (end.x - start.x) * 0.15, y: groundY + depth - undulation)
-            )
-
-            let lineWidth = rootLineWidth(for: level)
-            let opacity = rootOpacity(for: level)
-
-            context.stroke(
-                rootPath,
-                with: .color(Color.groveTerracotta.opacity(opacity)),
-                style: StrokeStyle(lineWidth: lineWidth, lineCap: .round)
-            )
-
-            // Parallel root for deeper connections
-            if level == .intertwined || level == .deep {
-                let offset: CGFloat = level == .deep ? 5 : 3.5
-                var parallelPath = Path()
-                parallelPath.move(to: CGPoint(x: start.x, y: start.y + offset))
-                parallelPath.addCurve(
-                    to: CGPoint(x: end.x, y: end.y + offset),
-                    control1: CGPoint(x: midX - (end.x - start.x) * 0.2, y: groundY + depth + offset + undulation * 0.7),
-                    control2: CGPoint(x: midX + (end.x - start.x) * 0.2, y: groundY + depth + offset - undulation * 0.7)
-                )
-                context.stroke(
-                    parallelPath,
-                    with: .color(Color.groveTerracotta.opacity(opacity * 0.5)),
-                    style: StrokeStyle(lineWidth: lineWidth * 0.6, lineCap: .round)
-                )
+            let strands: Int
+            let width: CGFloat
+            let opacity: Double
+            switch level {
+            case .scattered: strands = 1; width = 1.5; opacity = 0.32
+            case .growing: strands = 1; width = 1.9; opacity = 0.42
+            case .intertwined: strands = 2; width = 2.2; opacity = 0.5
+            case .deep: strands = 3; width = 2.5; opacity = 0.58
             }
 
-            // Node dots for deep connections
-            if level == .deep {
-                for t in [0.33, 0.66] as [CGFloat] {
-                    let dotX = start.x + (end.x - start.x) * t
-                    let curveY = groundY + depth * (1 - 4 * (t - 0.5) * (t - 0.5)) + undulation * (t - 0.5)
-                    var dot = Path()
-                    dot.addEllipse(in: CGRect(x: dotX - 2.5, y: curveY - 2.5, width: 5, height: 5))
-                    context.fill(dot, with: .color(Color.groveSage.opacity(0.45)))
+            // Fades in below the names, so roots seem to come up from the soil.
+            let shading = GraphicsContext.Shading.linearGradient(
+                Gradient(colors: [Self.rootColor.opacity(0), Self.rootColor.opacity(opacity)]),
+                startPoint: CGPoint(x: 0, y: groundY + 22),
+                endPoint: CGPoint(x: 0, y: groundY + 38)
+            )
+
+            let samples = 40
+            for strand in 0..<strands {
+                let phase = Double(strand) * 2 * .pi / Double(strands)
+                let isMain = strand == 0
+                var centers: [CGPoint] = []
+                var halfWidths: [CGFloat] = []
+                for i in 0...samples {
+                    let t = CGFloat(i) / CGFloat(samples)
+                    var p = bezier(p0, p1, p2, p3, t)
+                    let envelope = sin(.pi * t)
+                    // A slow wander, plus a gentle twist for the extra strands.
+                    p.y += CGFloat(sin(Double(t) * 7 + seed * 6)) * 1.6 * envelope
+                    if !isMain {
+                        p.y += CGFloat(sin(Double(t) * 12 + phase)) * 2.2 * envelope
+                    }
+                    centers.append(p)
+                    let taper = 0.3 + 0.7 * pow(abs(1 - 2 * t), 1.4)
+                    halfWidths.append(width * taper * (isMain ? 1 : 0.55) / 2)
                 }
+                let body = taperedPath(centers: centers, halfWidths: halfWidths)
+                var strandContext = context
+                if !isMain { strandContext.opacity = 0.7 }
+                strandContext.fill(body, with: shading)
             }
         }
+    }
+
+    /// One filled shape along the centre line, so a tapering root has no seams.
+    private func taperedPath(centers: [CGPoint], halfWidths: [CGFloat]) -> Path {
+        var left: [CGPoint] = []
+        var right: [CGPoint] = []
+        for i in centers.indices {
+            let a = centers[max(i - 1, 0)]
+            let b = centers[min(i + 1, centers.count - 1)]
+            let dx = b.x - a.x, dy = b.y - a.y
+            let length = max(sqrt(dx * dx + dy * dy), 0.001)
+            let normal = CGPoint(x: -dy / length, y: dx / length)
+            let w = halfWidths[i]
+            left.append(CGPoint(x: centers[i].x + normal.x * w, y: centers[i].y + normal.y * w))
+            right.append(CGPoint(x: centers[i].x - normal.x * w, y: centers[i].y - normal.y * w))
+        }
+        var path = Path()
+        guard let first = left.first else { return path }
+        path.move(to: first)
+        for point in left.dropFirst() + right.reversed() {
+            path.addLine(to: point)
+        }
+        path.closeSubpath()
+        return path
+    }
+
+    private func bezier(_ a: CGPoint, _ b: CGPoint, _ c: CGPoint, _ d: CGPoint, _ t: CGFloat) -> CGPoint {
+        let u = 1 - t
+        let x = u * u * u * a.x + 3 * u * u * t * b.x + 3 * u * t * t * c.x + t * t * t * d.x
+        let y = u * u * u * a.y + 3 * u * u * t * b.y + 3 * u * t * t * c.y + t * t * t * d.y
+        return CGPoint(x: x, y: y)
     }
 
     // MARK: - Particles
@@ -222,35 +289,6 @@ struct GroveSceneCanvas: View {
             var dot = Path()
             dot.addEllipse(in: CGRect(x: x - radius, y: y - radius, width: radius * 2, height: radius * 2))
             context.fill(dot, with: .color(Color.groveWarmSand.opacity(0.2 * alpha)))
-        }
-    }
-
-    // MARK: - Helpers
-
-    func rootDepth(for level: RootLevel) -> CGFloat {
-        switch level {
-        case .scattered: return 15
-        case .growing: return 25
-        case .intertwined: return 35
-        case .deep: return 50
-        }
-    }
-
-    private func rootLineWidth(for level: RootLevel) -> CGFloat {
-        switch level {
-        case .scattered: return 1.5
-        case .growing: return 2.5
-        case .intertwined: return 3.5
-        case .deep: return 5.0
-        }
-    }
-
-    private func rootOpacity(for level: RootLevel) -> Double {
-        switch level {
-        case .scattered: return 0.25
-        case .growing: return 0.4
-        case .intertwined: return 0.6
-        case .deep: return 0.8
         }
     }
 }

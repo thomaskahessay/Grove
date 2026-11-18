@@ -103,6 +103,7 @@ struct FriendProfileView: View {
 
             StreakPlantView(
                 streak: profile.currentStreak,
+                style: PlantStyle(identity: profile.id),
                 size: 140,
                 showLabel: true
             )

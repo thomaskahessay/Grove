@@ -6,6 +6,7 @@ struct StreakMomentData {
     let previousStage: PlantStage
     let currentStage: PlantStage
     let isWilted: Bool
+    var style: PlantStyle = .default
 }
 
 struct StreakMomentView: View {
@@ -27,6 +28,7 @@ struct StreakMomentView: View {
             // Plant
             StreakPlantView(
                 streak: data.streak,
+                style: data.style,
                 size: 250,
                 showLabel: false,
                 animateStageUp: data.isStageUp,

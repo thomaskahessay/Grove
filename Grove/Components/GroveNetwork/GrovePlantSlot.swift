@@ -19,50 +19,85 @@ struct GrovePlantSlot: View {
     let streak: Int
     let isWilted: Bool
     let wiltedAtStage: PlantStage
+    var style: PlantStyle = .default
     let plantSize: CGFloat
     let label: String
-    let sublabel: String?
+    /// This week's workouts against their goal, as dots under the name.
+    var week: GroveWeekProgress?
     let isUser: Bool
     var activity: GroveActivity = .recent
     let onTap: () -> Void
 
-    var body: some View {
-        VStack(spacing: 0) {
-            StreakPlantView(
-                streak: streak,
-                isWilted: isWilted,
-                wiltedAtStage: wiltedAtStage,
-                size: plantSize,
-                showLabel: false
-            )
-            // Quiet plants droop and fade.
-            .saturation(activity == .quiet ? 0.35 : 1)
-            .opacity(activity == .quiet ? 0.6 : 1)
-            .rotationEffect(.degrees(activity == .quiet ? -8 : 0), anchor: .bottom)
+    /// Where the plant's base sits in its frame (the renderer's ground line).
+    static let baseFraction: CGFloat = 0.86
 
-            // A small bloom next to the name marks someone who trained today.
-            HStack(spacing: 2) {
-                if activity == .today {
-                    Image(systemName: "camera.macro")
-                        .font(.system(size: isUser ? 9 : 8, weight: .semibold))
-                        .foregroundStyle(Color.groveTerracotta)
-                }
+    var body: some View {
+        // The slot's frame is just the plant, so the layout can stand its base on the
+        // strip's ground line; the name hangs below in the soil.
+        StreakPlantView(
+            streak: streak,
+            isWilted: isWilted,
+            wiltedAtStage: wiltedAtStage,
+            style: style,
+            size: plantSize,
+            showLabel: false,
+            showsGround: false,
+            trainedToday: activity == .today
+        )
+        // Quiet plants fade (the plant's own art handles wilting).
+        .saturation(activity == .quiet ? 0.35 : 1)
+        .opacity(activity == .quiet ? 0.6 : 1)
+        .overlay(alignment: .top) {
+            VStack(spacing: 0) {
                 Text(label)
                     .font(.system(size: isUser ? 11 : 9, weight: isUser ? .semibold : .medium))
                     .foregroundStyle(isUser ? Color.groveText : Color.groveTextSecondary)
                     .lineLimit(1)
-            }
 
-            if let sublabel {
-                Text(sublabel)
-                    .font(.system(size: 7, weight: .medium))
-                    .foregroundStyle(Color.groveTextSecondary.opacity(0.7))
+                if let week {
+                    goalDots(week)
+                        .padding(.top, 2)
+                }
             }
+            .fixedSize()
+            .offset(y: plantSize * GrovePlantSlot.baseFraction + 3)
         }
         .contentShape(Rectangle())
         .onTapGesture { onTap() }
         .accessibilityElement(children: .combine)
-        .accessibilityLabel(label + (activity == .today ? ", trained today" : activity == .quiet ? ", quiet lately" : ""))
+        .accessibilityLabel(accessibilityText)
         .accessibilityAddTraits(.isButton)
+    }
+
+    /// One dot per day of their weekly goal, filled as they train (extra workouts add
+    /// filled dots, up to seven). Without a shared goal, just a dot per workout.
+    private func goalDots(_ week: GroveWeekProgress) -> some View {
+        let total = min(max(week.target ?? 0, week.trained), 7)
+        let size: CGFloat = isUser ? 5 : 4
+        return HStack(spacing: isUser ? 2.5 : 2) {
+            ForEach(0..<total, id: \.self) { index in
+                if index < week.trained {
+                    Circle()
+                        .fill(week.reachedGoal ? Color.groveSage : Color.groveSage.opacity(0.8))
+                        .frame(width: size, height: size)
+                } else {
+                    Circle()
+                        .strokeBorder(Color.groveTextSecondary.opacity(0.35), lineWidth: 0.8)
+                        .frame(width: size, height: size)
+                }
+            }
+        }
+        .frame(height: size)
+    }
+
+    private var accessibilityText: String {
+        var text = label
+        if activity == .today { text += ", trained today" } else if activity == .quiet { text += ", quiet lately" }
+        if let week {
+            let days = week.trained == 1 ? "1 workout" : "\(week.trained) workouts"
+            text += ", \(days) this week"
+            if let target = week.target { text += " of \(target)" }
+        }
+        return text
     }
 }
