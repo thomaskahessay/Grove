@@ -11,6 +11,9 @@ struct SocialFeedView: View {
     /// Last time you viewed the feed, captured on appear so the "caught up" divider
     /// doesn't move while you're looking. Saved back to the user when you leave.
     @State private var lastSeen: Date?
+    /// Set when the feed disappears because it opened a post or profile on top of itself,
+    /// so coming back doesn't count as a new visit.
+    @State private var isShowingPushedPage = false
     @Environment(\.scenePhase) private var scenePhase
     @State private var selectedConnection: RootConnection?
     @State private var selectedProfileUserID: String?
@@ -72,13 +75,25 @@ struct SocialFeedView: View {
                 #endif
             }
             .onAppear {
+                // Back from a post or profile: same visit, so the divider stays put.
+                if isShowingPushedPage {
+                    isShowingPushedPage = false
+                    return
+                }
                 lastSeen = user?.lastFeedCheckDate
                 // Preview data: pretend the last visit was 5 hours ago so the divider shows.
                 if socialService.isPreviewMode && lastSeen == nil {
                     lastSeen = Date().addingTimeInterval(-5 * 3600)
                 }
             }
-            .onDisappear(perform: markFeedSeen)
+            .onDisappear {
+                // Opening a post or profile isn't leaving the feed; switching tabs is.
+                if selectedDetailItem != nil || selectedProfileUserID != nil {
+                    isShowingPushedPage = true
+                } else {
+                    markFeedSeen()
+                }
+            }
             .onChange(of: scenePhase) { _, phase in
                 if phase == .background { markFeedSeen() }
             }
