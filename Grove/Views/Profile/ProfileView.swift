@@ -39,6 +39,7 @@ struct ProfileView: View {
     @State private var selectedSharedWorkout: SharedWorkoutItem?
     @State private var achievementProgress: [AchievementService.AchievementProgress] = []
     @State private var selectedFriendID: String?
+    @State private var expandedPhoto: UIImage?
 
     private var user: User? { users.first }
 
@@ -170,6 +171,7 @@ struct ProfileView: View {
             }
             .toolbar(.hidden, for: .navigationBar)
         }
+        .expandedPhoto($expandedPhoto, name: user?.displayName ?? "")
         .photosPicker(isPresented: $showingPhotoPicker, selection: $photoItem, matching: .images)
         .onChange(of: photoItem) { _, newItem in
             Task {
@@ -289,6 +291,13 @@ struct ProfileView: View {
 
     private var profilePhotoWithGlassRing: some View {
         Menu {
+            if let data = user?.profileImageData, let image = UIImage(data: data) {
+                Button {
+                    showExpandedPhoto(image, in: $expandedPhoto)
+                } label: {
+                    Label("View Photo", systemImage: "arrow.up.left.and.arrow.down.right")
+                }
+            }
             Button {
                 showingPhotoPicker = true
             } label: {

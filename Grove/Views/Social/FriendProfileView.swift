@@ -14,6 +14,7 @@ struct FriendProfileView: View {
     @State private var showingRemoveConfirmation = false
     @State private var selectedDetailItem: SharedWorkoutItem?
     @State private var screenSize = CGSize(width: 402, height: 874)
+    @State private var expandedPhoto: UIImage?
 
     private var currentUser: User? { users.first }
 
@@ -56,6 +57,7 @@ struct FriendProfileView: View {
             if let profile = profileData?.profile { backgroundPlant(profile) }
         }
         .background(Color.groveBackground.ignoresSafeArea())
+        .expandedPhoto($expandedPhoto, name: profileData?.profile.displayName ?? "")
         .navigationTitle(profileData?.profile.displayName ?? "Profile")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
@@ -140,6 +142,14 @@ struct FriendProfileView: View {
                         .clipShape(Circle())
                 }
                 .shadow(color: .black.opacity(0.2), radius: 8, y: 2)
+                // Tap to see their photo full size (only when they have one).
+                .onTapGesture {
+                    if let data = profile.profileImageData, let image = UIImage(data: data) {
+                        showExpandedPhoto(image, in: $expandedPhoto)
+                    }
+                }
+                .accessibilityAddTraits(profile.profileImageData != nil ? .isButton : [])
+                .accessibilityHint(profile.profileImageData != nil ? "Shows their photo larger" : "")
 
             Text(profile.displayName)
                 .font(.title3)
@@ -499,16 +509,22 @@ struct FriendProfileView: View {
 
     // MARK: - Helpers
 
+    /// `.task` runs again whenever the page comes back on screen (e.g. back from a
+    /// post), so only the first load shows the spinner; later ones refresh in place and
+    /// keep what's shown if the refresh fails.
     private func loadProfile() async {
-        isLoading = true
-        loadError = nil
+        let isFirstLoad = profileData == nil
+        if isFirstLoad {
+            isLoading = true
+            loadError = nil
+        }
         if let data = await socialService.fetchFriendProfile(userID: userID) {
             profileData = data
 
-            // Fetch interactions for the friend's workouts so FeedItemCards can render them
+            // Interactions for their posts, so the tiles show how each one has grown
             let workoutIDs = data.recentWorkouts.map { $0.id }
             await socialService.fetchInteractions(for: workoutIDs)
-        } else {
+        } else if isFirstLoad {
             loadError = socialService.error ?? "Could not load profile"
         }
         isLoading = false
