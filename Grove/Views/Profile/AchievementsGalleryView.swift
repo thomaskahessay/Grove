@@ -8,9 +8,16 @@ struct AchievementsGalleryView: View {
     private var currentUser: User? { users.first }
 
     @State private var progressData: [AchievementService.AchievementProgress] = []
+    @State private var unlockedBanner: [AchievementType] = []
     var onScroll: ((Bool) -> Void)? = nil
 
     var body: some View {
+        screen
+            // Achievements earned outside a workout (creatine, custom exercise, posting…)
+            .achievementUnlockBanner($unlockedBanner)
+    }
+
+    private var screen: some View {
         ScrollView {
             VStack(spacing: 16) {
                 summaryHeader
@@ -45,7 +52,8 @@ struct AchievementsGalleryView: View {
     private func loadProgress() {
         if let user = currentUser {
             // Award any achievements the user already qualifies for (retroactive check)
-            let _ = AchievementService.checkAndAwardAchievements(for: user, context: modelContext)
+            let newlyUnlocked = AchievementService.checkAndAwardAchievements(for: user, context: modelContext)
+            if !newlyUnlocked.isEmpty { unlockedBanner = newlyUnlocked.map(\.type) }
             progressData = AchievementService.getProgress(for: user, context: modelContext)
         } else {
             progressData = AchievementType.allCases.map { type in

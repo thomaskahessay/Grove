@@ -15,6 +15,7 @@ struct ProgressView: View {
     @Query private var creatineLogs: [CreatineLog]
 
     @State private var showingExercisePicker = false
+    @State private var unlockedBanner: [AchievementType] = []
     @State private var searchText = ""
     @State private var selectedExerciseForDetail: Exercise?
     @State private var achievementProgress: [AchievementService.AchievementProgress] = []
@@ -69,6 +70,12 @@ struct ProgressView: View {
     // MARK: - Body
 
     var body: some View {
+        screen
+            // Achievements earned outside a workout (creatine, custom exercise, posting…)
+            .achievementUnlockBanner($unlockedBanner)
+    }
+
+    private var screen: some View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
@@ -986,7 +993,8 @@ struct ProgressView: View {
 
     private func loadAchievements() {
         if let user = currentUser {
-            let _ = AchievementService.checkAndAwardAchievements(for: user, context: modelContext)
+            let newlyUnlocked = AchievementService.checkAndAwardAchievements(for: user, context: modelContext)
+            if !newlyUnlocked.isEmpty { unlockedBanner = newlyUnlocked.map(\.type) }
             achievementProgress = AchievementService.getProgress(for: user, context: modelContext)
         }
     }

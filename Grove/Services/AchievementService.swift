@@ -21,6 +21,54 @@ struct AchievementService {
         }
     }
 
+    // MARK: - Shared stats
+
+    /// One set of numbers for both unlocking and the progress bars, so a bar can never
+    /// read full while the badge stays locked.
+    private struct Stats {
+        let completedWorkouts: [Workout]
+        let workoutCount: Int
+        /// Best of current and longest streak: a streak counts even if it has since broken.
+        let bestStreak: Int
+        let uniquePRExerciseCount: Int
+        let uniqueExerciseCount: Int
+        let uniqueMuscleGroupCount: Int
+        let totalCompletedSets: Int
+        let hasEarlyWorkout: Bool
+        let hasLateWorkout: Bool
+        let hasLongWorkout: Bool
+
+        init(user: User) {
+            let calendar = Calendar.current
+            // Only this user's workouts, everywhere (not a store-wide count).
+            completedWorkouts = user.workouts.filter { $0.completedAt != nil }
+            workoutCount = completedWorkouts.count
+            bestStreak = max(user.currentStreak, user.longestStreak)
+            // Baselines from first-time exercises are not PRs
+            uniquePRExerciseCount = Set(PRDetectionService.newPRRecords(from: user.personalRecords).compactMap { $0.exercise?.id }).count
+            let logs = completedWorkouts.flatMap { $0.exercises }.filter { $0.status == .completed }
+            uniqueExerciseCount = Set(logs.compactMap { $0.exercise?.id }).count
+            uniqueMuscleGroupCount = Set(logs.compactMap { $0.exercise?.muscleGroup }).count
+            totalCompletedSets = logs.flatMap { $0.sets }.filter { $0.isCompleted && !$0.isWarmup }.count
+            // Early Bird: started 4–8 AM. Night Owl: finished 9 PM–4 AM ("complete after 9 PM").
+            hasEarlyWorkout = completedWorkouts.contains { (4..<8).contains(calendar.component(.hour, from: $0.startedAt)) }
+            hasLateWorkout = completedWorkouts.contains { workout in
+                guard let end = workout.completedAt else { return false }
+                let hour = calendar.component(.hour, from: end)
+                return hour >= 21 || hour < 4
+            }
+            hasLongWorkout = completedWorkouts.contains { $0.duration >= 5400 }
+        }
+    }
+
+    /// Set once a workout has actually been posted to the feed (see `CloudKitSocialService`).
+    /// Socializer uses this instead of `Workout.isShared`, which is set before uploading.
+    static let hasPostedWorkoutKey = "grove_hasPostedWorkout"
+
+    private static var hasPostedWorkout: Bool {
+        UserDefaults.standard.bool(forKey: hasPostedWorkoutKey)
+    }
+
     // MARK: - Detection
 
     /// Checks all achievement conditions and returns newly unlocked ones.
@@ -33,17 +81,10 @@ struct AchievementService {
         let existingTypes = Set(user.achievements.map { $0.type })
         var results: [AchievementResult] = []
 
-        let completedWorkouts = user.workouts.filter { $0.completedAt != nil }
-        let workoutCount = completedWorkouts.count
-
-        // Precompute data needed by multiple checks
-        // Baselines from first-time exercises are not PRs
-        let uniquePRExerciseCount = Set(PRDetectionService.newPRRecords(from: user.personalRecords).compactMap { $0.exercise?.id }).count
-        let allExerciseLogs = completedWorkouts.flatMap { $0.exercises }
-        let completedExerciseLogs = allExerciseLogs.filter { $0.status == .completed }
-        let uniqueExerciseIDs = Set(completedExerciseLogs.compactMap { $0.exercise?.id })
-        let uniqueMuscleGroups = Set(completedExerciseLogs.compactMap { $0.exercise?.muscleGroup })
-        let totalCompletedSets = completedExerciseLogs.flatMap { $0.sets }.filter { $0.isCompleted && !$0.isWarmup }.count
+        let stats = Stats(user: user)
+        let completedWorkouts = stats.completedWorkouts
+        let workoutCount = stats.workoutCount
+        let streak = stats.bestStreak
 
         for type in AchievementType.allCases {
             guard !existingTypes.contains(type) else { continue }
@@ -55,7 +96,7 @@ struct AchievementService {
             // -- Workout milestones --
             case .firstRep:
                 earned = workoutCount >= 1
-                relatedData = completedWorkouts.last?.name
+                relatedData = completedWorkouts.min { ($0.completedAt ?? .distantFuture) < ($1.completedAt ?? .distantFuture) }?.name
 
             case .tenDown:
                 earned = workoutCount >= 10
@@ -79,50 +120,51 @@ struct AchievementService {
 
             // -- Streak milestones --
             case .threePeat:
-                earned = user.currentStreak >= 3
-                relatedData = "\(user.currentStreak)-day streak"
+                earned = streak >= 3
+                relatedData = "\(streak)-day streak"
 
             case .weekWarrior:
-                earned = user.currentStreak >= 7
-                relatedData = "\(user.currentStreak)-day streak"
+                earned = streak >= 7
+                relatedData = "\(streak)-day streak"
 
             case .fortnight:
-                earned = user.currentStreak >= 14
-                relatedData = "\(user.currentStreak)-day streak"
+                earned = streak >= 14
+                relatedData = "\(streak)-day streak"
 
             case .ironWill:
-                earned = user.currentStreak >= 30
-                relatedData = "\(user.currentStreak)-day streak"
+                earned = streak >= 30
+                relatedData = "\(streak)-day streak"
 
             case .legendary:
-                earned = user.currentStreak >= 60
-                relatedData = "\(user.currentStreak)-day streak"
+                earned = streak >= 60
+                relatedData = "\(streak)-day streak"
 
             case .unstoppable:
-                earned = user.currentStreak >= 100
-                relatedData = "\(user.currentStreak)-day streak"
+                earned = streak >= 100
+                relatedData = "\(streak)-day streak"
 
             // -- Personal records --
             case .prCrusher:
-                earned = !newPRs.isEmpty
+                // Also counts PRs from before achievements existed.
+                earned = !newPRs.isEmpty || stats.uniquePRExerciseCount >= 1
                 relatedData = newPRs.first?.exercise.name
 
             case .prCollector:
-                earned = uniquePRExerciseCount >= 5
-                relatedData = "\(uniquePRExerciseCount) exercises"
+                earned = stats.uniquePRExerciseCount >= 5
+                relatedData = "\(stats.uniquePRExerciseCount) exercises"
 
             case .prMachine:
-                earned = uniquePRExerciseCount >= 10
-                relatedData = "\(uniquePRExerciseCount) exercises"
+                earned = stats.uniquePRExerciseCount >= 10
+                relatedData = "\(stats.uniquePRExerciseCount) exercises"
 
             // -- Variety & planning --
             case .explorer:
-                earned = uniqueExerciseIDs.count >= 10
-                relatedData = "\(uniqueExerciseIDs.count) exercises"
+                earned = stats.uniqueExerciseCount >= 10
+                relatedData = "\(stats.uniqueExerciseCount) exercises"
 
             case .wellRounded:
-                earned = uniqueMuscleGroups.count >= 6
-                relatedData = "\(uniqueMuscleGroups.count) muscle groups"
+                earned = stats.uniqueMuscleGroupCount >= 6
+                relatedData = "\(stats.uniqueMuscleGroupCount) muscle groups"
 
             case .planner:
                 earned = checkFullPlannedWeek(for: user, context: context)
@@ -130,32 +172,24 @@ struct AchievementService {
 
             // -- Special --
             case .earlyBird:
-                let calendar = Calendar.current
-                earned = completedWorkouts.contains { workout in
-                    let hour = calendar.component(.hour, from: workout.startedAt)
-                    return hour < 8
-                }
+                earned = stats.hasEarlyWorkout
                 relatedData = "Early morning workout"
 
             case .nightOwl:
-                let calendar = Calendar.current
-                earned = completedWorkouts.contains { workout in
-                    let hour = calendar.component(.hour, from: workout.startedAt)
-                    return hour >= 21
-                }
+                earned = stats.hasLateWorkout
                 relatedData = "Late night workout"
 
             case .marathoner:
-                earned = completedWorkouts.contains { $0.duration >= 5400 }
+                earned = stats.hasLongWorkout
                 relatedData = "90+ minute workout"
 
             case .socializer:
-                earned = user.workouts.contains { $0.isShared }
+                earned = hasPostedWorkout
                 relatedData = "Shared a workout"
 
             case .volumeKing:
-                earned = totalCompletedSets >= 1000
-                relatedData = "\(totalCompletedSets) sets"
+                earned = stats.totalCompletedSets >= 1000
+                relatedData = "\(stats.totalCompletedSets) sets"
 
             case .creatineCommit:
                 earned = user.creatineLogs.count >= 30
@@ -187,21 +221,19 @@ struct AchievementService {
         for user: User,
         context: ModelContext
     ) -> [AchievementProgress] {
+        // Keep the earliest unlock if duplicates ever exist, instead of crashing.
         let unlockedMap = Dictionary(
-            uniqueKeysWithValues: user.achievements.map { ($0.type, $0.unlockedAt) }
+            user.achievements.map { ($0.type, $0.unlockedAt) },
+            uniquingKeysWith: { min($0, $1) }
         )
 
-        let workoutPredicate = #Predicate<Workout> { $0.completedAt != nil }
-        let completedWorkoutCount = (try? context.fetchCount(FetchDescriptor<Workout>(predicate: workoutPredicate))) ?? 0
-
-        // Precompute expensive data only once
-        let completedWorkouts = user.workouts.filter { $0.completedAt != nil }
-        // Baselines from first-time exercises are not PRs
-        let uniquePRExerciseCount = Set(PRDetectionService.newPRRecords(from: user.personalRecords).compactMap { $0.exercise?.id }).count
-        let allCompletedExerciseLogs = completedWorkouts.flatMap { $0.exercises }.filter { $0.status == .completed }
-        let uniqueExerciseCount = Set(allCompletedExerciseLogs.compactMap { $0.exercise?.id }).count
-        let uniqueMuscleGroupCount = Set(allCompletedExerciseLogs.compactMap { $0.exercise?.muscleGroup }).count
-        let totalCompletedSets = allCompletedExerciseLogs.flatMap { $0.sets }.filter { $0.isCompleted && !$0.isWarmup }.count
+        let stats = Stats(user: user)
+        let completedWorkoutCount = stats.workoutCount
+        let streak = stats.bestStreak
+        let uniquePRExerciseCount = stats.uniquePRExerciseCount
+        let uniqueExerciseCount = stats.uniqueExerciseCount
+        let uniqueMuscleGroupCount = stats.uniqueMuscleGroupCount
+        let totalCompletedSets = stats.totalCompletedSets
 
         return AchievementType.allCases.map { type in
             let isUnlocked = unlockedMap[type] != nil
@@ -224,23 +256,17 @@ struct AchievementService {
 
                 // -- Streak milestones --
                 case .threePeat:
-                    let best = isUnlocked ? max(user.currentStreak, 3) : user.currentStreak
-                    return (min(best, 3), 3)
+                    return (min(isUnlocked ? max(streak, 3) : streak, 3), 3)
                 case .weekWarrior:
-                    let best = isUnlocked ? max(user.currentStreak, 7) : user.currentStreak
-                    return (min(best, 7), 7)
+                    return (min(isUnlocked ? max(streak, 7) : streak, 7), 7)
                 case .fortnight:
-                    let best = isUnlocked ? max(user.currentStreak, 14) : user.currentStreak
-                    return (min(best, 14), 14)
+                    return (min(isUnlocked ? max(streak, 14) : streak, 14), 14)
                 case .ironWill:
-                    let best = isUnlocked ? max(user.longestStreak, 30) : user.longestStreak
-                    return (min(best, 30), 30)
+                    return (min(isUnlocked ? max(streak, 30) : streak, 30), 30)
                 case .legendary:
-                    let best = isUnlocked ? max(user.longestStreak, 60) : user.longestStreak
-                    return (min(best, 60), 60)
+                    return (min(isUnlocked ? max(streak, 60) : streak, 60), 60)
                 case .unstoppable:
-                    let best = isUnlocked ? max(user.longestStreak, 100) : user.longestStreak
-                    return (min(best, 100), 100)
+                    return (min(isUnlocked ? max(streak, 100) : streak, 100), 100)
 
                 // -- Personal records --
                 case .prCrusher:
@@ -260,17 +286,13 @@ struct AchievementService {
 
                 // -- Special --
                 case .earlyBird:
-                    let hasEarly = completedWorkouts.contains { Calendar.current.component(.hour, from: $0.startedAt) < 8 }
-                    return (isUnlocked || hasEarly ? 1 : 0, 1)
+                    return (isUnlocked || stats.hasEarlyWorkout ? 1 : 0, 1)
                 case .nightOwl:
-                    let hasLate = completedWorkouts.contains { Calendar.current.component(.hour, from: $0.startedAt) >= 21 }
-                    return (isUnlocked || hasLate ? 1 : 0, 1)
+                    return (isUnlocked || stats.hasLateWorkout ? 1 : 0, 1)
                 case .marathoner:
-                    let hasLong = completedWorkouts.contains { $0.duration >= 5400 }
-                    return (isUnlocked || hasLong ? 1 : 0, 1)
+                    return (isUnlocked || stats.hasLongWorkout ? 1 : 0, 1)
                 case .socializer:
-                    let hasShared = user.workouts.contains { $0.isShared }
-                    return (isUnlocked || hasShared ? 1 : 0, 1)
+                    return (isUnlocked || hasPostedWorkout ? 1 : 0, 1)
                 case .volumeKing:
                     return (min(totalCompletedSets, 1000), 1000)
                 case .creatineCommit:
@@ -293,39 +315,24 @@ struct AchievementService {
 
     // MARK: - Helpers
 
-    /// Checks if any full Mon-Sun week has all plans completed.
+    /// Whether any of the last 4 finished Mon–Sun weeks had a plan every day with every
+    /// non-rest day completed. (Checking only last week missed weeks if nothing ran the
+    /// achievement check during the following week.)
     private static func checkFullPlannedWeek(for user: User, context: ModelContext) -> Bool {
         let calendar = Calendar.current
         let today = calendar.startOfDay(for: Date())
-
-        // Check the week that just ended (last Monday through Sunday)
         guard let lastMonday = previousMonday(from: today, calendar: calendar) else { return false }
 
-        var allDaysPlanned = true
-        var allWorkoutsCompleted = true
-
-        for dayOffset in 0..<7 {
-            guard let day = calendar.date(byAdding: .day, value: dayOffset, to: lastMonday) else {
-                allDaysPlanned = false
-                break
-            }
-
-            let plan = user.plans.first { plan in
-                calendar.isDate(plan.date, inSameDayAs: day)
-            }
-
-            guard let plan = plan else {
-                allDaysPlanned = false
-                break
-            }
-
-            if !plan.isRestDay && plan.completedWorkout == nil {
-                allWorkoutsCompleted = false
-                break
+        return (0..<4).contains { weeksBack in
+            guard let monday = calendar.date(byAdding: .day, value: -7 * weeksBack, to: lastMonday) else { return false }
+            return (0..<7).allSatisfy { dayOffset in
+                guard let day = calendar.date(byAdding: .day, value: dayOffset, to: monday),
+                      let plan = user.plans.first(where: { calendar.isDate($0.date, inSameDayAs: day) }) else {
+                    return false
+                }
+                return plan.isRestDay || plan.completedWorkout != nil
             }
         }
-
-        return allDaysPlanned && allWorkoutsCompleted
     }
 
     private static func previousMonday(from date: Date, calendar: Calendar) -> Date? {
