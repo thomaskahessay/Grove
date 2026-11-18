@@ -26,6 +26,7 @@ enum AppearanceMode: String, CaseIterable {
 
 struct ProfileView: View {
     @Query private var users: [User]
+    @Query private var templates: [WorkoutTemplate]
     @Environment(\.modelContext) private var modelContext
     @Environment(CloudKitSocialService.self) private var socialService
 
@@ -55,23 +56,41 @@ struct ProfileView: View {
 
     @State private var screenWidth: CGFloat = 393 // sensible default, updated by GeometryReader
 
-    private var plantHeroHeight: CGFloat {
-        screenWidth * 0.75
-    }
-
-    /// Shift the plant canvas upward for early stages so small plants
-    /// aren't hidden behind the profile photo overlay.
-    private var plantVerticalOffset: CGFloat {
-        guard let user = user else { return 0 }
-        let stage = user.isStreakWilted
+    private var plantStage: PlantStage {
+        guard let user = user else { return .seed }
+        return user.isStreakWilted
             ? (PlantStage(rawValue: user.wiltedAtStage) ?? .seed)
             : PlantStage.from(streak: user.currentStreak)
-        switch stage {
-        case .seed:       return -screenWidth * 0.35
-        case .sprout:     return -screenWidth * 0.18
-        case .seedling:   return -screenWidth * 0.08
-        default:          return 0
+    }
+
+    /// Small plants sit low in their square canvas, so their hero is shorter and
+    /// bottom-aligned instead of leaving an empty band above them.
+    private var isSmallPlant: Bool {
+        switch plantStage {
+        case .seed, .sprout, .seedling: return true
+        default: return false
         }
+    }
+
+    /// Big enough that the plant rises behind the cards and its canopy reaches the header.
+    private var backgroundPlantSize: CGFloat {
+        screenWidth * 1.7
+    }
+
+    @State private var screenHeight: CGFloat = 874
+
+    /// The plant's ground sits just above the tab bar, so it grows up behind the page.
+    private var backgroundGroundY: CGFloat { screenHeight - 90 }
+
+    private var completedWorkouts: [Workout] {
+        (user?.workouts ?? [])
+            .filter { $0.completedAt != nil }
+            .sorted { ($0.completedAt ?? .distantPast) > ($1.completedAt ?? .distantPast) }
+    }
+
+    /// The grove count can come from a cache while iCloud is off; don't show it then.
+    private var groveCountIsKnown: Bool {
+        socialService.iCloudAvailable && socialService.friendsLoaded
     }
 
     var body: some View {
@@ -84,10 +103,13 @@ struct ProfileView: View {
         NavigationStack {
             ScrollView {
                 VStack(spacing: 0) {
-                    Spacer()
-                        .frame(height: 40)
-
                     plantHeroSection
+                        // Part of the scrolling content, so it never floats over the cards below.
+                        .overlay(alignment: .topTrailing) {
+                            settingsButton
+                                .padding(.trailing)
+                                .padding(.top, 4)
+                        }
 
                     VStack(spacing: 24) {
                         statsCard
@@ -112,8 +134,14 @@ struct ProfileView: View {
             } action: { newWidth in
                 screenWidth = newWidth
             }
-            .ignoresSafeArea(edges: .top)
-            .background(Color.groveBackground)
+            .onGeometryChange(for: CGFloat.self) { proxy in
+                proxy.size.height + proxy.safeAreaInsets.top + proxy.safeAreaInsets.bottom
+            } action: { newHeight in
+                screenHeight = newHeight
+            }
+            // The plant stays put behind the page, faded, while the content scrolls over it.
+            .background(alignment: .top) { backgroundPlant }
+            .background(Color.groveBackground.ignoresSafeArea())
             .overlay(alignment: .top) {
                 LinearGradient(
                     colors: [
@@ -128,20 +156,6 @@ struct ProfileView: View {
                 .frame(height: 100)
                 .ignoresSafeArea(edges: .top)
                 .allowsHitTesting(false)
-            }
-            .overlay(alignment: .topTrailing) {
-                NavigationLink {
-                    SettingsView()
-                } label: {
-                    Image(systemName: "gearshape.fill")
-                        .font(.title3)
-                        .foregroundStyle(Color.groveSage)
-                        .padding(12)
-                        .background(.ultraThinMaterial, in: Circle())
-                        .shadow(color: .black.opacity(0.15), radius: 6, y: 2)
-                }
-                .padding(.top, 12)
-                .padding(.trailing, 12)
             }
             .task {
                 await socialService.fetchMySharedWorkouts()
@@ -203,80 +217,74 @@ struct ProfileView: View {
 
     // MARK: - Plant Hero Section
 
-    private var plantHeroSection: some View {
-        ZStack(alignment: .bottom) {
-            // Layer 1: Full-width atmospheric plant
-            if let user = user {
-                NavigationLink {
-                    StreakDetailView(user: user)
-                } label: {
-                    StreakPlantView(
-                        streak: user.currentStreak,
-                        isWilted: user.isStreakWilted,
-                        wiltedAtStage: PlantStage(rawValue: user.wiltedAtStage) ?? .seed,
-                        style: user.plantStyle,
-                        size: screenWidth,
-                        showLabel: false
-                    )
-                    .offset(y: plantVerticalOffset)
-                    .frame(width: screenWidth, height: plantHeroHeight, alignment: .center)
-                    .mask(
-                        LinearGradient(
-                            stops: [
-                                .init(color: .white, location: 0),
-                                .init(color: .white, location: 0.75),
-                                .init(color: .clear, location: 1.0)
-                            ],
-                            startPoint: .top,
-                            endPoint: .bottom
-                        )
-                    )
-                }
-                .buttonStyle(.plain)
-            }
+    private var settingsButton: some View {
+        NavigationLink {
+            SettingsView()
+        } label: {
+            Image(systemName: "gearshape.fill")
+                .font(.title3)
+                .foregroundStyle(Color.groveSage)
+                .padding(10)
+                .background(.ultraThinMaterial, in: Circle())
+        }
+        .accessibilityLabel("Settings")
+    }
 
-            // Layer 2: Bottom gradient fade to background
-            LinearGradient(
-                stops: [
-                    .init(color: .clear, location: 0),
-                    .init(color: .clear, location: 0.3),
-                    .init(color: Color.groveBackground.opacity(0.5), location: 0.6),
-                    .init(color: Color.groveBackground.opacity(0.85), location: 0.8),
-                    .init(color: Color.groveBackground, location: 1.0)
-                ],
-                startPoint: .top,
-                endPoint: .bottom
+    /// A still, faded copy of the plant behind the whole page.
+    @ViewBuilder
+    private var backgroundPlant: some View {
+        if let user = user {
+            let size = backgroundPlantSize
+            StreakPlantView(
+                streak: user.currentStreak,
+                isWilted: user.isStreakWilted,
+                wiltedAtStage: PlantStage(rawValue: user.wiltedAtStage) ?? .seed,
+                style: user.plantStyle,
+                size: size,
+                showLabel: false,
+                isAnimated: false
             )
+            // The renderer's ground line sits at ~86% of the canvas.
+            .offset(y: backgroundGroundY - size * 0.86)
+            .frame(width: screenWidth, height: screenHeight, alignment: .top)
+            .clipped()
+            .opacity(0.22)
+            .ignoresSafeArea()
             .allowsHitTesting(false)
+            .accessibilityHidden(true)
+        }
+    }
 
-            // Layer 3: Profile photo + name overlay
+    /// Photo, name and stage, sitting on the background plant's ground.
+    private var plantHeroSection: some View {
+        VStack(spacing: 8) {
             if let user = user {
-                VStack(spacing: 8) {
-                    profilePhotoWithGlassRing
+                // Leaves room for the plant above the photo.
+                Spacer().frame(height: 60)
 
-                    Text(user.displayName ?? "Grove User")
-                        .font(.title3)
-                        .fontWeight(.bold)
-                        .foregroundStyle(Color.groveText)
+                profilePhotoWithGlassRing
 
-                    HStack(spacing: 6) {
-                        Text("Member since \(memberSinceText(user.createdAt))")
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
+                Text(user.displayName ?? "Grove User")
+                    .font(.title3)
+                    .fontWeight(.bold)
+                    .foregroundStyle(Color.groveText)
 
-                        Text("\u{00B7}")
-                            .foregroundStyle(.secondary)
+                HStack(spacing: 6) {
+                    Text("Member since \(memberSinceText(user.createdAt))")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
 
-                        Text(PlantStage.from(streak: user.currentStreak).displayName)
-                            .font(.caption2)
-                            .fontWeight(.medium)
-                            .foregroundStyle(Color.groveSage)
-                    }
+                    Text("\u{00B7}")
+                        .foregroundStyle(.secondary)
+
+                    Text(plantStage.displayName)
+                        .font(.caption2)
+                        .fontWeight(.medium)
+                        .foregroundStyle(Color.groveSage)
                 }
-                .padding(.bottom, 12)
             }
         }
-        .frame(height: plantHeroHeight + 40)
+        .frame(maxWidth: .infinity)
     }
 
     private var profilePhotoWithGlassRing: some View {
@@ -339,13 +347,37 @@ struct ProfileView: View {
 
     private var statsCard: some View {
         HStack(spacing: 0) {
-            statColumn(icon: "dumbbell.fill", value: "\(user?.workouts.count ?? 0)", label: "Workouts")
+            NavigationLink {
+                AllWorkoutsView(workouts: completedWorkouts)
+                    .navigationTitle("Workouts")
+            } label: {
+                statColumn(icon: "dumbbell.fill", value: "\(completedWorkouts.count)", label: "Workouts", isLink: true)
+            }
+            .buttonStyle(.plain)
             statDivider
-            statColumn(icon: "flame.fill", value: "\(user?.currentStreak ?? 0)", label: "Streak")
+            if let user = user {
+                NavigationLink {
+                    StreakDetailView(user: user)
+                } label: {
+                    statColumn(icon: "flame.fill", value: "\(user.currentStreak)", label: "Streak", isLink: true)
+                }
+                .buttonStyle(.plain)
+            } else {
+                statColumn(icon: "flame.fill", value: "0", label: "Streak")
+            }
             statDivider
-            statColumn(icon: "trophy.fill", value: "\(prExerciseCount)", label: "PRs")
+            NavigationLink {
+                PersonalRecordsView()
+            } label: {
+                statColumn(icon: "trophy.fill", value: "\(prExerciseCount)", label: "PRs", isLink: true)
+            }
+            .buttonStyle(.plain)
             statDivider
-            statColumn(icon: "person.2.fill", value: "\(socialService.friends.count)", label: "Grove")
+            statColumn(
+                icon: "person.2.fill",
+                value: groveCountIsKnown ? "\(socialService.friends.count)" : "–",
+                label: "Grove"
+            )
         }
         .padding(.vertical, 16)
         .frame(maxWidth: .infinity)
@@ -353,7 +385,7 @@ struct ProfileView: View {
         .shadow(color: .black.opacity(0.07), radius: 10, y: 3)
     }
 
-    private func statColumn(icon: String, value: String, label: String) -> some View {
+    private func statColumn(icon: String, value: String, label: String, isLink: Bool = false) -> some View {
         VStack(spacing: 6) {
             Image(systemName: icon)
                 .font(.caption)
@@ -362,11 +394,18 @@ struct ProfileView: View {
                 .font(.title3)
                 .fontWeight(.bold)
                 .foregroundStyle(Color.groveText)
-            Text(label)
-                .font(.caption2)
-                .foregroundStyle(.secondary)
+            HStack(spacing: 2) {
+                Text(label)
+                if isLink {
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 7, weight: .bold))
+                }
+            }
+            .font(.caption2)
+            .foregroundStyle(.secondary)
         }
         .frame(maxWidth: .infinity)
+        .contentShape(Rectangle())
     }
 
     private var statDivider: some View {
@@ -388,7 +427,7 @@ struct ProfileView: View {
                     .font(.headline)
                     .foregroundStyle(Color.groveText)
                 Spacer()
-                if socialService.friendsLoaded && !socialService.friends.isEmpty {
+                if groveCountIsKnown && !socialService.friends.isEmpty {
                     Text(socialService.friends.count == 1 ? "1 person" : "\(socialService.friends.count) people")
                         .font(.caption)
                         .foregroundStyle(.secondary)
@@ -534,15 +573,17 @@ struct ProfileView: View {
     }
 
     private var workoutHeatmapSection: some View {
-        let weeks = 13
+        // As many weeks as fit at a readable size, then cells stretch to fill the row.
+        let cellSpacing: CGFloat = 3
+        let dayLabelWidth: CGFloat = 14
+        let available = max(200, screenWidth - 32 - dayLabelWidth - cellSpacing)
+        let weeks = max(8, Int((available + cellSpacing) / (18 + cellSpacing)))
+        let cellSize = (available - CGFloat(weeks - 1) * cellSpacing) / CGFloat(weeks)
         let grid = heatmapGrid(weeks: weeks)
         let counts = workoutDayCounts
         let monthLabels = heatmapMonthLabels(grid: grid)
         let calendar = Calendar.current
         let today = calendar.startOfDay(for: Date())
-        let cellSize: CGFloat = 18
-        let cellSpacing: CGFloat = 3
-        let dayLabelWidth: CGFloat = 14
 
         var totalInPeriod = 0
         for week in grid {
@@ -585,6 +626,7 @@ struct ProfileView: View {
                         Text(label)
                             .font(.system(size: 9))
                             .foregroundStyle(.secondary)
+                            .fixedSize()
                             .frame(width: cellSize, alignment: .leading)
                     } else {
                         Color.clear.frame(width: cellSize, height: 12)
@@ -657,8 +699,6 @@ struct ProfileView: View {
 
     // MARK: - Achievement Shelf
 
-    private let achievementColumns = Array(repeating: GridItem(.flexible(), spacing: 6), count: 5)
-
     private var achievementShelf: some View {
         VStack(alignment: .leading, spacing: 14) {
             // Header
@@ -679,37 +719,59 @@ struct ProfileView: View {
                 }
             }
 
-            // Icon grid (5 columns)
-            LazyVGrid(columns: achievementColumns, spacing: 10) {
-                ForEach(achievementProgress, id: \.type) { progress in
-                    ZStack {
-                        Circle()
-                            .fill(progress.isUnlocked
-                                  ? Color.groveSage
-                                  : Color.groveWarmSand.opacity(0.2))
-                            .frame(width: 36, height: 36)
-                            .shadow(
-                                color: progress.isUnlocked
-                                    ? Color.groveSage.opacity(0.3)
-                                    : .clear,
-                                radius: 4
-                            )
-
-                        Image(systemName: progress.type.icon)
-                            .font(.system(size: 14))
-                            .foregroundStyle(
-                                progress.isUnlocked
-                                    ? .white
-                                    : Color.groveText.opacity(0.15)
-                            )
+            // Earned badges, newest first
+            let earnedList = achievementProgress
+                .filter(\.isUnlocked)
+                .sorted { ($0.unlockedAt ?? .distantPast) > ($1.unlockedAt ?? .distantPast) }
+            if earnedList.isEmpty {
+                Text("Your first workout earns your first badge.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            } else {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(alignment: .top, spacing: 14) {
+                        ForEach(earnedList, id: \.type) { progress in
+                            VStack(spacing: 6) {
+                                achievementBadge(progress.type, unlocked: true)
+                                Text(progress.type.rawValue)
+                                    .font(.caption2)
+                                    .foregroundStyle(Color.groveText)
+                                    .multilineTextAlignment(.center)
+                                    .lineLimit(2)
+                                    .frame(width: 64)
+                            }
+                        }
                     }
+                    .padding(.horizontal, 2)
                 }
             }
 
-            // Shelf line
-            Capsule()
-                .fill(Color.groveWarmSand.opacity(0.35))
-                .frame(height: 1.5)
+            // The locked one they're closest to
+            if let next = achievementProgress
+                .filter({ !$0.isUnlocked })
+                .max(by: { $0.progressFraction < $1.progressFraction }) {
+                HStack(spacing: 12) {
+                    achievementBadge(next.type, unlocked: false)
+                    VStack(alignment: .leading, spacing: 4) {
+                        HStack {
+                            Text("Next: \(next.type.rawValue)")
+                                .font(.subheadline.weight(.medium))
+                                .foregroundStyle(Color.groveText)
+                            Spacer()
+                            Text("\(next.currentValue)/\(next.targetValue)")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                        Text(next.type.description)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        SwiftUI.ProgressView(value: next.progressFraction)
+                            .tint(Color.groveSage)
+                    }
+                }
+                .padding(12)
+                .background(Color.groveWarmSand.opacity(0.12), in: RoundedRectangle(cornerRadius: 12))
+            }
 
             // Earned count
             let earned = achievementProgress.filter(\.isUnlocked).count
@@ -717,6 +779,17 @@ struct ProfileView: View {
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .frame(maxWidth: .infinity, alignment: .center)
+        }
+    }
+
+    private func achievementBadge(_ type: AchievementType, unlocked: Bool) -> some View {
+        ZStack {
+            Circle()
+                .fill(unlocked ? Color.groveSage : Color.groveWarmSand.opacity(0.2))
+                .frame(width: 44, height: 44)
+            Image(systemName: type.icon)
+                .font(.system(size: 17))
+                .foregroundStyle(unlocked ? .white : Color.groveText.opacity(0.35))
         }
     }
 
@@ -741,6 +814,32 @@ struct ProfileView: View {
 
     // MARK: - Current Program Card
 
+    private var isOwnRoutine: Bool {
+        UserDefaults.standard.string(forKey: PlanSetupMode.defaultsKey) == PlanSetupMode.ownRoutine.rawValue
+    }
+
+    /// The workouts in the plan, in order ("Upper A · Lower A · …").
+    private func programDayNames(for user: User) -> [String] {
+        let byID = Dictionary(templates.map { ($0.id, $0.name) }, uniquingKeysWith: { first, _ in first })
+        return user.weeklyTemplateIDs.compactMap { byID[$0] }
+    }
+
+    private func programTitle(for user: User) -> String {
+        let names = programDayNames(for: user)
+        if (isOwnRoutine || user.preferredSplit == .custom), !names.isEmpty {
+            return names.joined(separator: " \u{00B7} ")
+        }
+        return user.preferredSplit.rawValue
+    }
+
+    /// "4 days/week · Mon, Tue, Thu, Fri"
+    private func programSchedule(for user: User) -> String {
+        let weekdays = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+        let days = user.preferredTrainingSlots.sorted().compactMap { $0 < weekdays.count ? weekdays[$0] : nil }
+        let count = "\(user.preferredDaysPerWeek) days/week"
+        return days.isEmpty ? count : "\(count) \u{00B7} \(days.joined(separator: ", "))"
+    }
+
     private var currentProgramCard: some View {
         Group {
             if let user = user {
@@ -758,17 +857,21 @@ struct ProfileView: View {
                                 .font(.headline)
                                 .foregroundStyle(Color.groveText)
 
-                            Text(user.preferredSplit.rawValue)
+                            Text(programTitle(for: user))
                                 .font(.subheadline)
                                 .foregroundStyle(Color.groveSage)
+                                .fixedSize(horizontal: false, vertical: true)
 
-                            Text("\(user.preferredDaysPerWeek) days/week \u{00B7} \(user.preferredRepRange.rawValue)")
+                            Text(programSchedule(for: user))
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
 
-                            Text("\(user.preferredWorkoutMinutes) min sessions")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
+                            // Only the generated plan asked for these.
+                            if !isOwnRoutine {
+                                Text("\(user.preferredRepRange.rawValue) \u{00B7} \(user.preferredWorkoutMinutes) min sessions")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
                         }
 
                         Spacer()

@@ -14,6 +14,8 @@ struct StreakPlantView: View {
     var showsGround: Bool = true
     /// Adds a warm glow and fresh blossoms (the grove strip's "trained today" signal).
     var trainedToday: Bool = false
+    /// Off for decorative uses (e.g. a page background) so it doesn't redraw every frame.
+    var isAnimated: Bool = true
 
     @State private var stageUpScale: CGFloat = 1.0
     @State private var celebrationScale: CGFloat = 1.0
@@ -24,7 +26,7 @@ struct StreakPlantView: View {
 
     var body: some View {
         VStack(spacing: 12) {
-            TimelineView(.animation(minimumInterval: 1.0 / 30, paused: false)) { timeline in
+            TimelineView(.animation(minimumInterval: 1.0 / 30, paused: !isAnimated)) { timeline in
                 let elapsed = timeline.date.timeIntervalSinceReferenceDate
                 let primaryDrift = sin(elapsed * 0.5)
                 let secondaryGust = sin(elapsed * 1.1 + 0.9) * 0.42
