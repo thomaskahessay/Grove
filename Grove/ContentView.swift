@@ -9,11 +9,7 @@ struct ContentView: View {
     @Environment(\.scenePhase) private var scenePhase
     @Query private var users: [User]
     @Query(sort: \WorkoutPlan.date, order: .reverse) private var workoutPlans: [WorkoutPlan]
-    @Query(sort: \Exercise.name) private var allExercises: [Exercise]
     @Query private var creatineLogs: [CreatineLog]
-    @Query(Self.lastWorkoutDescriptor) private var lastCompletedWorkouts: [Workout]
-    @State private var showingWorkoutCreation = false
-    @State private var showingDayPlanSheet = false
     @State private var showNotificationPrompt = false
     @State private var selectedTab: Int = 0
     @State private var isLaunching = true
@@ -27,27 +23,6 @@ struct ContentView: View {
         case "Light": return .light
         case "Dark": return .dark
         default: return nil
-        }
-    }
-
-    private static var lastWorkoutDescriptor: FetchDescriptor<Workout> {
-        var descriptor = FetchDescriptor<Workout>(
-            predicate: #Predicate { $0.completedAt != nil },
-            sortBy: [SortDescriptor(\.completedAt, order: .reverse)]
-        )
-        descriptor.fetchLimit = 1
-        return descriptor
-    }
-
-    /// Today's plan that has an unstarted workout template (not rest, not completed).
-    private var todaysActionablePlan: WorkoutPlan? {
-        let calendar = Calendar.current
-        let today = calendar.startOfDay(for: Date())
-        return workoutPlans.first { plan in
-            calendar.isDate(plan.date, inSameDayAs: today)
-            && !plan.isRestDay
-            && plan.completedWorkout == nil
-            && plan.template != nil
         }
     }
 
@@ -217,69 +192,6 @@ struct ContentView: View {
                 }
             }
 
-            // Floating Action Button (Home tab only, hidden when workout is active)
-            if !sessionManager.hasActiveWorkout && selectedTab == 0 {
-                HStack {
-                    Spacer()
-                    Menu {
-                        if let plan = todaysActionablePlan, let template = plan.template {
-                            Button {
-                                WorkoutSessionManager.createAndStartWorkout(
-                                    from: template,
-                                    allExercises: allExercises,
-                                    context: modelContext,
-                                    sessionManager: sessionManager
-                                )
-                            } label: {
-                                Label("Start \(template.name)", systemImage: "play.fill")
-                            }
-                        }
-
-                        if let lastWorkout = lastCompletedWorkouts.first {
-                            Button {
-                                WorkoutSessionManager.repeatWorkout(
-                                    lastWorkout,
-                                    context: modelContext,
-                                    sessionManager: sessionManager
-                                )
-                            } label: {
-                                Label("Repeat \(lastWorkout.name)", systemImage: "arrow.counterclockwise")
-                            }
-                        }
-
-                        Button {
-                            showingDayPlanSheet = true
-                        } label: {
-                            Label("Add to Plan", systemImage: "calendar.badge.plus")
-                        }
-
-                        Button {
-                            showingWorkoutCreation = true
-                        } label: {
-                            Label("New Workout", systemImage: "plus.circle")
-                        }
-                    } label: {
-                        Image(systemName: "plus")
-                            .font(.title3)
-                            .fontWeight(.semibold)
-                            .foregroundStyle(Color.groveSage)
-                            .frame(width: 50, height: 50)
-                            .background(.ultraThinMaterial)
-                            .clipShape(Circle())
-                            .overlay(
-                                Circle()
-                                    .stroke(Color.groveSage.opacity(0.3), lineWidth: 1)
-                            )
-                            .shadow(color: .black.opacity(0.1), radius: 8, y: 4)
-                            .coachMarkAnchor(.fab)
-                    }
-                    .menuStyle(.button)
-                    .buttonStyle(.plain)
-                    .padding(.trailing, 20)
-                    .padding(.bottom, 90) // Above tab bar
-                }
-            }
-
             // Minimized workout card
             if sessionManager.isMinimized {
                 MinimizedWorkoutCardView()
@@ -287,15 +199,6 @@ struct ContentView: View {
                     .padding(.bottom, 60)
                     .transition(.move(edge: .bottom).combined(with: .opacity))
             }
-        }
-        .sheet(isPresented: $showingWorkoutCreation) {
-            WorkoutCreationView()
-        }
-        .sheet(isPresented: $showingDayPlanSheet) {
-            DayPlanSheet(
-                date: Calendar.current.startOfDay(for: Date()),
-                existingPlan: todaysActionablePlan
-            )
         }
         .fullScreenCover(
             isPresented: Binding(

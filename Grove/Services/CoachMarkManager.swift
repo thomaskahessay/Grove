@@ -9,9 +9,8 @@ class CoachMarkManager {
         case todaysWorkout = 0
         case streakPlant = 1
         case planMyWeek = 2
-        case fab = 3
-        case progressTab = 4
-        case socialTab = 5
+        case progressTab = 3
+        case socialTab = 4
     }
 
     struct StepContent {
@@ -91,7 +90,7 @@ class CoachMarkManager {
         case .todaysWorkout:
             StepContent(
                 title: "Your Daily Workout",
-                description: "Today's planned workout shows up here. Tap to start training.",
+                description: "Today's plan shows up here. Start it, or start something else.",
                 tooltipEdge: .bottom
             )
         case .streakPlant:
@@ -104,12 +103,6 @@ class CoachMarkManager {
             StepContent(
                 title: "Plan Your Week",
                 description: "Organize your training schedule and stay on track.",
-                tooltipEdge: .top
-            )
-        case .fab:
-            StepContent(
-                title: "Quick Actions",
-                description: "Tap here to start a workout, add to your plan, or create something new.",
                 tooltipEdge: .top
             )
         case .progressTab:

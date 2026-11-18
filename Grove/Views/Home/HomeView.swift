@@ -22,6 +22,9 @@ struct HomeView: View {
     @Query private var creatineLogs: [CreatineLog]
 
     @State private var showingWeeklyPlan = false
+    /// New Workout screen, opened from the today card ("Do a different workout", etc.).
+    /// This replaced the floating + menu.
+    @State private var showingWorkoutCreation = false
     @State private var showingCreatineCalendar = false
     @State private var restNudgeDismissed = false
 
@@ -131,12 +134,13 @@ struct HomeView: View {
                     Group {
                         if let plan = todaysPlan {
                             if plan.isRestDay {
-                                RestDayCard()
+                                RestDayCard(onTrainAnyway: newWorkout)
                             } else if let completedWorkout = plan.completedWorkout {
                                 CompletedTodayCard(
                                     workout: completedWorkout,
                                     tomorrowsPlan: tomorrowsPlan,
-                                    onPlanTomorrow: { showingWeeklyPlan = true }
+                                    onPlanTomorrow: { showingWeeklyPlan = true },
+                                    onLogAnother: newWorkout
                                 )
                             } else if let template = plan.template {
                                 TodayWorkoutCard(
@@ -150,23 +154,25 @@ struct HomeView: View {
                                         } else {
                                             startTodaysWorkout(plan: plan)
                                         }
-                                    }
+                                    },
+                                    onDifferentWorkout: newWorkout
                                 )
                             } else if let next = nextPlannedWorkout {
-                                NextWorkoutCard(name: next.name, date: next.date)
+                                NextWorkoutCard(name: next.name, date: next.date, onStart: newWorkout)
                             } else {
-                                EmptyTodayCard()
+                                EmptyTodayCard(onStart: newWorkout)
                             }
                         } else if let completedWorkout = todaysCompletedWorkout {
                             CompletedTodayCard(
                                 workout: completedWorkout,
                                 tomorrowsPlan: tomorrowsPlan,
-                                onPlanTomorrow: { showingWeeklyPlan = true }
+                                onPlanTomorrow: { showingWeeklyPlan = true },
+                                onLogAnother: newWorkout
                             )
                         } else if let next = nextPlannedWorkout {
-                            NextWorkoutCard(name: next.name, date: next.date)
+                            NextWorkoutCard(name: next.name, date: next.date, onStart: newWorkout)
                         } else {
-                            EmptyTodayCard()
+                            EmptyTodayCard(onStart: newWorkout)
                         }
                     }
                     .coachMarkAnchor(.todaysWorkout)
@@ -254,10 +260,12 @@ struct HomeView: View {
                         RecentWorkoutsSection(workouts: recentWorkouts, allWorkouts: completedWorkouts)
                     }
 
-                    Spacer(minLength: 100)
                 }
                 .padding(.horizontal)
                 .padding(.top, 8)
+                // Room for the minimized workout card when it's showing; otherwise the
+                // list ends just above the tab bar.
+                .padding(.bottom, sessionManager.isMinimized ? 96 : 16)
             }
             .background(Color.groveBackground)
             .navigationTitle("")
@@ -270,6 +278,9 @@ struct HomeView: View {
                         .lineLimit(1)
                         .minimumScaleFactor(0.7)
                 }
+            }
+            .sheet(isPresented: $showingWorkoutCreation) {
+                WorkoutCreationView()
             }
             .sheet(isPresented: $showingWeeklyPlan) {
                 WeeklyPlanView()
@@ -368,6 +379,15 @@ struct HomeView: View {
         .contentShape(RoundedRectangle(cornerRadius: 24))
     }
 
+    /// Opens New Workout, unless a workout is already running (then it's brought back).
+    private func newWorkout() {
+        if sessionManager.activeWorkout != nil {
+            sessionManager.expandWorkout()
+        } else {
+            showingWorkoutCreation = true
+        }
+    }
+
     private func startTodaysWorkout(plan: WorkoutPlan) {
         guard let template = plan.template else { return }
         WorkoutSessionManager.createAndStartWorkout(
@@ -381,12 +401,33 @@ struct HomeView: View {
 
 // MARK: - Today's Workout Card
 
+/// A quiet secondary action on the today card, e.g. "Train anyway".
+struct TodayCardLink: View {
+    let title: String
+    let systemImage: String
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Label(title, systemImage: systemImage)
+                .font(.subheadline)
+                .fontWeight(.medium)
+                .foregroundStyle(Color.groveSage)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 4)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+}
+
 struct TodayWorkoutCard: View {
     let workoutName: String
     let exerciseCount: Int
     let category: TemplateCategory
     var isResuming: Bool = false
     var onStart: (() -> Void)?
+    var onDifferentWorkout: (() -> Void)?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -417,6 +458,10 @@ struct TodayWorkoutCard: View {
                 Text(isResuming ? "Resume Workout" : "Start Workout")
             }
             .buttonStyle(.primary)
+
+            if !isResuming, let onDifferentWorkout {
+                TodayCardLink(title: "Do a different workout", systemImage: "shuffle", action: onDifferentWorkout)
+            }
         }
         .padding(20)
         .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 16))
@@ -427,24 +472,35 @@ struct TodayWorkoutCard: View {
 // MARK: - Empty Today Card
 
 struct EmptyTodayCard: View {
+    var onStart: (() -> Void)?
+
     var body: some View {
-        HStack(spacing: 16) {
-            Image(systemName: "moon.zzz.fill")
-                .font(.title)
-                .foregroundStyle(Color.groveWarmSand)
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(spacing: 16) {
+                Image(systemName: "calendar")
+                    .font(.title)
+                    .foregroundStyle(Color.groveWarmSand)
 
-            VStack(alignment: .leading, spacing: 4) {
-                Text("No workout planned")
-                    .font(.subheadline)
-                    .fontWeight(.medium)
-                    .foregroundStyle(Color.groveText)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Nothing planned today")
+                        .font(.subheadline)
+                        .fontWeight(.medium)
+                        .foregroundStyle(Color.groveText)
 
-                Text("Tap + to start a workout")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                    Text("Start whatever you feel like")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+
+                Spacer()
             }
 
-            Spacer()
+            // The main action here: it may be the only way to start from Home
+            // (e.g. someone who skipped planning in onboarding).
+            if let onStart {
+                Button("Start a Workout", action: onStart)
+                    .buttonStyle(.primary)
+            }
         }
         .padding(16)
         .frame(maxWidth: .infinity)
@@ -458,6 +514,7 @@ struct EmptyTodayCard: View {
 struct NextWorkoutCard: View {
     let name: String
     let date: Date
+    var onStart: (() -> Void)?
 
     private var dayLabel: String {
         let calendar = Calendar.current
@@ -471,23 +528,30 @@ struct NextWorkoutCard: View {
     }
 
     var body: some View {
-        HStack(spacing: 16) {
-            Image(systemName: "calendar.badge.clock")
-                .font(.title)
-                .foregroundStyle(Color.groveTerracotta)
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(spacing: 16) {
+                Image(systemName: "calendar.badge.clock")
+                    .font(.title)
+                    .foregroundStyle(Color.groveTerracotta)
 
-            VStack(alignment: .leading, spacing: 4) {
-                Text("Next up: \(name)")
-                    .font(.subheadline)
-                    .fontWeight(.medium)
-                    .foregroundStyle(Color.groveText)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Nothing planned today")
+                        .font(.subheadline)
+                        .fontWeight(.medium)
+                        .foregroundStyle(Color.groveText)
 
-                Text(dayLabel)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                    Text("Next up: \(name) \(dayLabel == "Tomorrow" ? "tomorrow" : "on \(dayLabel)")")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+
+                Spacer()
             }
 
-            Spacer()
+            if let onStart {
+                Button("Start a Workout", action: onStart)
+                    .buttonStyle(.primary)
+            }
         }
         .padding(16)
         .frame(maxWidth: .infinity)
@@ -499,24 +563,32 @@ struct NextWorkoutCard: View {
 // MARK: - Rest Day Card
 
 struct RestDayCard: View {
+    var onTrainAnyway: (() -> Void)?
+
     var body: some View {
-        HStack(spacing: 16) {
-            Image(systemName: "moon.fill")
-                .font(.title)
-                .foregroundStyle(Color.groveTerracotta)
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 16) {
+                Image(systemName: "moon.fill")
+                    .font(.title)
+                    .foregroundStyle(Color.groveTerracotta)
 
-            VStack(alignment: .leading, spacing: 4) {
-                Text("Rest Day")
-                    .font(.subheadline)
-                    .fontWeight(.medium)
-                    .foregroundStyle(Color.groveText)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Rest Day")
+                        .font(.subheadline)
+                        .fontWeight(.medium)
+                        .foregroundStyle(Color.groveText)
 
-                Text("Recovery is part of the plan")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                    Text("Recovery is part of the plan")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+
+                Spacer()
             }
 
-            Spacer()
+            if let onTrainAnyway {
+                TodayCardLink(title: "Train anyway", systemImage: "dumbbell", action: onTrainAnyway)
+            }
         }
         .padding(16)
         .frame(maxWidth: .infinity)
@@ -531,6 +603,7 @@ struct CompletedTodayCard: View {
     let workout: Workout
     let tomorrowsPlan: WorkoutPlan?
     var onPlanTomorrow: (() -> Void)?
+    var onLogAnother: (() -> Void)?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -554,6 +627,10 @@ struct CompletedTodayCard: View {
 
             // Up Next section
             upNextSection
+
+            if let onLogAnother {
+                TodayCardLink(title: "Log another workout", systemImage: "plus", action: onLogAnother)
+            }
         }
         .padding(16)
         .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 12))
