@@ -5,6 +5,7 @@ struct NotificationOnboardingView: View {
     let onContinue: () -> Void
 
     @Query private var users: [User]
+    @AppStorage("notificationPromptShown") private var notificationPromptShown = false
     @State private var isRequesting = false
     @State private var isGranted = false
     @State private var appeared = false
@@ -210,6 +211,8 @@ struct NotificationOnboardingView: View {
                     .padding(.horizontal, 24)
 
                     Button {
+                        // They've answered here; don't ask again on the home screen.
+                        notificationPromptShown = true
                         onContinue()
                     } label: {
                         Text("Not Now")
@@ -253,6 +256,7 @@ struct NotificationOnboardingView: View {
     }
 
     private func enableNotifications() {
+        notificationPromptShown = true
         isRequesting = true
         Task {
             let granted = await notificationService.requestAuthorization()

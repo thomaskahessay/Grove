@@ -13,52 +13,54 @@ struct CoachMarkOverlay: View {
                     // Spotlight border ring
                     SpotlightBorder(targetFrame: frame)
 
-                    // Tooltip
-                    CoachMarkTooltip(
-                        content: manager.currentStepContent,
-                        stepIndex: manager.stepIndex,
-                        totalSteps: manager.totalSteps,
-                        isLastStep: manager.isLastStep,
-                        onNext: { manager.advance() },
-                        onSkip: { manager.skip() }
-                    )
-                    .frame(maxWidth: 300)
-                    .position(
-                        tooltipPosition(
-                            for: frame,
-                            edge: manager.currentStepContent.tooltipEdge,
-                            screenSize: geometry.size
-                        )
-                    )
+                    // Tooltip, anchored to the spotlight's edge whatever its height
+                    tooltipLayer(for: frame, screenSize: geometry.size)
                 }
-                .ignoresSafeArea()
             }
+            // On the reader itself, so its size is the whole screen and matches the
+            // global frames the anchors report.
+            .ignoresSafeArea()
             .transition(.opacity)
             .animation(.easeInOut(duration: 0.35), value: manager.currentStep)
         }
     }
 
-    private func tooltipPosition(
-        for targetFrame: CGRect,
-        edge: Edge,
-        screenSize: CGSize
-    ) -> CGPoint {
-        let tooltipHeight: CGFloat = 140
+    /// Places the tooltip just above or below the spotlight. Built from spacers rather
+    /// than `.position` so a card that wraps to more lines grows away from the
+    /// spotlight instead of over it.
+    @ViewBuilder
+    private func tooltipLayer(for targetFrame: CGRect, screenSize: CGSize) -> some View {
         let spacing: CGFloat = 16
+        let spotlightInset: CGFloat = 8
+        let maxWidth: CGFloat = 300
+        let width = min(maxWidth, screenSize.width - 32)
+        // Clamp X to keep the tooltip within the screen
+        let centerX = max(16 + width / 2, min(screenSize.width - 16 - width / 2, targetFrame.midX))
 
-        let y: CGFloat = switch edge {
-        case .bottom:
-            targetFrame.maxY + spacing + tooltipHeight / 2
-        case .top:
-            targetFrame.minY - spacing - tooltipHeight / 2
-        default:
-            targetFrame.maxY + spacing + tooltipHeight / 2
+        let tooltip = CoachMarkTooltip(
+            content: manager.currentStepContent,
+            stepIndex: manager.stepIndex,
+            totalSteps: manager.totalSteps,
+            isLastStep: manager.isLastStep,
+            onNext: { manager.advance() },
+            onSkip: { manager.skip() }
+        )
+        .frame(width: width)
+        .fixedSize(horizontal: false, vertical: true)
+
+        VStack(spacing: 0) {
+            if manager.currentStepContent.tooltipEdge == .top {
+                Spacer(minLength: 0)
+                tooltip
+                Color.clear.frame(height: max(0, screenSize.height - targetFrame.minY + spotlightInset + spacing))
+            } else {
+                Color.clear.frame(height: max(0, targetFrame.maxY + spotlightInset + spacing))
+                tooltip
+                Spacer(minLength: 0)
+            }
         }
-
-        // Clamp X to keep tooltip within screen bounds
-        let x = max(170, min(screenSize.width - 170, targetFrame.midX))
-
-        return CGPoint(x: x, y: y)
+        .frame(width: screenSize.width, height: screenSize.height)
+        .offset(x: centerX - screenSize.width / 2)
     }
 }
 

@@ -49,7 +49,6 @@ struct WelcomeCarouselView: View {
                 }
             }
             .padding(.horizontal, 24)
-            .padding(.top, 16)
             .frame(height: 44)
             .animation(.easeInOut(duration: 0.2), value: currentPage)
 
@@ -110,12 +109,12 @@ struct WelcomeCarouselView: View {
                 .animation(.easeInOut(duration: 0.2), value: currentPage)
             }
             .padding(.horizontal, 24)
-            .padding(.bottom, 48)
+            .padding(.bottom, 16)
             .layoutPriority(1)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color.groveBackground)
-        .ignoresSafeArea()
+        // Only the background goes edge to edge; the Skip button must stay below the status bar.
+        .background(Color.groveBackground.ignoresSafeArea())
         .onAppear {
             withAnimation(.easeOut(duration: 0.6)) {
                 appeared = true

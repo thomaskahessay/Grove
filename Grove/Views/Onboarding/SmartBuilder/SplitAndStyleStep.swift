@@ -9,13 +9,15 @@ struct SplitAndStyleStep: View {
             VStack(spacing: 28) {
                 // Header
                 VStack(spacing: 10) {
-                    Text("Pick your\ntraining style")
+                    Text(state.isOwnRoutine ? "What split\ndo you run?" : "Pick your\ntraining style")
                         .font(.system(size: 30, weight: .bold))
                         .foregroundStyle(Color.groveText)
                         .multilineTextAlignment(.center)
                         .lineSpacing(4)
 
-                    Text("We'll organize your exercises around this split")
+                    Text(state.isOwnRoutine
+                         ? "Pick the closest one. You can rename the days next"
+                         : "We'll organize your exercises around this split")
                         .font(.subheadline)
                         .foregroundStyle(Color.groveTextSecondary)
                 }
@@ -93,7 +95,7 @@ struct SplitAndStyleStep: View {
 
                 // Week preview
                 Text(split == .custom
-                    ? "You choose the muscle groups for each day"
+                    ? (state.isOwnRoutine ? "Name each day yourself" : "You choose the muscle groups for each day")
                     : split.weekPreview(for: state.daysPerWeek))
                     .font(.caption)
                     .foregroundStyle(isSelected ? .white.opacity(0.8) : Color.groveTextSecondary)

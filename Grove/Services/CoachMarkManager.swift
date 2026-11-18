@@ -11,6 +11,8 @@ class CoachMarkManager {
         case planMyWeek = 2
         case progressTab = 3
         case socialTab = 4
+        /// Back on Today, pointing at the workout card again: the tour ends on doing something.
+        case firstWorkout = 5
     }
 
     struct StepContent {
@@ -28,7 +30,7 @@ class CoachMarkManager {
     // MARK: - Computed
 
     var currentStepContent: StepContent { stepContent(for: currentStep) }
-    var currentFrame: CGRect? { anchorFrames[currentStep] }
+    var currentFrame: CGRect? { anchorFrames[anchorStep(for: currentStep)] }
     var stepIndex: Int { currentStep.rawValue }
     var totalSteps: Int { TourStep.allCases.count }
     var isLastStep: Bool { currentStep == TourStep.allCases.last }
@@ -37,6 +39,17 @@ class CoachMarkManager {
 
     func startTourIfNeeded() {
         guard !Self.hasSeenTour else { return }
+        start()
+    }
+
+    /// Runs the tour again from the start (Settings → Show App Tour).
+    func replay() {
+        guard !isActive else { return }
+        start()
+    }
+
+    private func start() {
+        currentStep = .todaysWorkout
         Task {
             // Poll briefly for the first step's frame (max ~1 second)
             for _ in 0..<10 {
@@ -78,6 +91,11 @@ class CoachMarkManager {
 
     // MARK: - Private
 
+    /// Steps that point at a view another step already registered.
+    private func anchorStep(for step: TourStep) -> TourStep {
+        step == .firstWorkout ? .todaysWorkout : step
+    }
+
     private func completeTour() {
         withAnimation(.easeOut(duration: 0.3)) {
             isActive = false
@@ -89,33 +107,39 @@ class CoachMarkManager {
         switch step {
         case .todaysWorkout:
             StepContent(
-                title: "Your Daily Workout",
-                description: "Today's plan shows up here. Start it, or start something else.",
+                title: "Today's Workout",
+                description: "Your plan for today lives here. Tap Start Workout to follow it, or pick something else if you'd rather.",
                 tooltipEdge: .bottom
             )
         case .streakPlant:
             StepContent(
                 title: "Your Streak Plant",
-                description: "Your plant grows as you build your workout streak. Keep it alive!",
+                description: "Every day you work out, your plant grows. It only wilts if a whole week goes by with no workouts, so rest days are safe.",
                 tooltipEdge: .bottom
             )
         case .planMyWeek:
             StepContent(
-                title: "Plan Your Week",
-                description: "Organize your training schedule and stay on track.",
+                title: "Your Week",
+                description: "Each icon is the workout planned that day, and a moon is a rest day. Tap a day to change it, or use Plan My Week.",
                 tooltipEdge: .top
             )
         case .progressTab:
             StepContent(
-                title: "Track Your Progress",
-                description: "View your personal records, volume trends, and training insights.",
+                title: "Progress",
+                description: "After your first workout, your personal records and strength trends show up here.",
                 tooltipEdge: .top
             )
         case .socialTab:
             StepContent(
                 title: "Your Grove",
-                description: "See your friends' workouts and cheer them on with water, seeds, and sunlight.",
+                description: "Everyone's workouts land here. Cheer them on with water, seeds, and sunlight.",
                 tooltipEdge: .top
+            )
+        case .firstWorkout:
+            StepContent(
+                title: "You're Ready",
+                description: "That's it! Tap Start Workout whenever you're ready, and log each set as you go.",
+                tooltipEdge: .bottom
             )
         }
     }

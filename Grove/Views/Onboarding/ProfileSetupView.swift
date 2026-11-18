@@ -249,34 +249,39 @@ struct ProfileSetupView: View {
                     .transition(.move(edge: .bottom).combined(with: .opacity))
                 }
 
-                // Continue button
-                if showButton {
-                    Button(action: handleContinue) {
-                        Text("Continue")
-                            .font(.headline)
-                            .foregroundStyle(.white)
-                            .frame(maxWidth: .infinity)
-                            .frame(height: 54)
-                            .background(
-                                LinearGradient(
-                                    colors: [Color.groveSage, Color.groveSage.opacity(0.85)],
-                                    startPoint: .leading,
-                                    endPoint: .trailing
-                                )
-                            )
-                            .clipShape(RoundedRectangle(cornerRadius: 16))
-                            .shadow(color: Color.groveSage.opacity(0.3), radius: 8, y: 4)
-                    }
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
-                }
-
-                Spacer(minLength: 40)
+                Spacer(minLength: 24)
             }
             .padding(.horizontal, 24)
             .frame(maxWidth: .infinity, minHeight: geometry.size.height)
         }
         .scrollDismissesKeyboard(.interactively)
         .scrollContentBackground(.hidden)
+        // Pinned below the scroll view so it's never cut off by the bottom edge or keyboard.
+        .safeAreaInset(edge: .bottom) {
+            if showButton {
+                Button(action: handleContinue) {
+                    Text("Continue")
+                        .font(.headline)
+                        .foregroundStyle(.white)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 54)
+                        .background(
+                            LinearGradient(
+                                colors: [Color.groveSage, Color.groveSage.opacity(0.85)],
+                                startPoint: .leading,
+                                endPoint: .trailing
+                            )
+                        )
+                        .clipShape(RoundedRectangle(cornerRadius: 16))
+                        .shadow(color: Color.groveSage.opacity(0.3), radius: 8, y: 4)
+                }
+                .padding(.horizontal, 24)
+                .padding(.top, 8)
+                .padding(.bottom, 8)
+                .background(Color.groveBackground)
+                .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
+        }
         .background(Color.groveBackground)
         .onAppear { startAnimationSequence() }
         .confirmationDialog("Add Photo", isPresented: $showingImageSource, titleVisibility: .visible) {

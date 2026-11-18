@@ -6,6 +6,7 @@ struct SettingsView: View {
     @Query private var users: [User]
     @Environment(\.modelContext) private var modelContext
     @Environment(CloudKitSocialService.self) private var socialService
+    @Environment(CoachMarkManager.self) private var coachMarkManager
     @AppStorage("appearanceMode") private var appearanceMode: String = AppearanceMode.system.rawValue
 
     @State private var photoItem: PhotosPickerItem? = nil
@@ -387,6 +388,18 @@ struct SettingsView: View {
             } label: {
                 Label("Achievements", systemImage: "trophy.fill")
             }
+
+            Button {
+                coachMarkManager.replay()
+            } label: {
+                Label {
+                    Text("Show App Tour")
+                        .foregroundStyle(Color.groveText)
+                } icon: {
+                    Image(systemName: "questionmark.circle.fill")
+                        .foregroundStyle(Color.groveSage)
+                }
+            }
         }
     }
 
@@ -481,5 +494,6 @@ struct SettingsView: View {
     NavigationStack {
         SettingsView()
     }
+    .environment(CoachMarkManager())
     .modelContainer(.preview)
 }

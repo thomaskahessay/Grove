@@ -228,7 +228,8 @@ struct HomeView: View {
                         )
                     }
 
-                    // Calendar Strip
+                    // Calendar Strip + Plan My Week (one stop in the first-run tour)
+                    VStack(alignment: .leading, spacing: 24) {
                     CalendarStripView()
 
                     // Plan My Week
@@ -253,6 +254,7 @@ struct HomeView: View {
                         .contentShape(RoundedRectangle(cornerRadius: 10))
                     }
                     .buttonStyle(.plain)
+                    }
                     .coachMarkAnchor(.planMyWeek)
 
                     // Recent Workouts Section

@@ -129,7 +129,11 @@ struct ContentView: View {
                 // Prompt existing users who haven't been asked yet
                 let notificationService = NotificationService.shared
                 await notificationService.checkAuthorizationStatus()
-                if users.first != nil, !notificationPromptShown && !coachMarkManager.isActive && notificationService.authorizationStatus == .notDetermined {
+                // Not while the first-run tour is pending or showing: it starts a few seconds
+                // after launch, so `isActive` alone is still false at this point.
+                if users.first != nil, !notificationPromptShown,
+                   CoachMarkManager.hasSeenTour, !coachMarkManager.isActive,
+                   notificationService.authorizationStatus == .notDetermined {
                     showNotificationPrompt = true
                 }
             }
@@ -238,19 +242,17 @@ struct ContentView: View {
                 }
             }
             .tint(.groveSage)
-            .tabBarMinimizeBehavior(.onScrollDown)
+            // Kept expanded during the tour: its spotlights point at the tab buttons.
+            .tabBarMinimizeBehavior(coachMarkManager.isActive ? .never : .onScrollDown)
             .modifier(WorkoutAccessoryModifier(isActive: sessionManager.isMinimized))
             .background {
-                TabBarFrameReader { tabBarFrame in
-                    let tabWidth = tabBarFrame.width / 4
-                    coachMarkManager.registerFrame(.progressTab, frame: CGRect(
-                        x: tabWidth, y: tabBarFrame.minY,
-                        width: tabWidth, height: tabBarFrame.height
-                    ))
-                    coachMarkManager.registerFrame(.socialTab, frame: CGRect(
-                        x: tabWidth * 2, y: tabBarFrame.minY,
-                        width: tabWidth, height: tabBarFrame.height
-                    ))
+                TabBarFrameReader(titles: ["Progress", "Grove"]) { frames in
+                    if let frame = frames["Progress"] {
+                        coachMarkManager.registerFrame(.progressTab, frame: frame)
+                    }
+                    if let frame = frames["Grove"] {
+                        coachMarkManager.registerFrame(.socialTab, frame: frame)
+                    }
                 }
             }
 
@@ -337,6 +339,12 @@ struct ContentView: View {
                 coachMarkManager.registerFrame(step, frame: frame)
             }
         }
+        .onChange(of: coachMarkManager.isActive) { _, active in
+            // A replay from Settings starts from the Profile tab.
+            if active, selectedTab != 0 {
+                withAnimation { selectedTab = 0 }
+            }
+        }
         .onChange(of: coachMarkManager.currentStep) { _, newStep in
             switch newStep {
             case .progressTab:
@@ -402,7 +410,9 @@ private enum TabAvatar {
 // MARK: - Tab Bar Frame Reader
 
 private struct TabBarFrameReader: UIViewRepresentable {
-    let onFrame: (CGRect) -> Void
+    /// Tab titles to locate, as shown under the icons.
+    let titles: [String]
+    let onFrames: ([String: CGRect]) -> Void
 
     func makeUIView(context: Context) -> UIView {
         let view = UIView()
@@ -415,10 +425,19 @@ private struct TabBarFrameReader: UIViewRepresentable {
         DispatchQueue.main.async {
             guard let window = uiView.window else { return }
             guard let tabBar = Self.findTabBar(in: window) else { return }
-            let frame = tabBar.convert(tabBar.bounds, to: nil)
-            guard frame.width > 0 && frame.height > 0 else { return }
+            let barFrame = tabBar.convert(tabBar.bounds, to: nil)
+            guard barFrame.width > 0 && barFrame.height > 0 else { return }
+
+            var frames: [String: CGRect] = [:]
+            for (index, title) in titles.enumerated() {
+                if let item = Self.findItem(titled: title, in: tabBar, barWidth: barFrame.width) {
+                    frames[title] = item.convert(item.bounds, to: nil)
+                } else {
+                    frames[title] = Self.estimatedFrame(index: index, of: titles, in: barFrame)
+                }
+            }
             MainActor.assumeIsolated {
-                onFrame(frame)
+                onFrames(frames)
             }
         }
     }
@@ -429,6 +448,35 @@ private struct TabBarFrameReader: UIViewRepresentable {
             if let found = findTabBar(in: subview) { return found }
         }
         return nil
+    }
+
+    /// The tab's own button view. On iOS 26 the bar floats inset from the screen edges,
+    /// so slicing the UITabBar's bounds into equal parts lands the spotlight off target.
+    private static func findItem(titled title: String, in view: UIView, barWidth: CGFloat) -> UIView? {
+        var best: UIView?
+        func visit(_ v: UIView) {
+            if !v.isHidden, v.alpha > 0,
+               let label = v.accessibilityLabel, label.hasPrefix(title),
+               v.bounds.width > 20, v.bounds.width < barWidth * 0.6,
+               v.bounds.width > (best?.bounds.width ?? 0) {
+                best = v
+            }
+            v.subviews.forEach(visit)
+        }
+        visit(view)
+        return best
+    }
+
+    /// Fallback when no item view is found: the floating bar inset from the UITabBar's bounds.
+    /// Assumes the four tabs Grove has; `titles` are looked up in that order.
+    private static func estimatedFrame(index: Int, of titles: [String], in barFrame: CGRect) -> CGRect? {
+        let allTabs = ["Today", "Progress", "Grove", "You"]
+        guard let position = allTabs.firstIndex(of: titles[index]) else { return nil }
+        let platter = CGRect(x: barFrame.minX + 21, y: barFrame.minY + 8,
+                             width: barFrame.width - 42, height: 62)
+        let width = platter.width / CGFloat(allTabs.count)
+        return CGRect(x: platter.minX + width * CGFloat(position), y: platter.minY,
+                      width: width, height: platter.height)
     }
 }
 
