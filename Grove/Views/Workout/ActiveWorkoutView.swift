@@ -195,10 +195,12 @@ struct ActiveWorkoutView: View {
                     Button {
                         showingAddExercise = true
                     } label: {
-                        Label("Add", systemImage: "plus")
+                        // "Exercise", not "Add": this screen also has "Add Set".
+                        Label("Exercise", systemImage: "plus")
                             .font(.subheadline)
                     }
                     .tint(Color.groveSage)
+                    .accessibilityLabel("Add exercise")
                 }
                 .padding(.horizontal)
                 .padding(.top, 8)
