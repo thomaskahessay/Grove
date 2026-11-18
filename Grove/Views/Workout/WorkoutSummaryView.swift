@@ -477,9 +477,12 @@ struct WorkoutSummaryView: View {
                         fromWorkoutRecordName: postID
                     )
                 }
-                await socialService.updateMyStats(user: user)
                 await socialService.checkAvailableSunlight()
             }
+        }
+        // Friends see your new streak and workout count whether or not you posted.
+        if let user {
+            Task { await socialService.updateMyStats(user: user) }
         }
         sessionManager.dismissSummary()
     }

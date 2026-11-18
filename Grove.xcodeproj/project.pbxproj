@@ -71,6 +71,7 @@
 				Models/WorkoutPlan.swift,
 				Models/WorkoutTemplate.swift,
 				Services/SharedModelContainer.swift,
+				Services/StreakManager.swift,
 			);
 			target = 9DB2E5732F8D7A2100BE6078 /* GroveWidgetsExtension */;
 		};

@@ -94,9 +94,20 @@ struct StreakPlantProvider: TimelineProvider {
         do {
             let container = try SharedModelContainer.makeContainer()
             let context = ModelContext(container)
+            // Read-only: the streak is recalculated below for display, never saved.
+            context.autosaveEnabled = false
+            defer { context.rollback() }
             let descriptor = FetchDescriptor<User>()
             guard let user = try context.fetch(descriptor).first else {
                 return .empty
+            }
+
+            // The saved streak is only recalculated when the app runs, so after a missed
+            // day the widget would keep showing a healthy plant. Work it out for today.
+            let workoutDescriptor = FetchDescriptor<Workout>(predicate: #Predicate { $0.completedAt != nil })
+            // If the fetch fails, show the saved streak rather than treating it as none.
+            if let workouts = try? context.fetch(workoutDescriptor) {
+                StreakManager.recalculateStreak(for: user, workouts: workouts, plans: [])
             }
 
             let streak = user.currentStreak

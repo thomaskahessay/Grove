@@ -1,6 +1,8 @@
 import SwiftUI
 import SwiftData
 import UIKit
+import Combine
+import WidgetKit
 
 struct ContentView: View {
     @Environment(\.modelContext) private var modelContext
@@ -107,6 +109,8 @@ struct ContentView: View {
                 // Preload social feed in the background, independent of the splash timer.
                 Task {
                     guard let user = users.first else { return }
+                    // Before the profile sync, so friends get today's streak, not yesterday's.
+                    refreshStreak(syncToFriends: false)
                     await socialService.refreshAll(user: user)
 
                     // Schedule watering reminder if there are un-watered posts today
@@ -140,8 +144,45 @@ struct ContentView: View {
             .onChange(of: users.first?.appleUserID) {
                 sessionManager.user = users.first
             }
+            // A streak can break overnight while the app sits in memory, so check it
+            // whenever the app comes back and when the day rolls over while it's open.
+            .onChange(of: scenePhase) { _, phase in
+                if phase == .active { refreshStreak() }
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .NSCalendarDayChanged).receive(on: DispatchQueue.main)) { _ in
+                refreshStreak()
+            }
         } else {
             OnboardingContainerView()
+        }
+    }
+
+    /// Recalculates the streak (wilting the plant if it broke) and, when it changed,
+    /// saves, refreshes the widget and tells friends. HomeView also does this on appear.
+    private func refreshStreak(syncToFriends: Bool = true) {
+        guard let user = users.first else { return }
+        // Right after a workout the streak was just set by endWorkout(); the relationship
+        // may not include the new workout yet, which would briefly reset it.
+        guard sessionManager.completedWorkout == nil,
+              !sessionManager.showingSummary,
+              !sessionManager.showingStreakMoment else { return }
+
+        let before = (user.currentStreak, user.isStreakWilted)
+        // Same set HomeView uses: every completed workout.
+        let descriptor = FetchDescriptor<Workout>(predicate: #Predicate { $0.completedAt != nil })
+        // A failed fetch must not read as "no workouts", which would wilt the plant.
+        guard let workouts = try? modelContext.fetch(descriptor) else { return }
+        StreakManager.recalculateStreak(for: user, workouts: workouts, plans: workoutPlans)
+        guard (user.currentStreak, user.isStreakWilted) != before else { return }
+
+        do {
+            try modelContext.save()
+        } catch {
+            print("[Grove] ERROR: Failed to save streak refresh: \(error)")
+        }
+        WidgetCenter.shared.reloadAllTimelines()
+        if syncToFriends {
+            Task { await socialService.updateMyStats(user: user) }
         }
     }
 
@@ -239,6 +280,9 @@ struct ContentView: View {
         ) {
             if let workout = sessionManager.completedWorkout {
                 WorkoutSummaryView(workout: workout)
+                    // Only its Finish button may close it: that's what posts the workout,
+                    // queues the streak moment and clears the just-finished state.
+                    .interactiveDismissDisabled()
             }
         }
         .sheet(
@@ -264,7 +308,9 @@ struct ContentView: View {
             isPresented: Binding(
                 get: { sessionManager.showingStreakMoment },
                 set: { sessionManager.showingStreakMoment = $0 }
-            )
+            ),
+            // Swiping it away does the same cleanup as its button (safe to run twice).
+            onDismiss: { sessionManager.dismissStreakMoment() }
         ) {
             if let data = sessionManager.streakMomentData {
                 StreakMomentView(data: data) {

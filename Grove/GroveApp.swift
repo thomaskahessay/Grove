@@ -173,7 +173,10 @@ struct GroveApp: App {
             case .active:
                 Task { @MainActor in
                     NotificationService.shared.cancelAbandonedWorkoutReminder()
-                    // New posts (for the Grove tab's badge) and their interactions
+                    // Everyone in the grove first (someone may have joined, or changed
+                    // their streak), since the feed only asks for posts from known people.
+                    // Then new posts (for the Grove tab's badge) and their interactions.
+                    await socialService.fetchFriends()
                     await socialService.fetchFeed()
                     await socialService.checkAvailableSunlight()
                 }

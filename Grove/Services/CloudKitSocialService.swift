@@ -685,7 +685,8 @@ class CloudKitSocialService {
         do {
             items = try await fetchFeedItems(from: since, to: nil)
         } catch {
-            if !feedItems.isEmpty && !(error is CancellationError) && (error as? CKError)?.code != .operationCancelled {
+            // Offline already has its own state; don't add a banner on every app open.
+            if !feedItems.isEmpty && !isOffline && !(error is CancellationError) && (error as? CKError)?.code != .operationCancelled {
                 self.error = "Could not refresh feed: \(error.localizedDescription)"
             }
             return
